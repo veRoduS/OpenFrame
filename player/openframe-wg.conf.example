@@ -1,0 +1,12 @@
+# Export a distinct CLIENT config from your existing WireGuard server instead of
+# using these placeholders. Rename the private file to openframe-wg.conf and
+# place it beside openframe.json. Never share a private key between players.
+[Interface]
+PrivateKey = REPLACE_WITH_THIS_PLAYERS_PRIVATE_KEY
+Address = 10.8.0.2/32
+
+[Peer]
+PublicKey = REPLACE_WITH_YOUR_WIREGUARD_SERVERS_PUBLIC_KEY
+Endpoint = vpn.example.com:51820
+AllowedIPs = 10.8.0.1/32
+PersistentKeepalive = 25

@@ -1,0 +1,8 @@
+{
+  "server": "https://openframe.example.com",
+  "name": "Off-site screen",
+  "cloudflare_access": {
+    "client_id": "REPLACE_WITH_PLAYER_SERVICE_TOKEN_CLIENT_ID",
+    "client_secret": "REPLACE_WITH_PLAYER_SERVICE_TOKEN_CLIENT_SECRET"
+  }
+}

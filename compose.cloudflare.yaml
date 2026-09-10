@@ -1,0 +1,37 @@
+# Standalone deployment. Do not merge with the LAN compose.yaml.
+services:
+  openframe:
+    build: .
+    expose:
+      - "3100"
+    volumes:
+      - openframe-data:/data
+    environment:
+      DATA_DIR: /data
+      COOKIE_SECURE: "true"
+      PUBLIC_URL: "${OPENFRAME_PUBLIC_URL:?Set OPENFRAME_PUBLIC_URL to your HTTPS hostname}"
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.8.3
+    command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/cloudflare_tunnel_token"]
+    secrets:
+      - cloudflare_tunnel_token
+    depends_on:
+      openframe:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  openframe-data:
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ./.secrets/cloudflare-tunnel-token

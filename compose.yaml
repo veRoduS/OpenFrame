@@ -1,0 +1,18 @@
+services:
+  openframe:
+    build: .
+    ports:
+      - "${OPENFRAME_BIND_ADDRESS:-0.0.0.0}:${OPENFRAME_PORT:-3100}:3100"
+    volumes:
+      - openframe-data:/data
+    environment:
+      DATA_DIR: /data
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      PUBLIC_URL: "${PUBLIC_URL:-}"
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  openframe-data:
