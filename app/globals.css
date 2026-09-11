@@ -642,6 +642,151 @@ small {
 .of-modal.wide {
   max-width: min(860px, calc(100% - 32px)) !important;
 }
+.screen-setup {
+  grid-template-columns: minmax(0, 1fr);
+}
+.screen-setup > [data-slot='tabs'] {
+  min-width: 0;
+}
+.setup-content {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.setup-tabs {
+  display: flex;
+  width: 100%;
+}
+.setup-tabs > button {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+.setup-tabs > button[data-active] {
+  background: #e7f0ea;
+  color: #216c49;
+  border-color: #b6cfbf;
+}
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.screen-setup label {
+  min-width: 0;
+}
+.screen-setup input,
+.screen-setup select {
+  width: 100%;
+  min-width: 0;
+}
+.setup-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #e3e7e4;
+  padding-top: 14px;
+}
+.setup-option label {
+  margin: 0;
+}
+.setup-summary,
+.setup-row small {
+  color: #63716a;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.setup-summary {
+  display: grid;
+  gap: 4px;
+}
+.setup-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #725716;
+  background: #fff8e5;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.setup-warning svg {
+  flex: 0 0 18px;
+  margin-top: 1px;
+}
+.setup-list {
+  margin-top: 16px;
+}
+.setup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 180px) 36px;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid #e3e7e4;
+  padding: 14px 0;
+}
+.setup-row > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.setup-row strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.setup-state {
+  font-size: 12px;
+  color: #216c49;
+  overflow-wrap: anywhere;
+}
+.setup-state.allocated {
+  color: #65528e;
+}
+.setup-empty {
+  padding: 16px 0;
+  font-size: 14px;
+  color: #63716a;
+}
+.setup-delete {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 540px) {
+  .screens-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .screens-heading .heading-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .screens-heading .heading-actions > button {
+    font-size: 12px;
+    padding: 9px;
+  }
+  .setup-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup-row {
+    grid-template-columns: minmax(0, 1fr) 36px;
+  }
+  .setup-state {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .setup-row > button {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .setup-tabs > button {
+    padding-inline: 3px;
+    font-size: 12px;
+  }
+}
 .of-modal [data-slot='dialog-title'] {
   font-size: 20px;
   padding-right: 20px;

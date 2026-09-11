@@ -21,3 +21,9 @@ Include affected server/player versions, deployment mode, impact, minimal reprod
 - Maintain the Pi OS, Chromium, Docker host, Node dependencies, and optional VPN/tunnel packages. OpenFrame does not install fleet security updates automatically.
 
 Ignore rules and `pnpm repository:check` catch known private filenames, not every possible secret. Review staged content and enable GitHub secret scanning/push protection where available. If a credential enters Git history, revoke it first; deleting the current file does not remove it from history.
+
+## Screen provisioning vault
+
+The optional [screen setup builder](docs/screen-setup.md) accepts WireGuard client keys, Wi-Fi passwords, and Cloudflare service tokens through administrator-only endpoints. Use a protected management connection. These secrets are encrypted in SQLite using AES-256-GCM; allocation metadata stays plaintext. `DATA_DIR/provisioning.key` is generated with mode 600 on POSIX and must be included in restricted, externally encrypted backups. On Windows, protect the data directory with appropriate ACLs. This is not protection against a compromised server or access to both the database and its adjacent key.
+
+Explicit administrator ZIP downloads contain plaintext secrets and are marked no-store. Do not share ZIPs, extracted files, or configured SD images. A downloaded client belongs to one screen; copying it onto multiple devices can cause address/key conflicts. Issued setups are retained for re-download and currently have no purge or key-rotation UI. Revoke leaked/retired peers and service tokens on their respective servers; OpenFrame device revocation is separate. Imported configs cannot contain WireGuard shell hooks, and the unprivileged Pi agent never reads the root-owned WireGuard key.

@@ -42,7 +42,7 @@ docker compose cp openframe:/data/. ./backups/before-upgrade/
 docker compose start openframe
 ```
 
-3. Verify the backup contains `openframe.sqlite` and `media/` plus any SQLite sidecars present. Encrypt/copy it to separate storage. Record the source version/tag and Compose project name. Back up environment files, tunnel secrets, and per-player VPN/configuration separately with restricted access; they are not inside `/data`.
+3. Verify the backup contains `openframe.sqlite` and `media/` plus any SQLite sidecars present. After using the screen setup builder it must also contain **`provisioning.key`**, required to decrypt saved configurations. Encrypt/copy it to separate storage. Record the source version/tag and Compose project name. Back up environment files, tunnel secrets, and manually provisioned per-player VPN/configuration separately with restricted access; those are not inside `/data`. Configurations imported/generated through the builder are encrypted in this database, with the key alongside it.
 4. Rehearse restoration on an isolated machine/project. A backup that has never been restored is unverified.
 
 If the copy fails, retain the original volume and diagnose it; restarting restores service but does not mean the backup succeeded. Do not copy a running local Node database either: stop that process first, copy all of `DATA_DIR`, then restart.
@@ -83,6 +83,7 @@ To roll back, stop the failed deployment and use the previous source tag. Do not
 | Server does not start | `docker compose logs --tail=100 openframe`; port collisions, volume permissions, disk space |
 | Empty library after upgrade | Compose project/volume name or Node `DATA_DIR` changed; preserve and locate original data |
 | Login loops or writes return 403 | Browser origin matches `PUBLIC_URL`; secure cookies require HTTPS |
+| Setup download returns 503 | Restore the matching database and `provisioning.key`; never replace the key with a new one |
 | Player never shows a pairing code | Correct server origin, DNS/routing/TLS; use agent `--check-connection` |
 | Paired player is empty | Published playlist assigned, not blanked, at least one currently eligible entry |
 | Draft edits do not reach screens | Save and publish; wait for sync/download/preparation; inspect device readiness/error |

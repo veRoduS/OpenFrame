@@ -37,6 +37,8 @@ On PowerShell, set `$env:OPENFRAME_PYTHON = (Get-Command python).Source`, use `p
 
 For browser checks, install Playwright in a separate tools directory, install its Chromium browser, and set `OPENFRAME_PLAYWRIGHT` to that package's absolute `index.mjs` file URL. Run `node tests/playlist-picker.browser.mjs` against `pnpm dev` or `pnpm start`. Alternatively select an installed browser with `OPENFRAME_BROWSER_CHANNEL=msedge`. The test mocks API requests and writes ignored screenshots under `work/`; it does not edit your library. See the [hardware checklist](docs/playback-testing.md) for real-device acceptance.
 
+After `pnpm build`, run `node tests/screen-setup.browser.mjs` with the same Playwright settings. It starts its own ephemeral server/database and verifies VPN import, allocation, ZIP contents, re-download, and desktop/mobile layouts using fake credentials. It does not contact a VPN or modify your running server's data.
+
 ## Change requirements
 
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.

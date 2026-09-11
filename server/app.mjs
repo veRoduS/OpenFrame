@@ -1,4 +1,5 @@
 import express from 'express';
+import { mountScreenSetup } from './screen-setup.mjs';
 import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
@@ -184,6 +185,7 @@ export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
     res.clearCookie('openframe_session', { path: '/' });
     res.json({ ok: true });
   });
+  mountScreenSetup(app, { admin, db, root, list, get, put, remove });
   const publicDevice = (d) => {
     const { tokenHash: _tokenHash, ...rest } = d;
     return rest;

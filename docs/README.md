@@ -8,6 +8,7 @@
 - [Raspberry Pi installation](../README.md#raspberry-pi-installation): dedicated Pi setup, first boot, image customization, pairing, and local playback.
 - [Cloudflare Tunnel and Access](remote-players.md): off-site HTTPS connectivity and separate machine credentials.
 - [WireGuard players](wireguard-players.md): importing an existing per-player VPN configuration.
+- [Screen setup builder](screen-setup.md): VPN inventory, allocation, private ZIP exports, and provisioning-key backups.
 - [Playback acceptance tests](playback-testing.md): readiness, offline recovery, and physical-device performance checks.
 - [Security](../SECURITY.md): deployment boundaries, secret handling, and vulnerability reporting.
 

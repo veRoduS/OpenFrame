@@ -10,6 +10,8 @@ Wi-Fi or Ethernet must work at the remote location first. WireGuard provides a r
 
 ## Drop-in setup
 
+For a guided workflow, use **Screens > Screen setup** to import client exports into an available/allocated inventory and generate each screen's private setup ZIP. The [builder guide](screen-setup.md) covers allocation, encrypted storage, backups, and re-downloads. The manual drop-in method below remains supported and does not require storing keys on the home server.
+
 1. Export a client `.conf` from your existing WireGuard server. Give each player its own private key, peer registration, and VPN address. Do not copy your VPN server's own configuration onto a player.
 2. Rename the export to **`openframe-wg.conf`** and place it in the same directory as **`openframe.json`**. This filename opts in to WireGuard; no extra JSON fields are needed.
 3. Set `server` in the JSON to OpenFrame's address **reachable through the VPN**, including its port. For example, if OpenFrame runs on the VPN host at `10.8.0.1`:
@@ -55,7 +57,7 @@ You can use Cloudflare for management and WireGuard for players, or select eithe
 
 ## Startup, recovery, and keys
 
-The installer stores the normalized client configuration at `/etc/wireguard/wg-openframe.conf`, owned by root with mode `600`. The unprivileged OpenFrame agent, renderer, and management API never receive the private key. The interface name `wg-openframe` is reserved for this feature. Existing unrelated tunnels and Wi-Fi profiles are not replaced. An unmanaged file at an OpenFrame WireGuard destination causes installation to fail instead of overwriting it.
+The installer stores the normalized client configuration at `/etc/wireguard/wg-openframe.conf`, owned by root with mode `600`. The unprivileged OpenFrame agent and renderer never receive the private key. If you use the optional setup builder, its administrator-only API receives the imported client and stores it encrypted on the home server; explicit bundle downloads contain the plaintext key. Normal library/player API responses do not include it. The interface name `wg-openframe` is reserved for this feature. Existing unrelated tunnels and Wi-Fi profiles are not replaced. An unmanaged file at an OpenFrame WireGuard destination causes installation to fail instead of overwriting it.
 
 The distro's `wg-quick@wg-openframe.service` starts at boot. An OpenFrame drop-in bounds startup DNS attempts and retries failed startup every 15 seconds, with a 30-second start timeout. NetworkManager continues managing Wi-Fi/Ethernet but leaves this specific tunnel to `wg-quick`. The agent and kiosk do **not** depend on VPN readiness, so a tunnel outage does not block playback of previously downloaded content. These retry settings do not detect a wrong peer key or a failed handshake after the interface starts. See [WireGuard's service unit](https://github.com/WireGuard/wireguard-tools/blob/master/src/systemd/wg-quick%40.service) and [NetworkManager device configuration](https://networkmanager.dev/docs/api/latest/NetworkManager.conf.html#device-sections).
 

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { version } from '../package.json';
 import {
   Monitor,
+  FileCog,
   LayoutTemplate,
   ListVideo,
   Images,
@@ -81,6 +82,7 @@ import {
 } from './types';
 import { SlideCanvas } from './canvas';
 import { MediaLibrary } from './media-library';
+import { ScreenSetup } from './screen-setup';
 import { resizeLayer } from './geometry.mjs';
 import { useUnsavedNavigation } from './use-unsaved-navigation';
 import { localDateTime } from '../player/web/counter.js';
@@ -203,6 +205,7 @@ export default function App() {
   } | null>(null);
   const [pairCode, setPairCode] = useState('');
   const [pairOpen, setPairOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const refresh = async () => setLibrary(await api<Library>('/api/library'));
   const run = (action: () => Promise<void>, message = '') => {
     void (async () => {
@@ -433,7 +436,9 @@ export default function App() {
               </span>
             </header>
             <div className="page-content">
-              <div className="page-heading">
+              <div
+                className={`page-heading ${view === 'devices' ? 'screens-heading' : ''}`}
+              >
                 <div>
                   <span className="eyebrow">
                     {view === 'slides'
@@ -474,6 +479,10 @@ export default function App() {
                   )}
                   {view === 'devices' && (
                     <>
+                      <button onClick={() => setSetupOpen(true)}>
+                        <FileCog size={18} />
+                        Screen setup
+                      </button>
                       <IconButton
                         label="Refresh screens"
                         onClick={() => run(refresh)}
@@ -818,6 +827,7 @@ export default function App() {
               onPreview={setPreview}
             />
           )}
+          {setupOpen && <ScreenSetup onClose={() => setSetupOpen(false)} />}
           <Modal
             title="Pair a screen"
             description="Enter the eight-character code shown on the player display."

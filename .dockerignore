@@ -17,6 +17,7 @@ outputs
 player-cache
 player/__pycache__
 openframe.json
+openframe-screen-*.zip
 identity.json
 *.private.json
 *.key

@@ -21,7 +21,7 @@ const files = [
   ),
 ];
 const privatePath =
-  /(^|\/)(data|backups|node_modules|\.pnpm-store|\.secrets|player-cache|work|outputs|dist|\.openai)(\/|$)|(^|\/)(openframe|identity)\.json$|\.private\.json$|\.(conf|pem|key|p12|pfx|db|img)(\.|$)|\.sqlite|\.tar\.gz$/i;
+  /(^|\/)(data|backups|node_modules|\.pnpm-store|\.secrets|player-cache|work|outputs|dist|\.openai)(\/|$)|(^|\/)(openframe|identity)\.json$|(^|\/)openframe-screen-.*\.zip$|\.private\.json$|\.(conf|pem|key|p12|pfx|db|img)(\.|$)|\.sqlite|\.tar\.gz$/i;
 for (const file of files) {
   const example = file.endsWith('.example') || file.endsWith('.example.json');
   if (!example && (privatePath.test(file) || /(^|\/)\.env/.test(file)))

@@ -9,6 +9,7 @@ This is pre-1.0 software, not a finished Yodeck replacement. The management appl
 - [Documentation index](docs/README.md) and [server setup, backup, restore, and upgrades](docs/operations.md)
 - [Prebuilt Docker images and ARM Compose setup](docs/container-images.md)
 - [Pi installation](#raspberry-pi-installation), [Cloudflare Tunnel](docs/remote-players.md), and [WireGuard](docs/wireguard-players.md)
+- [Screen setup builder](docs/screen-setup.md): saved VPN clients and downloadable per-screen configurations
 - [Architecture and pairing](docs/architecture.md), [API](docs/api.md), and [widget development](docs/widgets.md)
 - [Contributing](CONTRIBUTING.md), [security](SECURITY.md), [versioning/releases](docs/releases.md), and [changelog](CHANGELOG.md)
 
@@ -47,6 +48,8 @@ The playlist's Add slides tab marks slides already included with **In playlist**
 5. Pair a player using its displayed code, then assign the published playlist in Screens.
 
 Screens supports naming, assignment, last-seen status, rotation, a black display, refresh, restart, and credential revocation. Changes normally reach a connected player within 15 seconds, plus download time. Online status means a recent agent heartbeat, not proof that a physical monitor is working.
+
+Choose **Screens > Screen setup** to import WireGuard clients, track available/allocated configurations, and download a per-screen ZIP with server, optional VPN, first-boot Wi-Fi, and Cloudflare Access settings. Secrets are encrypted on the server; downloaded bundles are private plaintext files. See the [setup builder guide](docs/screen-setup.md) before copying files onto an SD card. Normal pairing approval is still required.
 
 When leaving an edited slide or playlist, choose Save and continue, Discard changes, or Keep editing. Save and continue waits for a successful save; a failed save leaves the editor open. This covers the editor Back action, browser Back from the editor, closing the playlist editor, and same-window links. Reloading, closing a tab, or entering another address uses the browser's native unsaved-changes warning; browsers do not permit a custom Save button there. Cancel that warning and save in the editor first. Saving a playlist draft does not publish it.
 

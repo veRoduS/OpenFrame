@@ -30,6 +30,15 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | POST | `/api/devices/:id/command` | Queue `{type:"refresh"}` or `{type:"reboot"}` |
 | DELETE | `/api/devices/:id` | Revoke and remove device |
 | POST | `/api/player/sync` | Heartbeat plus publication/config/command delivery |
+| GET | `/api/screen-setup` | Administrator-only VPN/setup metadata and default public server URL |
+| POST | `/api/screen-setup/vpns` | Import `{name,server,config}` with WireGuard client text; returns metadata only |
+| DELETE | `/api/screen-setup/vpns/:id` | Delete unused VPN config; allocated configs return 409 |
+| POST | `/api/screen-setup/setups` | Create encrypted setup and atomically reserve optional VPN client |
+| POST | `/api/screen-setup/setups/:id/download` | Administrator-only private ZIP attachment, `Cache-Control: no-store` |
+
+Setup creation accepts `{name,server?,vpnId?,wifi?:{ssid,password,country},access?:{client_id,client_secret}}`. Choose a direct server origin or a saved VPN ID; the saved VPN's server takes precedence. Origins require HTTP/HTTPS without userinfo, paths, queries, or fragments. Access credentials require HTTPS and nonempty printable ASCII header values. SSIDs are limited to 32 UTF-8 bytes, passwords to 64 characters, and country to two uppercase letters. Setup names and VPN names are case-insensitively unique within their respective inventories. Already allocated clients or duplicate names return 409; missing IDs return 404; invalid input returns 400. Missing/mismatched encryption keys return 503 without replacing the key or allocating a client.
+
+Inventory returns `{vpns,setups,defaultServer}`. VPN metadata is `{id,name,server,addresses,endpoints,fullTunnel,assignedTo,createdAt}`; `assignedTo` is a setup ID or null, not a device ID. Setup metadata is `{id,name,server,vpnId,createdAt}`. No listing includes credential fields or ciphertext. Downloads contain `openframe.json`, optional `openframe-wg.conf`, and `SETUP.txt`; creation does not enroll/approve a player. See [screen setup](screen-setup.md) for limits, retention, installation, and secret-handling requirements.
 
 Slide structure is defined in `server/schema.mjs`; positions and sizes are percentages. Durations are integer seconds from 2 to 3600. Rotation is 0, 90, 180, or 270 degrees.
 
