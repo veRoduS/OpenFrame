@@ -14,7 +14,7 @@ Patch resets at each minor milestone. Minor and patch reset at each major releas
 
 Patch commits accumulate locally and are included in the next milestone's pushed history. Users receive a milestone tag ending in `.0`, not a public release per patch. A failed push retried for the **same unchanged milestone** is not another version bump. Do not push an unprepared patch just to trigger CI or back up work; use private local/offline backups instead. Contributor pull requests are grouped into agreed milestones, with the maintainer assigning the integrated version.
 
-The initial `0.1.0` source was an unpublished development baseline. The GitHub-preparation revision is `0.1.1`; the next approved minor milestone is `0.2.0`. There is no automatic publication job, remote, or repository creation step in the version tool.
+The initial `0.1.0` source was an unpublished development baseline. The GitHub-preparation revision is recorded as local `0.1.1`; the first approved GitHub milestone is `0.2.0`. Repository: [veRoduS/OpenFrame](https://github.com/veRoduS/OpenFrame), default branch `main`. Version tools themselves never create a remote, commit, tag, or publish.
 
 ## Local revisions
 
@@ -55,7 +55,7 @@ Flags prevent accidental invocation; they do not authorize an assistant or contr
 
 ## First GitHub publication
 
-This source tree starts with no remote and no commits. Once checks pass, local history can be started with reviewed files. These are **manual operator commands**, not instructions to publish without approval:
+The original source started with no remote and no commits; its local baseline is now recorded. For a fresh independent repository, local history can be started with reviewed files using these **manual operator commands**, not instructions to publish without approval:
 
 ```sh
 git add .
@@ -70,6 +70,8 @@ After the approved version bump and milestone commit, create a tag such as `git 
 
 Wait for CI to pass, then manually draft/publish the GitHub Release from that tag with the reviewed notes. While hardware acceptance is incomplete, mark it as a prerelease/experimental. Do not attach configured Pi images, private JSON, data, or local workspace ZIPs. GitHub's tag source archives contain committed files. For a local source ZIP use `git archive --format=zip --prefix=openframe-0.2.0/ --output=outputs/openframe-0.2.0-source.zip v0.2.0` after creating `outputs/`; archive the reviewed tag, never the whole working directory.
 
-Enable private vulnerability reporting before inviting security reports. See [GitHub's configuration guide](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository). Configure branch protection to require successful checks and review; enable secret protection where available. Keep workflow token permissions read-only. Repository settings must be applied on GitHub and cannot be enabled by adding documentation alone.
+Enable private vulnerability reporting before inviting security reports. See [GitHub's configuration guide](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository). Configure branch protection to require successful checks and review; enable secret protection where available. Keep verification workflow permissions read-only; only the image publishing job receives `packages: write`. Repository settings must be applied on GitHub and cannot be enabled by adding documentation alone.
 
-CI runs on incoming pushes/PRs and manual dispatch. It does not originate pushes or publish releases/images. Version tags are checked against the package version and must end with a zero patch. Local-only patch revisions do not trigger remote CI. The workflow uses GitHub's maintained [checkout](https://github.com/actions/checkout), [Node setup](https://github.com/actions/setup-node), and [Python setup](https://github.com/actions/setup-python) actions.
+CI runs on incoming branch pushes/PRs, manual dispatch, and calls from the publication workflow. It does not originate pushes or publish releases/images. The separate [milestone image workflow](container-images.md) accepts `vX.Y.0` tags, runs CI against the tagged commit including native ARM64/AMD64 Docker checks, then publishes images and a Compose artifact. Version tags must match the package and have a zero patch. There is no image publishing on ordinary branch/PR activity and no automatic deployment. Local-only patches trigger neither workflow. GitHub Releases remain manual.
+
+The workflow uses GitHub's maintained [checkout](https://github.com/actions/checkout), [Node setup](https://github.com/actions/setup-node), and [Python setup](https://github.com/actions/setup-python) actions, plus Docker's [multi-platform build actions](https://docs.docker.com/build/ci/github-actions/multi-platform/).

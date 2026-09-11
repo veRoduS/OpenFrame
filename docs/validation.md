@@ -1,5 +1,13 @@
 # Validation record
 
+## GitHub milestone 0.2.0
+
+Local checks for the first GitHub milestone: 67 Node tests (including real Python-agent integration), 32 Python tests, lint, typecheck, production build, version/repository checks, and production dependency audit passed. The production audit reported zero advisories at check time.
+
+The new workflow adds native AMD64 and ARM64 Docker health, persistence, SQLite startup, and image-codec checks before image publication. Consult the [actual Actions runs](https://github.com/veRoduS/OpenFrame/actions) for remote results; adding a workflow is not proof it passed. Physical Pi testing remains outstanding. This milestone builds a server container and Compose artifact, not a tested SD-card image or containerized HDMI kiosk.
+
+## Local baseline 0.1.1
+
 Local release-preparation revision: **0.1.1**, checked on **2026-09-09**. These results describe this source revision, not a published GitHub release or a certified appliance image.
 
 | Check | Result |

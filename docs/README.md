@@ -4,6 +4,7 @@
 
 - [Quick start and user guide](../README.md): Docker setup, slide/media editing, playlists, schedules, widgets, and screens.
 - [Server operations](operations.md): configuration, backup/restore, upgrades, rollback, and troubleshooting.
+- [Container images](container-images.md): milestone GHCR publishing, prebuilt Compose stack, and ARM64 Pi requirements.
 - [Raspberry Pi installation](../README.md#raspberry-pi-installation): dedicated Pi setup, first boot, image customization, pairing, and local playback.
 - [Cloudflare Tunnel and Access](remote-players.md): off-site HTTPS connectivity and separate machine credentials.
 - [WireGuard players](wireguard-players.md): importing an existing per-player VPN configuration.

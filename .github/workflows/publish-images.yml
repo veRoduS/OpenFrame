@@ -1,0 +1,129 @@
+name: Publish milestone images
+
+on:
+  push:
+    tags: ['v*.*.0']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing approved milestone tag (for example v0.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      image: ${{ steps.release.outputs.image }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Validate requested tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.0$ ]] || { echo 'An approved X.Y.0 tag is required'; exit 1; }
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - id: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: node scripts/prepare-container-release.mjs
+
+  verify:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+
+  publish:
+    needs: [prepare, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.prepare.outputs.image }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse to replace a published milestone
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo 'This image version already exists. Use the existing digest; do not overwrite it.'
+            exit 1
+          fi
+      - name: Build and publish both architectures
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            VCS_REF=${{ needs.prepare.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=min
+          sbom: true
+      - name: Verify the registry manifest
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE@$IMAGE_DIGEST" --raw > /tmp/openframe-manifest.json
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const manifest = JSON.parse(readFileSync('/tmp/openframe-manifest.json', 'utf8'));
+          const platforms = manifest.manifests.map(m => `${m.platform?.os}/${m.platform?.architecture}`);
+          assert.ok(platforms.includes('linux/amd64'));
+          assert.ok(platforms.includes('linux/arm64'));
+          JS
+      - name: Package the digest-pinned Compose stack
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: node scripts/prepare-container-release.mjs bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: openframe-compose-${{ env.VERSION }}
+          path: outputs/compose-stack/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90
+      - name: Installation summary
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf '## OpenFrame %s\n\nImage: `%s:%s`\n\nDigest: `%s@%s`\n\nDownload the Compose artifact, copy `.env.example` to `.env`, then run `docker compose up -d`. Requires 64-bit Linux on ARM.\n' "$VERSION" "$IMAGE" "$VERSION" "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,5 @@
-FROM node:24-bookworm-slim AS build
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS build
 WORKDIR /app
 RUN npm install -g pnpm@11.19.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -7,6 +8,13 @@ COPY . .
 RUN pnpm build
 
 FROM node:24-bookworm-slim
+ARG VERSION=dev
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.title="OpenFrame" \
+      org.opencontainers.image.source="https://github.com/veRoduS/OpenFrame" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version=$VERSION \
+      org.opencontainers.image.revision=$VCS_REF
 ENV NODE_ENV=production PORT=3100 DATA_DIR=/data
 WORKDIR /app
 RUN npm install -g pnpm@11.19.0

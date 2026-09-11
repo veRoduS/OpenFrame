@@ -2,7 +2,7 @@
 
 ## Install
 
-Use a machine with Docker Engine/Desktop in Linux-container mode and the Docker Compose plugin. Download a milestone's source archive from the repository's Releases page, or clone the repository and check out its published tag. Run commands from the extracted repository root. No prebuilt OpenFrame container image is published yet; Compose builds the included Dockerfile.
+Use a machine with Docker Engine/Desktop in Linux-container mode and the Docker Compose plugin. The [container guide](container-images.md) covers the prebuilt milestone stack and ARM64 requirements. For source builds, download a milestone's source archive or clone the repository and check out its published tag. Run commands from the extracted repository root; the default Compose file builds the included Dockerfile.
 
 ```sh
 cp .env.example .env

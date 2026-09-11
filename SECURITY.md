@@ -4,7 +4,7 @@ OpenFrame is pre-1.0 software. There is no independent security audit, long-term
 
 ## Reporting vulnerabilities
 
-Do not open a public issue containing exploit details, credentials, private media, databases, or player identities. Once the repository is published and private vulnerability reporting is enabled, use its **Security > Report a vulnerability** action. If that action is absent, ask the maintainer in a public issue to establish a private reporting channel without disclosing the vulnerability. No private email address or reporting endpoint has been configured in this source tree.
+Do not open a public issue containing exploit details, credentials, private media, databases, or player identities. Private vulnerability reporting is enabled for [veRoduS/OpenFrame](https://github.com/veRoduS/OpenFrame/security/advisories/new). Use **Security > Report a vulnerability**. If that action is unavailable, ask the maintainer to establish a private reporting channel without disclosing the vulnerability. No private email address is configured in this source tree.
 
 Include affected server/player versions, deployment mode, impact, minimal reproduction, and a proposed fix if available. Redact administrator passwords, cookies, device tokens, Cloudflare credentials, WireGuard keys, Wi-Fi passwords, and private hostnames.
 

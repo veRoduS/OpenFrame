@@ -7,15 +7,16 @@ This is pre-1.0 software, not a finished Yodeck replacement. The management appl
 ## Documentation
 
 - [Documentation index](docs/README.md) and [server setup, backup, restore, and upgrades](docs/operations.md)
+- [Prebuilt Docker images and ARM Compose setup](docs/container-images.md)
 - [Pi installation](#raspberry-pi-installation), [Cloudflare Tunnel](docs/remote-players.md), and [WireGuard](docs/wireguard-players.md)
 - [Architecture and pairing](docs/architecture.md), [API](docs/api.md), and [widget development](docs/widgets.md)
 - [Contributing](CONTRIBUTING.md), [security](SECURITY.md), [versioning/releases](docs/releases.md), and [changelog](CHANGELOG.md)
 
-Routine changes receive local patch versions. GitHub publication happens only at approved minor milestones; major versions require an explicit owner request. No version command or CI workflow automatically pushes or publishes.
+Routine changes receive local patch versions. GitHub publication happens only at approved minor milestones; major versions require an explicit owner request. Version commands never push. Only approved milestone tags (or explicitly selected existing tags) trigger the separate image-publishing workflow; ordinary CI never publishes.
 
 ## Run with Docker
 
-Install Docker with the Compose plugin (Linux containers). Obtain this repository's source from an approved milestone tag/archive and run from its root directory. Copy `.env.example` to `.env` to customize host/port settings. No prebuilt registry image is required.
+Install Docker with the Compose plugin (Linux containers). For a prebuilt image, use the [milestone Compose stack](docs/container-images.md), available for AMD64 and ARM64 with a 64-bit OS. To build from source instead, obtain this repository's source from an approved milestone tag/archive and run from its root directory. Copy `.env.example` to `.env` to customize host/port settings. No registry image is required for source builds.
 
 ```sh
 docker compose up -d --build
