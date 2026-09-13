@@ -2,6 +2,15 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.3.0] - 2026-09-13
+
+- Approved GitHub milestone: screen setup bundles and experimental managed WireGuard onboarding.
+- Add encrypted imported WireGuard inventory, one-client-per-setup allocation, and private ZIP downloads containing player, optional Wi-Fi, and Cloudflare Access configuration.
+- Add opt-in, source-built WireGuard hosting, approval-gated peer allocation, managed VPN status, and a Pi first-boot hotspot form. Client private keys remain on the Pi; verified setup switches playback to the private VPN origin.
+- Include simple installation instructions, security/recovery guidance, and native AMD64/ARM64 helper build checks in CI. The managed helper is source-built; the existing publishing workflow publishes the application image and Compose artifact only.
+- Compatibility: existing players, external VPN imports, stored media, and manifest schema remain unchanged. Back up application data before upgrading; managed deployments also require the matching WireGuard state backup. Server upgrades do not update Pi code or the OS. Use matching player source when provisioning the new hotspot flow; see [setup](docs/quick-start.md) and [upgrade/rollback operations](docs/operations.md).
+- Experimental limitations: real managed Docker networking, image building, Pi Wi-Fi/HDMI boot, and Zero 2 W performance remain unvalidated. No prebuilt hardware-tested SD-card image, automatic public fallback, or OTA update service is included.
+
 ## [0.2.2] - 2026-09-13
 
 - Add optional managed WireGuard hosting and Pi first-boot hotspot setup

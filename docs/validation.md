@@ -1,5 +1,11 @@
 # Validation record
 
+## GitHub milestone 0.3.0
+
+Pre-publication checks on 2026-09-13: 80 Node tests (zero skips, including Python-agent integration), 40 Python tests, typecheck, lint, formatting, production build, shell syntax, version/repository checks, and an isolated frozen-lockfile install passed. The production dependency audit reported no known vulnerabilities. Screen-setup and first-boot-form browser regressions passed at desktop and phone widths using isolated data and mocked networking.
+
+This milestone preserves both local patch commits. See [Actions](https://github.com/veRoduS/OpenFrame/actions) for CI and image-publication results; local checks do not establish remote success. Docker is unavailable locally. Live managed networking, image building, Pi boot, and hardware performance remain experimental and unvalidated, as described in the [acceptance checklist](managed-wireguard.md#acceptance-checks). No hardware-tested SD-card image is being published.
+
 ## Local revision 0.2.2
 
 Checked on 2026-09-12, locally only. Optional managed WireGuard and hotspot onboarding are experimental, not a published appliance release.

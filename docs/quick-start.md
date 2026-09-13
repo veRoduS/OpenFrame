@@ -1,6 +1,6 @@
 # Simple server and screen setup
 
-Use the server and player source from the same checkout. The automated hotspot/managed-VPN flow below is new, experimental local work; it is not included in the published 0.2.0 images. No prebuilt, hardware-tested SD-card image is available yet.
+Use the server and player source from the same 0.3.0 checkout. The automated hotspot/managed-VPN flow below is experimental and uses the separate source-built managed stack, not the ordinary prebuilt application image alone. No prebuilt, hardware-tested SD-card image is available yet.
 
 ## Easiest existing setup
 
