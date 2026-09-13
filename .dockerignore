@@ -19,6 +19,7 @@ player/__pycache__
 openframe.json
 openframe-screen-*.zip
 identity.json
+server-key.json
 *.private.json
 *.key
 *.pem

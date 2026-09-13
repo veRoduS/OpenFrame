@@ -12,7 +12,8 @@ delete process.env.PUBLIC_URL;
 process.env.COOKIE_SECURE = 'false';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const dir = mkdtempSync(path.join(os.tmpdir(), 'openframe-setup-browser-'));
-const { app, db } = createApp({ dataDir: dir });
+delete process.env.OPENFRAME_WG_SOCKET;
+const { app, db, close } = createApp({ dataDir: dir });
 app.use(express.static(path.join(root, 'dist')));
 app.get('/{*path}', (req, res) =>
   res.sendFile(path.join(root, 'dist/index.html')),
@@ -55,6 +56,9 @@ try {
     exact: true,
   });
   await dialog.getByLabel('Screen name', { exact: true }).waitFor();
+  await dialog.getByRole('tab', { name: 'Managed VPN', exact: true }).click();
+  await dialog.getByText('Not enabled', { exact: true }).waitFor();
+  await dialog.getByRole('tab', { name: 'Build config', exact: true }).click();
   assert.equal(await dialog.getByLabel('Home server URL').inputValue(), '');
   await dialog.getByRole('tab', { name: 'VPN configs', exact: true }).click();
   await dialog
@@ -107,6 +111,20 @@ try {
     await dialog.evaluate((element) => {
       element.scrollTop = 0;
     });
+    assert.ok(
+      await dialog.evaluate((element) => {
+        const bottom = Math.max(
+          ...[...element.querySelectorAll('.setup-tabs > button')].map(
+            (button) => button.getBoundingClientRect().bottom,
+          ),
+        );
+        return (
+          bottom <=
+          element.querySelector('.setup-content').getBoundingClientRect().top
+        );
+      }),
+      `Tabs overlap content at ${width}px`,
+    );
     await page.screenshot({
       path: path.join(root, `work/screen-setup-${state}-${width}.png`),
     });
@@ -192,11 +210,32 @@ try {
   assert.equal(inventory.setups.length, 1);
   for (const secret of [privateKey, 'fake-wifi-password', 'fake-client-secret'])
     assert.ok(!JSON.stringify(inventory).includes(secret));
+  // Status rendering uses a fixture; the real backend remains VPN-disabled.
+  await page.route('**/api/managed-vpn', (route) =>
+    route.fulfill({
+      json: {
+        enabled: true,
+        endpoint: 'vpn.example.com:51820',
+        server: 'http://10.77.0.1:3100',
+        peers: [
+          {
+            id: 'test-peer',
+            name: 'Offsite lobby screen',
+            address: '10.77.0.2',
+          },
+        ],
+      },
+    }),
+  );
+  await dialog.getByRole('tab', { name: 'Managed VPN', exact: true }).click();
+  await dialog.getByText('Registered screens (1)', { exact: true }).waitFor();
+  for (const width of [1280, 390, 320]) await checkLayout(width, 'managed');
   assert.deepEqual(errors, []);
   console.log(
     'Screen setup browser checks passed: real import/allocation/export, re-download, and 1280/390/320px layouts.',
   );
 } finally {
+  close();
   if (browser) await browser.close();
   server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));

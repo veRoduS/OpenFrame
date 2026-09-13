@@ -1,6 +1,8 @@
 # Screen setup builder
 
-Open **Screens > Screen setup** as an administrator to create a private setup ZIP. It supports a direct LAN/HTTPS server or a saved WireGuard client, with optional first-boot Wi-Fi and Cloudflare Access credentials. This is a configuration builder, not an OS image flasher or VPN server manager.
+Open **Screens > Screen setup** as an administrator to create a private setup ZIP. It supports a direct LAN/HTTPS server or a saved WireGuard client, with optional first-boot Wi-Fi and Cloudflare Access credentials. The ZIP builder is not an OS image flasher and does not change an external VPN server.
+
+The separate **Managed VPN** tab shows the optional OpenFrame-hosted WireGuard service and its registered peers. Enable that service through the [managed stack](managed-wireguard.md). Its hotspot-prepared players generate private keys themselves and request settings after approval, without consuming imported VPN inventory or downloading a ZIP. Registered does not mean currently connected. Existing imported clients follow the instructions below; their external VPN peers are still managed manually.
 
 ## Prepare a WireGuard inventory
 

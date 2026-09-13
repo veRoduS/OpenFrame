@@ -1,6 +1,6 @@
 {
   "name": "openframe",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.19.0",
@@ -18,8 +18,8 @@
     "version:major": "node scripts/version.mjs major",
     "repository:check": "node scripts/check-repository.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint app server tests player/web scripts",
-    "format": "oxfmt --ignore-path .formatignore app server tests player/web scripts"
+    "lint": "oxlint app server tests player/web player/setup-web scripts",
+    "format": "oxfmt --ignore-path .formatignore app server tests player/web player/setup-web scripts"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

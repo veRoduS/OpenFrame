@@ -1,0 +1,42 @@
+# Standalone source-built stack. Do not merge with the other Compose files.
+services:
+  wireguard:
+    build:
+      context: .
+      dockerfile: Dockerfile.wireguard
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_RAW, CHOWN]
+    security_opt: [no-new-privileges:true]
+    environment:
+      WG_ENDPOINT: ${WG_ENDPOINT:?Set WG_ENDPOINT to the public DNS name or IP and forwarded UDP port}
+      WG_PREFIX: ${WG_PREFIX:-10.77.0}
+    ports:
+      - "${WG_PORT:-51820}:51820/udp"
+      - "${OPENFRAME_BIND_ADDRESS:-127.0.0.1}:${OPENFRAME_PORT:-3100}:3100"
+    volumes:
+      - wireguard-state:/var/lib/openframe-wireguard
+      - wireguard-control:/run/openframe-vpn
+    restart: unless-stopped
+    init: true
+  openframe:
+    build: .
+    network_mode: service:wireguard
+    depends_on:
+      wireguard:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - openframe-data:/data
+      - wireguard-control:/run/openframe-vpn:ro
+    environment:
+      DATA_DIR: /data
+      OPENFRAME_WG_SOCKET: /run/openframe-vpn/control.sock
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    init: true
+volumes:
+  openframe-data:
+  wireguard-state:
+  wireguard-control:

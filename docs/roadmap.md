@@ -10,6 +10,7 @@
 - Explicit publication snapshots, pairing/assignment, rotation/blanking, readiness reports, refresh/restart/revocation.
 - Verified offline asset cache and prepared-frame playback; Pi installation and image-customization scripts.
 - Optional off-site Cloudflare Tunnel/Access and existing WireGuard client configuration import.
+- Experimental opt-in WireGuard hosting, per-approved-screen peer registration, and first-boot Pi Wi-Fi hotspot enrollment. Native networking and image/hardware validation remain outstanding; see [acceptance checks](managed-wireguard.md#acceptance-checks).
 
 ## Before claiming appliance readiness
 

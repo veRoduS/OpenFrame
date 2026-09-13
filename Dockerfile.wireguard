@@ -1,0 +1,6 @@
+FROM node:24-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends wireguard-tools iproute2 iptables && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY server/wireguard-core.mjs server/wireguard-host.mjs ./
+HEALTHCHECK --interval=15s --timeout=5s CMD node -e "const h=require('http');const r=h.get({socketPath:'/run/openframe-vpn/control.sock',path:'/status'},s=>process.exit(s.statusCode===200?0:1));r.on('error',()=>process.exit(1))"
+CMD ["node", "wireguard-host.mjs"]

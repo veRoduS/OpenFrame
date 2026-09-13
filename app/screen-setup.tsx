@@ -9,6 +9,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { api } from './types';
+import { ManagedVpn } from './managed-vpn';
 
 type Vpn = {
   id: string;
@@ -166,6 +167,7 @@ export function ScreenSetup({ onClose }: { onClose: () => void }) {
             <TabsTrigger value="build">Build config</TabsTrigger>
             <TabsTrigger value="vpns">VPN configs</TabsTrigger>
             <TabsTrigger value="issued">Issued setups</TabsTrigger>
+            <TabsTrigger value="managed">Managed VPN</TabsTrigger>
           </TabsList>
         </Tabs>
         {error && (
@@ -177,6 +179,7 @@ export function ScreenSetup({ onClose }: { onClose: () => void }) {
           <output>Loading configurations...</output>
         ) : (
           <fieldset disabled={busy} className="setup-content">
+            {tab === 'managed' && <ManagedVpn />}
             {tab === 'build' && (
               <form
                 onSubmit={(e) => {

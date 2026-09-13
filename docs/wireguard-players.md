@@ -1,5 +1,7 @@
 # Off-site players through your existing WireGuard server
 
+For OpenFrame to host its own VPN and register hotspot-prepared players, use the separate [managed WireGuard guide](managed-wireguard.md). This page covers externally managed VPN servers and imported client files; that existing path is unchanged.
+
 WireGuard is an alternative to Cloudflare Tunnel. It does not require a public OpenFrame hostname. Keep the existing VPN server; export a separate **client** configuration for each Pi. OpenFrame does not create peers on your VPN server or change its firewall.
 
 ```text

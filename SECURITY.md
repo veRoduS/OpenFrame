@@ -10,6 +10,8 @@ Include affected server/player versions, deployment mode, impact, minimal reprod
 
 ## Deployment boundaries
 
+- Optional [managed WireGuard and hotspot onboarding](docs/managed-wireguard.md) adds an explicitly enabled root Pi setup service and a separate network-capable Docker helper. The Pi retains its private key; public HTTPS enrollment and administrator approval precede peer registration. The temporary Wi-Fi form requires physically displayed credentials and must be supervised. Its HTTP page is not TLS-protected. Native firewall/hotspot behavior still needs real-host validation; do not infer isolation from mocked tests.
+- Managed VPN backups include the private `wireguard-state/server-key.json` as well as application data. Restore matching state, encrypt backups, and never commit it or configured images. Managed screen deletion requests peer revocation, with lease expiry as a fallback if the helper is unavailable; external imported VPN peers still require manual revocation.
 - Complete first-administrator setup on a trusted LAN or behind an Access policy before making a hostname public. The first caller can initialize an unconfigured server. Passwords require 12-256 characters; there is one administrator, no MFA/roles, and no password-reset UI.
 - Use HTTPS for off-site access, or HTTP strictly inside your WireGuard tunnel/trusted LAN. Set `PUBLIC_URL` to the exact public origin and `COOKIE_SECURE=true` when using HTTPS. Do not disable certificate verification.
 - Cloudflare Tunnel supplies connectivity; Access policies supply an additional access boundary. An unattended player needs Service Auth, not an interactive login. Keep OpenFrame pairing enabled in either case.

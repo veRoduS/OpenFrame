@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OpenFrame first boot</title>
+    <link rel="stylesheet" href="/setup.css" />
+    <script src="/screen.js" defer></script>
+  </head>
+  <body class="display">
+    <main>
+      <header>
+        <span class="brand">OpenFrame</span
+        ><span class="badge">First boot</span>
+      </header>
+      <h1 id="phase">Starting setup</h1>
+      <section class="connection" id="connection">
+        <img
+          src="/hotspot.png"
+          alt="Setup Wi-Fi QR code"
+          width="240"
+          height="240"
+        />
+        <dl>
+          <dt>Wi-Fi network</dt>
+          <dd id="ssid"></dd>
+          <dt>Password</dt>
+          <dd id="password"></dd>
+          <dt>Setup address</dt>
+          <dd id="url"></dd>
+        </dl>
+      </section>
+      <section id="approval" hidden>
+        <h2>Screen approval code</h2>
+        <p id="code"></p>
+      </section>
+      <p id="screen-error" role="alert"></p>
+    </main>
+  </body>
+</html>

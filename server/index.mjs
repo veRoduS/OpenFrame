@@ -3,7 +3,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const project = fileURLToPath(new URL('..', import.meta.url));
-const { app, db } = createApp();
+const { app, db, close } = createApp();
 app.use('/player', express.static(path.join(project, 'player/web')));
 if (process.argv.includes('--dev')) {
   const { createServer } = await import('vite');
@@ -23,6 +23,7 @@ const server = app.listen(port, process.env.HOST || '0.0.0.0', () =>
   console.log(`OpenFrame: http://localhost:${port}`),
 );
 function stop() {
+  close();
   server.close(() => {
     db.close();
     process.exit(0);

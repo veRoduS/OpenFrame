@@ -1,5 +1,6 @@
 import express from 'express';
 import { mountScreenSetup } from './screen-setup.mjs';
+import { mountManagedVpn } from './managed-vpn.mjs';
 import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
@@ -29,7 +30,10 @@ const secret = () => randomBytes(32).toString('hex');
 const passwordSchema = z.object({ password: z.string().min(12).max(256) });
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
-export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
+export function createApp({
+  dataDir = process.env.DATA_DIR || './data',
+  managedVpnTransport,
+} = {}) {
   const root = path.resolve(dataDir);
   mkdirSync(path.join(root, 'media'), { recursive: true });
   const db = new DatabaseSync(path.join(root, 'openframe.sqlite'));
@@ -186,6 +190,14 @@ export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
     res.json({ ok: true });
   });
   mountScreenSetup(app, { admin, db, root, list, get, put, remove });
+  const managedVpn = mountManagedVpn(app, {
+    admin,
+    player,
+    list,
+    get,
+    put,
+    transport: managedVpnTransport,
+  });
   const publicDevice = (d) => {
     const { tokenHash: _tokenHash, ...rest } = d;
     return rest;
@@ -485,15 +497,41 @@ export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
     },
   );
   app.post('/api/player/enroll', rateLimit, (req, res) => {
-    const { name } = z
-      .object({ name: z.string().trim().min(1).max(100) })
+    const { name, wireguardPublicKey, enrollmentToken } = z
+      .object({
+        name: z.string().trim().min(1).max(100),
+        wireguardPublicKey: z.string().max(44).optional(),
+        enrollmentToken: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+      })
       .parse(req.body);
+    if (wireguardPublicKey && !enrollmentToken)
+      throw fail(
+        400,
+        'Managed enrollment requires a persistent enrollment token',
+      );
+    if (wireguardPublicKey) {
+      const previous = list('device').find(
+        (d) => d.wireguardPublicKey === wireguardPublicKey,
+      );
+      if (previous && previous.tokenHash === hash(enrollmentToken))
+        return res.status(200).json({
+          id: previous.id,
+          token: enrollmentToken,
+          code: previous.code,
+        });
+    }
+    managedVpn.validateEnrollment(wireguardPublicKey);
     for (const d of list('device'))
       if (!d.approved && Date.now() - Date.parse(d.createdAt) > 86400000)
         remove('device', d.id);
     if (list('device').filter((d) => !d.approved).length >= 50)
       throw fail(429, 'Too many pending devices');
-    const token = secret();
+    const token = wireguardPublicKey ? enrollmentToken : secret();
+    if (list('device').some((d) => d.tokenHash === hash(token)))
+      throw fail(409, 'Enrollment token already in use');
     const code = randomBytes(4).toString('hex').toUpperCase();
     const device = put('device', {
       id: randomUUID(),
@@ -508,6 +546,7 @@ export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
       lastSeen: null,
       status: null,
       command: null,
+      ...(wireguardPublicKey ? { wireguardPublicKey } : {}),
     });
     res.status(201).json({ id: device.id, token, code });
   });
@@ -538,9 +577,10 @@ export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
     put('device', device);
     res.json({ ok: true });
   });
-  app.delete('/api/devices/:id', admin, (req, res) => {
+  app.delete('/api/devices/:id', admin, async (req, res) => {
     requireRecord('device', req.params.id);
     remove('device', req.params.id);
+    await managedVpn.revoked();
     res.json({ ok: true });
   });
   app.post('/api/player/sync', player, (req, res) => {
@@ -618,5 +658,5 @@ export function createApp({ dataDir = process.env.DATA_DIR || './data' } = {}) {
             : err.message,
     });
   });
-  return { app, db };
+  return { app, db, close: () => managedVpn.close() };
 }

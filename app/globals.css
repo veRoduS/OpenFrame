@@ -719,6 +719,27 @@ small {
 .setup-list {
   margin-top: 16px;
 }
+.managed-vpn {
+  display: grid;
+  gap: 18px;
+  overflow-wrap: anywhere;
+}
+.managed-vpn h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.managed-vpn dt {
+  color: #63716a;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.managed-vpn .setup-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+.managed-vpn .setup-row > span {
+  white-space: nowrap;
+}
 .setup-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(80px, 180px) 36px;
@@ -756,6 +777,16 @@ small {
   justify-content: flex-end;
 }
 @media (max-width: 540px) {
+  .setup-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    height: auto !important;
+    min-height: 73px;
+    gap: 3px;
+  }
+  .setup-tabs > button {
+    min-height: 32px;
+  }
   .screens-heading {
     flex-direction: column;
     align-items: flex-start;

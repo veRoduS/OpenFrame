@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.2.2] - 2026-09-13
+
+- Add optional managed WireGuard hosting and Pi first-boot hotspot setup
+
 ## [0.2.1] - 2026-09-11
 
 - Add screen setup bundles with encrypted WireGuard inventory and per-screen allocation

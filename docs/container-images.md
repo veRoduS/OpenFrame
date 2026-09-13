@@ -1,5 +1,7 @@
 # Docker images and Compose stack
 
+The optional [managed WireGuard stack](managed-wireguard.md) currently builds both services from source. Its `Dockerfile.wireguard` is separate from the normal application image. CI includes native AMD64/ARM64 helper builds, a WireGuard binary check, and Compose validation, but does not publish that helper or validate a live VPN. Published milestone application images do not automatically include later local changes.
+
 Repository: https://github.com/veRoduS/OpenFrame
 
 The **Publish milestone images** action builds OpenFrame's home-server image and uploads a ready-to-run Compose stack. It does not deploy onto your computer, install a Pi OS, or configure a physical HDMI kiosk. The existing native Pi player installer remains the lightweight playback path.

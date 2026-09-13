@@ -6,6 +6,7 @@ This is pre-1.0 software, not a finished Yodeck replacement. The management appl
 
 ## Documentation
 
+- [Simple server and screen setup](docs/quick-start.md), including the optional [managed WireGuard and hotspot flow](docs/managed-wireguard.md)
 - [Documentation index](docs/README.md) and [server setup, backup, restore, and upgrades](docs/operations.md)
 - [Prebuilt Docker images and ARM Compose setup](docs/container-images.md)
 - [Pi installation](#raspberry-pi-installation), [Cloudflare Tunnel](docs/remote-players.md), and [WireGuard](docs/wireguard-players.md)
@@ -36,6 +37,8 @@ Players can connect from other networks through a Cloudflare Tunnel and your own
 The included `compose.cloudflare.yaml` runs the home connector without publishing application ports. Players support optional Cloudflare Access service tokens as well as OpenFrame's normal pairing. See [docs/remote-players.md](docs/remote-players.md) for existing-tunnel and Docker setup, secret handling, and connection checks. The Cloudflare deployment is not started automatically, and the default local setup is unchanged.
 
 **WireGuard is also supported.** Drop an exported player client config named `openframe-wg.conf` beside `openframe.json`, then run the Pi installer or image builder. Set `server` to OpenFrame's VPN-reachable address. The installer enables a dedicated tunnel service without making cached playback wait for VPN readiness. See [docs/wireguard-players.md](docs/wireguard-players.md) for routing, per-player keys, and checks. No VPN server changes are made automatically.
+
+OpenFrame can also host an optional WireGuard service and enroll Pi players through a first-boot Wi-Fi hotspot. This experimental, source-built path registers a separate public key per approved screen; private keys stay on the Pi. It does not change an existing VPN server. See [the setup guide](docs/managed-wireguard.md) for UDP/HTTPS requirements and outstanding hardware validation.
 
 ## First playlist
 

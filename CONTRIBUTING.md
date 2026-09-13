@@ -41,6 +41,8 @@ After `pnpm build`, run `node tests/screen-setup.browser.mjs` with the same Play
 
 ## Change requirements
 
+Run `node tests/bootstrap.browser.mjs` with the same Playwright settings to check the first-boot form at desktop and phone sizes. Its network requests are mocked and it never configures your Wi-Fi. Managed VPN tests use an injected helper; Python provisioning tests mock privileged commands. Actual Compose networking, image chroot/package installation, regulatory settings, and Pi AP/client switching need the separate [acceptance checklist](docs/managed-wireguard.md#acceptance-checks).
+
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.
 - Validate inputs in `server/schema.mjs`, mirror them in `app/types.ts`, and bound player memory/network/timer work.
 - Update the relevant [documentation](docs/README.md) and describe user-visible behavior, compatibility, and migration needs.

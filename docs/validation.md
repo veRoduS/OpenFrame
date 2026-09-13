@@ -1,5 +1,17 @@
 # Validation record
 
+## Local revision 0.2.2
+
+Checked on 2026-09-12, locally only. Optional managed WireGuard and hotspot onboarding are experimental, not a published appliance release.
+
+- 80 Node tests passed, zero skipped, including real Python-agent integration and injected managed-VPN approval, allocation, retry, outage, revocation, and identity-pinning cases.
+- 40 Python tests passed. First-boot country/AP commands, route guarding, public-to-private pairing preservation, enrollment retries, portal request boundaries, and existing agent/import paths use mocked privileged networking.
+- Typecheck, lint, formatting, production build, three Pi shell syntax checks, version consistency, repository hygiene, documentation links, and Compose/CI YAML parsing passed.
+- First-boot phone form passed at 900/390/320px. Screen setup/import/export and managed-status layouts passed at 1280/390/320px using an ephemeral database and fake credentials. Playlist picker regression passed at the same three sizes against mocked APIs. Screenshots were visually inspected for the phone form and setup views.
+- The normal local preview reports version 0.2.2. No VPN service, router change, image publication, GitHub push, or deployment was performed.
+
+Docker is unavailable in this Windows environment. Live WireGuard/iptables/network-namespace behavior, hotspot radio switching, image chroot/package installation, fresh Pi boot, and physical Zero 2 W/Pi 4/5 performance remain untested. CI's new helper build/binary checks have not been run remotely for this local revision. Complete the [managed VPN acceptance checklist](managed-wireguard.md#acceptance-checks), including forced-helper-failure recovery, before unattended use. No new dependency audit or independent security audit was performed for this revision.
+
 ## GitHub milestone 0.2.0
 
 Local checks for the first GitHub milestone: 67 Node tests (including real Python-agent integration), 32 Python tests, lint, typecheck, production build, version/repository checks, and production dependency audit passed. The production audit reported zero advisories at check time.

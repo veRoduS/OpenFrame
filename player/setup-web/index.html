@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OpenFrame setup</title>
+    <link rel="stylesheet" href="/setup.css" />
+    <script src="/setup.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="brand">OpenFrame</span
+        ><span class="badge">Screen setup</span>
+      </header>
+      <h1>Connect your screen</h1>
+      <form id="setup">
+        <label
+          >Screen name<input
+            name="name"
+            required
+            maxlength="100"
+            autocomplete="off"
+        /></label>
+        <label
+          >Wi-Fi network (SSID)<input
+            name="ssid"
+            required
+            maxlength="32"
+            autocomplete="off"
+        /></label>
+        <label
+          >Wi-Fi password<input
+            name="password"
+            type="password"
+            maxlength="64"
+            autocomplete="new-password"
+        /></label>
+        <label
+          >Country code<input
+            name="country"
+            required
+            value="US"
+            pattern="[A-Z]{2}"
+            maxlength="2"
+        /></label>
+        <label
+          >OpenFrame server URL<input
+            name="server"
+            type="url"
+            required
+            placeholder="https://openframe.example.com"
+            pattern="https://.*"
+            autocomplete="url"
+        /></label>
+        <details>
+          <summary>Cloudflare Access</summary>
+          <label
+            >Client ID<input
+              name="clientId"
+              maxlength="2048"
+              autocomplete="off" /></label
+          ><label
+            >Client secret<input
+              name="clientSecret"
+              type="password"
+              maxlength="2048"
+              autocomplete="new-password"
+          /></label>
+        </details>
+        <p id="error" role="alert"></p>
+        <button type="submit" disabled>Connect</button>
+      </form>
+      <output id="status" aria-live="polite"></output>
+    </main>
+  </body>
+</html>

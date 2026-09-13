@@ -30,6 +30,7 @@ yarn-error.log*
 # local environment
 .env*
 !.env.example
+!.env.managed.example
 /data/
 /player-cache/
 /.secrets/
@@ -52,6 +53,7 @@ next-env.d.ts
 openframe.json
 openframe-screen-*.zip
 identity.json
+server-key.json
 *.private.json
 *.key
 *.p12

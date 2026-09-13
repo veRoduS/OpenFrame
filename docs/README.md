@@ -2,6 +2,8 @@
 
 ## Install and operate
 
+- [Simple server and screen setup](quick-start.md): shortest manual and automated installation paths.
+- [Managed WireGuard and first-boot hotspot](managed-wireguard.md): optional VPN hosting, approval, private routing, and hardware acceptance checks.
 - [Quick start and user guide](../README.md): Docker setup, slide/media editing, playlists, schedules, widgets, and screens.
 - [Server operations](operations.md): configuration, backup/restore, upgrades, rollback, and troubleshooting.
 - [Container images](container-images.md): milestone GHCR publishing, prebuilt Compose stack, and ARM64 Pi requirements.

@@ -1,5 +1,7 @@
 # Server operations
 
+For the shortest instructions see [simple setup](quick-start.md). Optional OpenFrame-hosted WireGuard uses a separate [standalone stack](managed-wireguard.md), with its own UDP endpoint and additional backup requirements. Its internal `OPENFRAME_WG_SOCKET` setting connects the app to the restricted helper socket; leave it unset for ordinary deployments. Back up matching application data and `wireguard-state` together, not just the application volume.
+
 ## Install
 
 Use a machine with Docker Engine/Desktop in Linux-container mode and the Docker Compose plugin. The [container guide](container-images.md) covers the prebuilt milestone stack and ARM64 requirements. For source builds, download a milestone's source archive or clone the repository and check out its published tag. Run commands from the extracted repository root; the default Compose file builds the included Dockerfile.

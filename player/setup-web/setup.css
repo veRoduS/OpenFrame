@@ -1,0 +1,153 @@
+* {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+body {
+  margin: 0;
+  background: #f5f7f6;
+  color: #202923;
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+}
+main {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #dce3df;
+  padding-bottom: 20px;
+}
+.brand {
+  font-weight: 700;
+  font-size: 22px;
+}
+.badge {
+  font-size: 12px;
+  color: #356181;
+}
+h1 {
+  font-size: 26px;
+  line-height: 1.3;
+  margin: 28px 0;
+}
+form {
+  display: grid;
+  gap: 18px;
+}
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  min-width: 0;
+}
+input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px;
+  min-height: 44px;
+  font: inherit;
+  border: 1px solid #bbc9c0;
+  border-radius: 5px;
+  background: white;
+  color: #202923;
+}
+input:focus {
+  outline: 2px solid #307454;
+  outline-offset: 1px;
+}
+button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 5px;
+  background: #216c49;
+  color: white;
+  font:
+    600 16px system-ui,
+    sans-serif;
+  cursor: pointer;
+  padding: 12px 20px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+details {
+  border-top: 1px solid #dce3df;
+  padding-top: 14px;
+}
+details label {
+  margin-top: 12px;
+}
+summary {
+  cursor: pointer;
+  font-size: 14px;
+}
+#error,
+#screen-error {
+  color: #9a342e;
+  overflow-wrap: anywhere;
+}
+#error:empty {
+  display: none;
+}
+output {
+  display: block;
+  color: #356181;
+  margin-top: 20px;
+}
+.display main {
+  max-width: 960px;
+  padding-top: 48px;
+}
+.connection {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: center;
+  gap: 48px;
+  margin: 36px 0;
+}
+.connection img {
+  width: 240px;
+  height: 240px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+dl {
+  margin: 0;
+}
+dt {
+  color: #647269;
+  font-size: 15px;
+  margin-top: 12px;
+}
+dd {
+  font-size: 24px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+#code {
+  font:
+    700 40px ui-monospace,
+    monospace;
+  color: #216c49;
+  overflow-wrap: anywhere;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .connection {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .connection img {
+    width: 200px;
+    height: 200px;
+  }
+}
