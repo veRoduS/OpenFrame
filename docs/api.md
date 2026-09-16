@@ -1,5 +1,13 @@
 # HTTP API
 
+## Local recovery portal
+
+These routes exist only on the temporary player hotspot at `http://192.168.50.1`, not on the home server or first-boot portal. `GET /setup/state` returns `{csrf,paused,pauseSeconds,remainingSeconds,closing}`. `pauseSeconds` is the selected pause length; null means indefinite when paused. `remainingSeconds` is a rounded-up, monotonic countdown, or null while indefinitely paused. Reading state never extends the window.
+
+`POST /setup/pause` accepts exactly `{duration:60}`, `{duration:300}`, `{duration:900}`, or `{duration:null}` and returns the updated state. `POST /setup/resume` takes `{}` and queues immediate reconnection to saved Wi-Fi. `POST /setup` takes `{ssid,password,country}` and queues replacement Wi-Fi regardless of pause. Resume/submission return 202; invalid input returns 400, an expired/closing/already-submitted window returns 409. Writes require the local Host, matching Origin, and `X-Setup-Token` from state; bodies are limited to 2048 bytes. Responses are not cached. Pauses belong to the running recovery service and reset on restart. See [recovery behavior](player-recovery.md).
+
+## Home server
+
 This contract follows the application source; it is not a separate versioned URL namespace. Software versions, publication revisions, and manifest schemaVersion are independent. See [release compatibility](releases.md).
 
 All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an appropriate HTTP status. Administrator requests require the `openframe_session` HttpOnly cookie, issued by setup/login and valid for 24 hours. Browser writes must use the server's origin (or configured `PUBLIC_URL`). Devices use `Authorization: Bearer <token>`.

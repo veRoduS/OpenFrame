@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.3.2
+
+Checked on 2026-09-16: 81 Node tests (including Python-agent integration), 56 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. New recovery coverage includes each monotonic pause deadline, indefinite pause, invalid inputs, expiry/submission ordering, restart defaults, protected pause/resume endpoints, and retaining the hotspot past its original deadline until resumed. Privileged networking remains mocked.
+
+Browser checks passed for the branded first-boot display at 1920x1080 and 800x480 plus 390px, all three setup stages, cached playback and connection indicators, and the recovery page at 900/390/320px. Recovery tests exercise all four pause choices, reload persistence, preserving in-progress edits when pausing, explicit resume, failed pause responses, and replacement Wi-Fi submission while paused. The first-boot phone-form regression also passed at 900/390/320px. Screenshots were inspected. QR credentials are fake fixtures; native QR generation/scanning and actual Pi radio switching remain untested. Complete the expanded [hardware recovery checks](player-recovery.md#validation-before-unattended-use) before unattended use. No GitHub push, device deployment, or new dependency audit was performed.
+
 ## Local revision 0.3.1
 
 Checked on 2026-09-16: 81 Node tests (including Python-agent integration), 49 Python tests, typecheck, lint, formatting, build, shell syntax, and version/repository checks passed. The added coverage includes encrypted recovery credentials and access control, cached-playback connectivity/retry state, hidden profile construction, outage grace/retry timing, reserved firewall cleanup, and recovery form boundaries.

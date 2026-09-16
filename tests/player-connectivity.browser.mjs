@@ -60,6 +60,10 @@ try {
     });
     await page.goto('http://setup.test/');
     await page.getByText('Scan to connect', { exact: true }).waitFor();
+    assert.equal(
+      await page.locator('.setup-progress [aria-current]').textContent(),
+      '01 Connect',
+    );
     assert.ok(
       await page
         .locator('img')
@@ -70,6 +74,10 @@ try {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
+    await page.screenshot({
+      path: `work/player-setup-${viewport.width}.png`,
+      fullPage: true,
+    });
     if (viewport.width > 600)
       assert.ok(
         await page.evaluate(
@@ -77,14 +85,26 @@ try {
         ),
         'Setup overflows HDMI viewport',
       );
-    await page.screenshot({
-      path: `work/player-setup-${viewport.width}.png`,
-      fullPage: true,
-    });
+    phase = 'Joining Wi-Fi';
+    await page.clock.fastForward(2200);
+    await page.getByRole('heading', { name: 'Joining Wi-Fi' }).waitFor();
+    assert.equal(
+      await page.locator('.setup-progress [aria-current]').textContent(),
+      '02 Configure',
+    );
+    assert.equal(await page.locator('#connection').isVisible(), false);
     phase = 'Awaiting approval';
     await page.clock.fastForward(2200);
     await page.getByText('ABCDEF12').waitFor();
     assert.equal(await page.locator('#connection').isVisible(), false);
+    assert.equal(
+      await page.locator('.setup-progress [aria-current]').textContent(),
+      '03 Pair screen',
+    );
+    await page.screenshot({
+      path: `work/player-approval-${viewport.width}.png`,
+      fullPage: true,
+    });
     await page.close();
   }
   for (const width of [1280, 390]) {
@@ -176,37 +196,121 @@ try {
     assert.equal(await page.locator('#stage').isVisible(), false);
     await page.close();
   }
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-  let submitted;
-  await page.route('http://192.168.50.1/**', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path === '/setup/state')
-      return route.fulfill({ json: { csrf: 'fixture-token' } });
-    if (path === '/setup') {
-      submitted = route.request().postDataJSON();
-      assert.equal(route.request().headers()['x-setup-token'], 'fixture-token');
-      return route.fulfill({ status: 202, json: { ok: true } });
+  for (const width of [900, 390, 320]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    let submitted;
+    let resumed = false;
+    let failPause = false;
+    const state = {
+      csrf: 'fixture-token',
+      paused: false,
+      remainingSeconds: 90,
+      closing: false,
+    };
+    await page.route('http://192.168.50.1/**', (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === '/setup/state') return route.fulfill({ json: state });
+      if (path === '/setup/pause') {
+        assert.equal(route.request().headers()['x-setup-token'], state.csrf);
+        if (failPause) return route.fulfill({ status: 503, json: {} });
+        const { duration } = route.request().postDataJSON();
+        assert.ok([60, 300, 900, null].includes(duration));
+        state.paused = true;
+        state.pauseSeconds = duration;
+        state.remainingSeconds = duration;
+        return route.fulfill({ json: state });
+      }
+      if (path === '/setup/resume') {
+        assert.equal(route.request().headers()['x-setup-token'], state.csrf);
+        assert.deepEqual(route.request().postDataJSON(), {});
+        resumed = true;
+        return route.fulfill({ status: 202, json: { ok: true } });
+      }
+      if (path === '/setup') {
+        submitted = route.request().postDataJSON();
+        assert.equal(
+          route.request().headers()['x-setup-token'],
+          'fixture-token',
+        );
+        return route.fulfill({ status: 202, json: { ok: true } });
+      }
+      return sendFile(
+        route,
+        'player/setup-web',
+        path === '/' ? 'recovery.html' : path.slice(1),
+      );
+    });
+    await page.goto('http://192.168.50.1/');
+    await page.getByLabel('Wi-Fi network (SSID)').fill('Office');
+    await page.getByLabel('Wi-Fi password').fill('fake-password');
+    for (const [value, label] of [
+      ['60', 'Paused - 1:00 remaining'],
+      ['300', 'Paused - 5:00 remaining'],
+      ['900', 'Paused - 15:00 remaining'],
+      ['indefinite', 'Paused indefinitely'],
+    ]) {
+      await page.getByLabel('Pause duration').selectOption(value);
+      await page
+        .getByRole('button', { name: 'Pause reconnects', exact: true })
+        .click();
+      await page.getByText(label, { exact: true }).waitFor();
+      assert.equal(
+        await page.getByLabel('Wi-Fi network (SSID)').inputValue(),
+        'Office',
+      );
     }
-    return sendFile(
-      route,
-      'player/setup-web',
-      path === '/' ? 'recovery.html' : path.slice(1),
+    await page.reload();
+    await page.getByText('Paused indefinitely', { exact: true }).waitFor();
+    assert.equal(
+      await page.getByLabel('Pause duration').inputValue(),
+      'indefinite',
     );
-  });
-  await page.goto('http://192.168.50.1/');
-  await page.getByLabel('Wi-Fi network (SSID)').fill('Office');
-  await page.getByLabel('Wi-Fi password').fill('fake-password');
-  await page.screenshot({ path: 'work/player-recovery-390.png' });
-  await page.getByRole('button', { name: 'Connect', exact: true }).click();
-  await page.getByText(/your saved playlist/).waitFor();
-  assert.deepEqual(submitted, {
-    ssid: 'Office',
-    password: 'fake-password',
-    country: 'US',
-  });
-  assert.equal(await page.getByLabel('Wi-Fi password').inputValue(), '');
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await page.screenshot({
+      path: `work/player-recovery-paused-${width}.png`,
+      fullPage: true,
+    });
+    await page
+      .getByRole('button', { name: 'Resume reconnects', exact: true })
+      .click();
+    await page.getByText(/your saved playlist/).waitFor();
+    assert.ok(resumed);
+    state.paused = false;
+    state.remainingSeconds = 90;
+    await page.reload();
+    failPause = true;
+    await page
+      .getByRole('button', { name: 'Pause reconnects', exact: true })
+      .click();
+    await page.getByText(/Could not confirm/).waitFor();
+    assert.equal(
+      await page.locator('#reconnect-status').textContent(),
+      'Reconnects in 1:30',
+    );
+    failPause = false;
+    await page.getByLabel('Pause duration').selectOption('indefinite');
+    await page
+      .getByRole('button', { name: 'Pause reconnects', exact: true })
+      .click();
+    await page.getByText('Paused indefinitely', { exact: true }).waitFor();
+    await page.getByLabel('Wi-Fi network (SSID)').fill('Office');
+    await page.getByLabel('Wi-Fi password').fill('fake-password');
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page.getByText(/your saved playlist/).waitFor();
+    assert.deepEqual(submitted, {
+      ssid: 'Office',
+      password: 'fake-password',
+      country: 'US',
+    });
+    assert.equal(await page.getByLabel('Wi-Fi password').inputValue(), '');
+    await page.close();
+  }
   console.log(
-    'Setup QR/layout, approval state, cached playback/connection indicator, local-agent failure, blanking and recovery form passed. Wi-Fi networking mocked.',
+    'Branded setup QR/layout, approval, cached playback/connection indicator, agent failure, blanking, recovery pause choices/reload/resume/errors and Wi-Fi submission passed. Wi-Fi networking mocked.',
   );
 } finally {
   await browser.close();

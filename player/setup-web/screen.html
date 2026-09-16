@@ -10,42 +10,86 @@
   <body class="display">
     <main>
       <header>
-        <span class="brand">OpenFrame</span
-        ><span class="badge">Screen setup</span>
+        <span class="brand"
+          ><span class="brand-mark" aria-hidden="true">
+            <!-- Lucide Monitor. ISC: Copyright (c) 2026 Lucide Icons and Contributors.
+          Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+          THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+          Derived from Feather, MIT License: Copyright (c) 2013-present Cole Bemis.
+          Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+          THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. -->
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect width="20" height="14" x="2" y="3" rx="2" />
+              <path d="M12 17v4M8 21h8" />
+            </svg> </span
+          >OpenFrame</span
+        >
+        <span class="badge">Screen setup</span>
       </header>
-      <h1 id="phase">Starting setup</h1>
-      <section class="connection" id="connection">
-        <img
-          src="/hotspot.png"
-          alt="Setup Wi-Fi QR code"
-          width="240"
-          height="240"
-        />
-        <div>
-          <h2>Scan to connect</h2>
-          <ol class="setup-steps">
-            <li>Scan this code with your phone and join the setup Wi-Fi.</li>
-            <li>Open <strong>192.168.50.1</strong> in your browser.</li>
-            <li>Enter your Wi-Fi details and OpenFrame server address.</li>
-          </ol>
-          <dl>
-            <dt>Wi-Fi network</dt>
-            <dd id="ssid"></dd>
-            <dt>Password</dt>
-            <dd id="password"></dd>
-            <dt>Setup address</dt>
-            <dd id="url"></dd>
-          </dl>
-        </div>
-      </section>
-      <section id="approval" hidden>
-        <h2>Screen approval code</h2>
-        <p id="code"></p>
-        <p>
-          In OpenFrame, open Screens, choose Pair screen, and enter this code.
-        </p>
-      </section>
-      <p id="screen-error" role="alert"></p>
+      <ol class="setup-progress" aria-label="Setup progress">
+        <li aria-current="step"><span>01</span> Connect</li>
+        <li><span>02</span> Configure</li>
+        <li><span>03</span> Pair screen</li>
+      </ol>
+      <div class="setup-content">
+        <h1 id="phase">Starting setup</h1>
+        <section class="connection" id="connection">
+          <img
+            src="/hotspot.png"
+            alt="Setup Wi-Fi QR code"
+            width="320"
+            height="320"
+          />
+          <div>
+            <h2>Scan to connect</h2>
+            <ol class="setup-steps">
+              <li>
+                <strong>Join the screen's Wi-Fi</strong
+                ><span>Scan the QR code with your phone's camera.</span>
+              </li>
+              <li>
+                <strong>Open <span id="url">http://192.168.50.1</span></strong
+                ><span>Use your phone's browser while connected.</span>
+              </li>
+              <li>
+                <strong>Connect to your OpenFrame server</strong
+                ><span>Enter your Wi-Fi details and server address.</span>
+              </li>
+            </ol>
+            <dl class="setup-credentials">
+              <div>
+                <dt>Wi-Fi network</dt>
+                <dd id="ssid"></dd>
+              </div>
+              <div>
+                <dt>Password</dt>
+                <dd id="password"></dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+        <section id="approval" hidden>
+          <h2>Screen approval code</h2>
+          <p id="code"></p>
+          <p>
+            In OpenFrame, open Screens, choose Pair screen, and enter this code.
+          </p>
+        </section>
+        <p id="screen-error" role="alert"></p>
+      </div>
+      <footer class="setup-footer">
+        <span>OpenFrame / Community edition</span
+        ><span>Your screens. Your server.</span>
+      </footer>
     </main>
   </body>
 </html>

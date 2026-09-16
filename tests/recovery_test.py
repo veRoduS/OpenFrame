@@ -16,6 +16,91 @@ WIFI = dict(ssid='Office', password='fake-password', country='US')
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_unpaused_window_expires_and_restart_clears_pause(self):
+        with patch.object(recovery.time, 'monotonic', return_value=0) as clock:
+            portal = recovery.Portal()
+            clock.return_value = 90
+            self.assertTrue(portal.state()['closing'])
+            self.assertFalse(portal.submit(WIFI))
+            fresh = recovery.Portal()
+            fresh.pause({'duration': None})
+            restarted = recovery.Portal()
+            self.assertFalse(restarted.paused)
+            self.assertEqual(restarted.state()['remainingSeconds'], 90)
+
+    def test_pause_deadlines_are_owned_by_player_and_replace_existing_window(self):
+        with patch.object(recovery.time, 'monotonic', return_value=100) as clock:
+            for duration in (60, 300, 900):
+                clock.return_value = 100
+                portal = recovery.Portal()
+                self.assertEqual(portal.state()['remainingSeconds'], 90)
+                clock.return_value = 120
+                self.assertTrue(portal.pause({'duration': duration}))
+                self.assertEqual(portal.state()['remainingSeconds'], duration)
+                clock.return_value = 120 + duration - 0.1
+                self.assertTrue(portal.is_open())
+                self.assertEqual(portal.state()['remainingSeconds'], 1)
+                clock.return_value = 120 + duration
+                self.assertFalse(portal.is_open())
+                self.assertFalse(portal.pause({'duration': None}))
+                self.assertFalse(portal.submit(None))
+
+    def test_indefinite_pause_survives_reads_and_ends_on_submission_or_close(self):
+        with patch.object(recovery.time, 'monotonic', return_value=0) as clock:
+            portal = recovery.Portal()
+            self.assertTrue(portal.pause({'duration': None}))
+            clock.return_value = 1000000
+            for _ in range(3):
+                self.assertEqual(portal.state(), dict(csrf=portal.token, paused=True, pauseSeconds=None, remainingSeconds=None, closing=False))
+            self.assertTrue(portal.submit(None))
+            self.assertTrue(portal.state()['closing'])
+            self.assertIsNone(portal.pending.get_nowait())
+            self.assertFalse(portal.pause({'duration': 60}))
+            self.assertFalse(portal.submit(WIFI))
+            portal.close()
+            self.assertFalse(portal.is_open())
+
+    def test_invalid_pause_does_not_change_deadline(self):
+        portal = recovery.Portal()
+        deadline = portal.deadline
+        for value in ({}, [], {'duration': True}, {'duration': '60'}, {'duration': 60.0}, {'duration': 0}, {'duration': -1}, {'duration': 91}, {'duration': None, 'extra': 1}):
+            with self.assertRaises(ValueError):
+                portal.pause(value)
+            self.assertEqual(portal.deadline, deadline)
+            self.assertFalse(portal.paused)
+
+    def test_submitted_wifi_wins_over_expiry_and_can_override_pause(self):
+        with patch.object(recovery.time, 'monotonic', return_value=0) as clock:
+            portal = recovery.Portal()
+            portal.pause({'duration': 60})
+            self.assertTrue(portal.submit(WIFI))
+            clock.return_value = 200
+            self.assertTrue(portal.is_open())
+            self.assertEqual(portal.pending.get_nowait(), WIFI)
+            portal.close()
+            self.assertFalse(portal.is_open())
+
+    def test_window_keeps_hotspot_past_original_deadline_until_resume(self):
+        with patch.object(recovery.time, 'monotonic', return_value=0) as clock:
+            portal = recovery.Portal()
+            calls = []
+            def pending_get(timeout):
+                calls.append(clock.return_value)
+                if len(calls) == 1:
+                    portal.pause({'duration': None})
+                    clock.return_value = 1000
+                    raise recovery.queue.Empty()
+                self.assertTrue(portal.submit(None))
+                return None
+            with patch.object(recovery, 'Portal', return_value=portal), patch.object(portal.pending, 'get', side_effect=pending_get), patch.object(recovery, 'credentials', return_value=VALUE), patch.object(recovery, 'report'), patch.object(recovery, 'atomic_write'), patch.object(recovery, 'command'), patch.object(recovery, 'firewall') as firewall, patch.object(recovery.subprocess, 'run'), patch.object(recovery.subprocess, 'Popen') as dns, patch.object(recovery, 'SetupHTTPServer') as server, patch.object(recovery.threading, 'Thread'), patch.object(recovery.time, 'sleep'):
+                dns.return_value.poll.return_value = None
+                self.assertIsNone(recovery.window(VALUE))
+                self.assertEqual(calls, [0, 1000])
+                server.return_value.shutdown.assert_called_once()
+                dns.return_value.terminate.assert_called_once()
+                self.assertEqual(firewall.call_args.args, (False,))
+                self.assertFalse(portal.is_open())
+
     def test_profile_is_hidden_non_autoconnecting_and_has_no_nat(self):
         profile = recovery.profile(VALUE)
         self.assertIn('hidden=true', profile)
@@ -89,15 +174,43 @@ class RecoveryTests(unittest.TestCase):
             status = response.status
             conn.close()
             return status, data
-        self.assertEqual(request('GET', '/setup/state')[1], {'csrf': portal.token})
+        self.assertEqual(request('GET', '/setup/state')[1]['csrf'], portal.token)
         self.assertEqual(request('GET', '/recovery.json')[0], 404)
         self.assertEqual(request('POST', '/setup', WIFI)[0], 403)
         headers = {'Origin': 'http://' + recovery.IP, 'X-Setup-Token': portal.token}
+        for endpoint, body in (('/setup/pause', {'duration': None}), ('/setup/resume', {})):
+            self.assertEqual(request('POST', endpoint, body)[0], 403)
+            self.assertEqual(request('POST', endpoint, body, {**headers, 'Host': 'evil.example'})[0], 403)
+            self.assertEqual(request('POST', endpoint, body, {**headers, 'Origin': 'http://evil.example'})[0], 403)
+        self.assertEqual(request('POST', '/setup/pause', {'duration': 7}, headers)[0], 400)
+        self.assertEqual(request('POST', '/setup/resume', {'extra': 1}, headers)[0], 400)
+        status, state = request('POST', '/setup/pause', {'duration': None}, headers)
+        self.assertEqual(status, 200)
+        self.assertTrue(state['paused'])
+        self.assertIsNone(state['remainingSeconds'])
         self.assertEqual(request('POST', '/setup', {**WIFI, 'server': 'https://other.example'}, headers)[0], 400)
         self.assertEqual(request('POST', '/setup', WIFI, {**headers, 'Host': 'evil.example'})[0], 403)
         self.assertEqual(request('POST', '/setup', WIFI, headers)[0], 202)
         self.assertEqual(portal.pending.get_nowait(), WIFI)
         self.assertEqual(request('POST', '/setup', WIFI, headers)[0], 409)
+        self.assertEqual(request('POST', '/setup/pause', {'duration': 60}, headers)[0], 409)
+        self.assertEqual(request('POST', '/setup/resume', {}, headers)[0], 409)
+
+    def test_resume_endpoint_queues_saved_wifi_reconnection(self):
+        portal = recovery.Portal()
+        portal.pause({'duration': None})
+        server = recovery.SetupHTTPServer(('127.0.0.1', 0), portal.handler())
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+        self.addCleanup(conn.close)
+        conn.request('POST', '/setup/resume', '{}', {'Host': recovery.IP, 'Origin': 'http://' + recovery.IP, 'X-Setup-Token': portal.token})
+        response = conn.getresponse()
+        response.read()
+        self.assertEqual(response.status, 202)
+        self.assertIsNone(portal.pending.get_nowait())
+        self.assertTrue(portal.state()['closing'])
 
 
 if __name__ == '__main__':

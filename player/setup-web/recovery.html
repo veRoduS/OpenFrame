@@ -13,6 +13,35 @@
         <span class="brand">OpenFrame</span><span class="badge">Recovery</span>
       </header>
       <h1>Reconnect your screen</h1>
+      <section
+        id="reconnect-controls"
+        class="reconnect-controls"
+        aria-label="Automatic reconnection"
+      >
+        <h2>Automatic reconnection</h2>
+        <p id="reconnect-status" role="status">Checking connection...</p>
+        <label for="pause-duration">Pause duration</label>
+        <select id="pause-duration" disabled>
+          <option value="60">1 minute</option>
+          <option value="300" selected>5 minutes</option>
+          <option value="900">15 minutes</option>
+          <option value="indefinite">Indefinite</option>
+        </select>
+        <div class="reconnect-actions">
+          <button id="pause-reconnects" type="button" disabled>
+            Pause reconnects
+          </button>
+          <button
+            id="resume-reconnects"
+            type="button"
+            class="secondary"
+            disabled
+          >
+            Reconnect now
+          </button>
+        </div>
+        <p id="pause-error" role="alert"></p>
+      </section>
       <form id="recovery-form">
         <label
           >Wi-Fi network (SSID)<input
