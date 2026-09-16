@@ -54,6 +54,7 @@ openframe.json
 openframe-screen-*.zip
 identity.json
 server-key.json
+recovery.json
 *.private.json
 *.key
 *.p12

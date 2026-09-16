@@ -2,6 +2,7 @@
 
 ## Install and operate
 
+- [Player connection and recovery Wi-Fi](player-recovery.md): QR onboarding, cached playback, heartbeat, and time-boxed hidden recovery hotspots.
 - [Simple server and screen setup](quick-start.md): shortest manual and automated installation paths.
 - [Managed WireGuard and first-boot hotspot](managed-wireguard.md): optional VPN hosting, approval, private routing, and hardware acceptance checks.
 - [Quick start and user guide](../README.md): Docker setup, slide/media editing, playlists, schedules, widgets, and screens.

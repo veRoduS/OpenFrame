@@ -6,6 +6,7 @@ const stage = document.getElementById('stage'),
 const heading = document.getElementById('heading'),
   detail = document.getElementById('detail');
 const preview = new URLSearchParams(location.search).get('preview');
+const connectionStatus = document.getElementById('connection-status');
 let lastState = null,
   lastStatus = null,
   blank = false,
@@ -42,6 +43,11 @@ const playback = new Playback({
 });
 function applyState(state) {
   lastState = state;
+  connectionStatus.hidden =
+    !!preview ||
+    !state.approved ||
+    !!state.blank ||
+    state.connection?.connected !== false;
   if (!state.approved) {
     blank = false;
     stage.hidden = false;
@@ -90,6 +96,8 @@ async function poll() {
         : data,
     );
   } catch (error) {
+    if (!preview && lastState?.approved && !blank)
+      connectionStatus.hidden = false;
     if (!playback.current && !blank && !lastState?.manifest)
       showMessage('Waiting for connection', error.message);
   } finally {

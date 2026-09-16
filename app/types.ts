@@ -78,6 +78,7 @@ export type Device = {
     revision?: string;
     error?: string | null;
     version?: string;
+    recovery?: string | null;
     playback?: {
       phase: string;
       preparationMs?: number;

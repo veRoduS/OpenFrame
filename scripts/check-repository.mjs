@@ -26,7 +26,8 @@ for (const file of files) {
   const example = file.endsWith('.example') || file.endsWith('.example.json');
   if (
     !example &&
-    (privatePath.test(file) || /(^|\/)(\.env|server-key\.json$)/.test(file))
+    (privatePath.test(file) ||
+      /(^|\/)(\.env|(?:server-key|recovery)\.json$)/.test(file))
   )
     failures.push(`Private/generated path: ${file}`);
   const full = resolve(root, file);

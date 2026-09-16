@@ -23,6 +23,7 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends python3 ca-certificates xserver-xorg xinit x11-xserver-utils openbox chromium sudo fonts-dejavu-core fonts-liberation
+apt-get install -y --no-install-recommends iptables network-manager dnsmasq-base
 if $prepare; then
   apt-get install -y --no-install-recommends wireguard-tools iptables network-manager dnsmasq-base qrencode
 fi
@@ -41,10 +42,8 @@ if [[ "$source_dir" != /opt/openframe ]]; then
   install -m 644 "$source_dir/agent.py" /opt/openframe/agent.py
   install -m 644 "$source_dir/wireguard.py" /opt/openframe/wireguard.py
   cp -R "$source_dir/web" /opt/openframe/
-  if $prepare; then
-    install -m 644 "$source_dir/bootstrap.py" "$source_dir/managed_network.py" /opt/openframe/
-    cp -R "$source_dir/setup-web" /opt/openframe/
-  fi
+  install -m 644 "$source_dir/bootstrap.py" "$source_dir/managed_network.py" "$source_dir/recovery.py" /opt/openframe/
+  cp -R "$source_dir/setup-web" /opt/openframe/
 fi
 if ! $prepare; then
 python3 - "$config_file" <<'PY'
@@ -117,6 +116,24 @@ RestartSec=3
 GETTY
 systemctl set-default multi-user.target
 systemctl enable openframe-agent.service getty@tty1.service
+cat > /etc/systemd/system/openframe-recovery.service <<'SERVICE'
+[Unit]
+Description=OpenFrame single-radio Wi-Fi recovery
+After=NetworkManager.service
+Wants=NetworkManager.service
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/openframe/recovery.py
+Restart=on-failure
+RestartSec=15
+RuntimeDirectory=openframe-recovery
+RuntimeDirectoryMode=0755
+UMask=0077
+TimeoutStopSec=60
+[Install]
+WantedBy=multi-user.target
+SERVICE
+systemctl enable NetworkManager.service openframe-recovery.service
 if $prepare; then
   cat > /etc/systemd/system/openframe-setup.service <<SERVICE
 [Unit]
@@ -138,7 +155,7 @@ SERVICE
 fi
 if [[ "${OPENFRAME_IMAGE_BUILD:-0}" != 1 ]]; then
   systemctl daemon-reload
-  if ! $prepare; then systemctl restart openframe-agent.service; fi
+  if ! $prepare; then systemctl restart openframe-agent.service openframe-recovery.service; fi
 fi
 if [[ "$wireguard_mode" != direct ]]; then
   systemctl enable wg-quick@wg-openframe.service

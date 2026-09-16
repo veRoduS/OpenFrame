@@ -37,6 +37,10 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | POST | `/api/screen-setup/setups/:id/download` | Administrator-only private ZIP attachment, `Cache-Control: no-store` |
 | GET | `/api/managed-vpn` | Administrator-only managed VPN status and registered peer metadata |
 | POST | `/api/player/provision` | Device bearer token; approval-gated managed VPN settings |
+| POST | `/api/player/recovery` | Approved device bearer token; retrieve its stable hidden Wi-Fi settings |
+| GET | `/api/devices/:id/recovery` | Administrator-only explicit credential reveal; never included in library responses |
+
+Recovery retrieval takes `{}` and returns `{playerId,ssid,password,hidden:true}`. The SSID is the player's UUID without hyphens (32 bytes), and the password is server-generated. Unapproved devices receive 403. Admin reveal returns `{available:false}` until the player has requested credentials, or `{available:true,...settings}` afterward. Both responses use `Cache-Control: no-store`. Credentials are encrypted under `provisioning.key` and removed with the device. The sync request additionally accepts `recovery` as null or `standby`, `starting`, `hotspot`, `reconnecting`, `error`; it is last-reported status only. The player's local state adds `connection:{connected,lastContactAt}` (Unix seconds or null), with no recovery secrets. See [player recovery](player-recovery.md).
 
 Managed enrollment optionally adds `{wireguardPublicKey,enrollmentToken}` to `/api/player/enroll`. The key must be canonical, nonzero, 32-byte base64; the token is a client-generated 64-character hex secret persisted before the request. Both require the opt-in managed VPN service. Repeating the same public key/token returns the original `{id,token,code}`; a different token for that key returns 409. The server stores only the token hash and public key. Ordinary `{name}` enrollment is unchanged.
 

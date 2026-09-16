@@ -11,7 +11,7 @@
     <main>
       <header>
         <span class="brand">OpenFrame</span
-        ><span class="badge">First boot</span>
+        ><span class="badge">Screen setup</span>
       </header>
       <h1 id="phase">Starting setup</h1>
       <section class="connection" id="connection">
@@ -21,18 +21,29 @@
           width="240"
           height="240"
         />
-        <dl>
-          <dt>Wi-Fi network</dt>
-          <dd id="ssid"></dd>
-          <dt>Password</dt>
-          <dd id="password"></dd>
-          <dt>Setup address</dt>
-          <dd id="url"></dd>
-        </dl>
+        <div>
+          <h2>Scan to connect</h2>
+          <ol class="setup-steps">
+            <li>Scan this code with your phone and join the setup Wi-Fi.</li>
+            <li>Open <strong>192.168.50.1</strong> in your browser.</li>
+            <li>Enter your Wi-Fi details and OpenFrame server address.</li>
+          </ol>
+          <dl>
+            <dt>Wi-Fi network</dt>
+            <dd id="ssid"></dd>
+            <dt>Password</dt>
+            <dd id="password"></dd>
+            <dt>Setup address</dt>
+            <dd id="url"></dd>
+          </dl>
+        </div>
       </section>
       <section id="approval" hidden>
         <h2>Screen approval code</h2>
         <p id="code"></p>
+        <p>
+          In OpenFrame, open Screens, choose Pair screen, and enter this code.
+        </p>
       </section>
       <p id="screen-error" role="alert"></p>
     </main>

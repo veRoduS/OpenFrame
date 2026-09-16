@@ -1,6 +1,7 @@
 import express from 'express';
 import { mountScreenSetup } from './screen-setup.mjs';
 import { mountManagedVpn } from './managed-vpn.mjs';
+import { mountRecovery } from './recovery.mjs';
 import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
@@ -189,7 +190,23 @@ export function createApp({
     res.clearCookie('openframe_session', { path: '/' });
     res.json({ ok: true });
   });
-  mountScreenSetup(app, { admin, db, root, list, get, put, remove });
+  const vault = mountScreenSetup(app, {
+    admin,
+    db,
+    root,
+    list,
+    get,
+    put,
+    remove,
+  });
+  const recovery = mountRecovery(app, {
+    admin,
+    player,
+    get,
+    put,
+    remove,
+    vault,
+  });
   const managedVpn = mountManagedVpn(app, {
     admin,
     player,
@@ -580,6 +597,7 @@ export function createApp({
   app.delete('/api/devices/:id', admin, async (req, res) => {
     requireRecord('device', req.params.id);
     remove('device', req.params.id);
+    recovery.remove(req.params.id);
     await managedVpn.revoked();
     res.json({ ok: true });
   });
@@ -590,6 +608,10 @@ export function createApp({
         error: z.string().max(500).nullable().optional(),
         version: z.string().max(50).optional(),
         uptime: z.number().nonnegative().optional(),
+        recovery: z
+          .enum(['standby', 'starting', 'hotspot', 'reconnecting', 'error'])
+          .nullable()
+          .optional(),
         commandAck: z.string().nullable().optional(),
         playback: z
           .object({

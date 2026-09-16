@@ -191,7 +191,11 @@ export function mountScreenSetup(
   function key() {
     try {
       if (!existsSync(keyPath)) {
-        if (list('vpn-config').length || list('screen-setup').length)
+        if (
+          list('vpn-config').length ||
+          list('screen-setup').length ||
+          list('recovery-wifi').length
+        )
           throw new Error();
         try {
           writeFileSync(keyPath, randomBytes(32), {
@@ -390,4 +394,5 @@ export function mountScreenSetup(
     );
     res.type('application/zip').send(Buffer.from(zipSync(files)));
   });
+  return { encrypt, decrypt };
 }

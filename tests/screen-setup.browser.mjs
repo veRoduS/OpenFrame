@@ -230,6 +230,52 @@ try {
   await dialog.getByRole('tab', { name: 'Managed VPN', exact: true }).click();
   await dialog.getByText('Registered screens (1)', { exact: true }).waitFor();
   for (const width of [1280, 390, 320]) await checkLayout(width, 'managed');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  const device = await (
+    await context.request.post(`${base}/api/player/enroll`, {
+      data: { name: 'Recovery screen' },
+    })
+  ).json();
+  await context.request.post(`${base}/api/devices/${device.id}/approve`, {
+    data: { code: device.code },
+  });
+  const headers = { Authorization: `Bearer ${device.token}` };
+  const recovery = await (
+    await context.request.post(`${base}/api/player/recovery`, {
+      headers,
+      data: {},
+    })
+  ).json();
+  await context.request.post(`${base}/api/player/sync`, {
+    headers,
+    data: { recovery: 'standby', version: 'test' },
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.reload();
+  await page.getByText('Screens', { exact: true }).first().click();
+  await page.getByText(/^Last heartbeat:/).waitFor();
+  assert.equal(await page.locator('.recovery-details').count(), 0);
+  await page.getByRole('button', { name: 'Show recovery credentials' }).click();
+  await page.getByText(recovery.password, { exact: true }).waitFor();
+  await page.getByText(recovery.ssid, { exact: true }).waitFor();
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      `Recovery admin overflow ${width}`,
+    );
+    await page.screenshot({
+      path: path.join(root, `work/screen-recovery-admin-${width}.png`),
+      fullPage: true,
+    });
+  }
+  await page.getByRole('button', { name: 'Hide recovery credentials' }).click();
+  assert.equal(
+    await page.getByText(recovery.password, { exact: true }).count(),
+    0,
+  );
   assert.deepEqual(errors, []);
   console.log(
     'Screen setup browser checks passed: real import/allocation/export, re-download, and 1280/390/320px layouts.',

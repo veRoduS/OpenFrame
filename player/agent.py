@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 
 
 def normalize_server(value):
@@ -117,6 +117,9 @@ class Agent:
             self.state = {'approved': False}
         self.started = time.monotonic()
         self.error = None
+        self.connected = False
+        self.last_contact = None
+        self.recovery_next = 0
         self.verified_revision = None
         self.playback = None
         self.playback_at = 0
@@ -127,7 +130,7 @@ class Agent:
         if self.credentials.get('token'):
             headers['Authorization'] = 'Bearer ' + self.credentials['token']
         request = urllib.request.Request(self.server + endpoint, data=json.dumps(body).encode() if body is not None else None, headers=headers)
-        with self.opener.open(request, timeout=25) as response:
+        with self.opener.open(request, timeout=10) as response:
             return json.load(response)
 
     def download(self, asset):
@@ -164,8 +167,12 @@ class Agent:
             'revision': revision, 'version': VERSION, 'uptime': time.monotonic() - self.started,
             'error': self.error, 'commandAck': self.state.get('commandAck'),
             'playback': playback,
+            'recovery': self.recovery_status(),
         })
         response['server'] = self.server
+        with self.lock:
+            self.connected = True
+            self.last_contact = time.time()
         response['generation'] = self.state.get('generation', 0)
         response['commandAck'] = self.state.get('commandAck')
         if response.get('approved'):
@@ -196,24 +203,54 @@ class Agent:
         if execute and command['type'] == 'reboot' and self.allow_reboot:
             subprocess.run(['sudo', '-n', '/usr/sbin/reboot'], check=True, timeout=10)
 
+    def recovery_status(self):
+        value = read_json(Path('/run/openframe-recovery/status.json'), {})
+        if value.get('playerId') == self.credentials.get('id') and value.get('phase') in ('standby', 'starting', 'hotspot', 'reconnecting', 'error'):
+            return value['phase']
+        return None
+
+    def ensure_recovery(self):
+        if not self.state.get('approved') or time.monotonic() < self.recovery_next:
+            return
+        self.recovery_next = time.monotonic() + 60
+        path = self.cache / 'recovery.json'
+        saved = read_json(path, {})
+        if saved.get('playerId') == self.credentials.get('id') and saved.get('server') == self.server and saved.get('ssid') == self.credentials.get('id', '').replace('-', '') and saved.get('hidden') is True and re.fullmatch(r'[A-Za-z0-9_-]{24}', saved.get('password', '')):
+            return
+        try:
+            value = self.request('/api/player/recovery', {})
+            player_id = self.credentials.get('id', '')
+            if not re.fullmatch(r'[a-f0-9-]{36}', player_id) or value.get('playerId') != player_id or value.get('ssid') != player_id.replace('-', '') or not re.fullmatch(r'[A-Za-z0-9_-]{24}', value.get('password', '')) or value.get('hidden') is not True:
+                raise ValueError('Invalid recovery settings')
+            atomic_json(path, {**value, 'server': self.server})
+            os.chmod(path, 0o600)
+        except Exception:
+            logging.warning('Recovery Wi-Fi settings unavailable; playback is unchanged')
+
     def loop(self):
         while True:
+            attempt_started = time.monotonic()
             try:
                 self.sync()
+                self.ensure_recovery()
             except urllib.error.HTTPError as error:
+                self.connected = False
                 self.error = 'Server returned HTTP ' + str(error.code)
                 if device_revoked(error):
                     # Revocation stops local playback too. A new enrollment needs approval.
                     self.credentials = {}
+                    (self.cache / 'recovery.json').unlink(missing_ok=True)
                     atomic_json(self.cache / 'identity.json', {})
                     with self.lock:
                         self.state = {'approved': False, 'error': 'Device revoked. Pair this screen again.'}
                         atomic_json(self.cache / 'state.json', self.state)
                 logging.warning('%s', self.error)
             except Exception as error:
+                self.connected = False
                 self.error = str(error)[:500]
                 logging.warning('Sync failed: %s', self.error)
-            time.sleep(15)
+            # Keep failed connection attempts near 15 seconds apart, without overlap.
+            time.sleep(max(1, 15 - (time.monotonic() - attempt_started)))
 
     def handler(self):
         agent = self
@@ -268,6 +305,7 @@ class Agent:
                 if route == '/local/state':
                     with agent.lock:
                         state = dict(agent.state)
+                        state['connection'] = {'connected': agent.connected, 'lastContactAt': agent.last_contact}
                     # Credentials never leave the agent, including through localhost.
                     state.pop('server', None)
                     state['error'] = agent.error or state.get('error')
@@ -280,10 +318,10 @@ class Agent:
                         return
                     data = None
                     content_type = 'image/webp'
-                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/image-layout.js', '/playback.js', '/frame.js'):
+                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/image-layout.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
                     filename = 'index.html' if route == '/' else route[1:]
                     data = (web / filename).read_bytes()
-                    content_type = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css'}[filename.split('.')[-1]]
+                    content_type = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css', 'svg': 'image/svg+xml'}[filename.split('.')[-1]]
                 else:
                     self.send_error(404)
                     return

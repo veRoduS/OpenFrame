@@ -69,7 +69,7 @@ if $hotspot; then
   [[ ! -e "$mount_dir/etc/resolv.conf.openframe-original" && ! -L "$mount_dir/etc/resolv.conf.openframe-original" && ! -e "$mount_dir/usr/sbin/policy-rc.d.openframe-original" && ! -L "$mount_dir/usr/sbin/policy-rc.d.openframe-original" ]] || { echo 'Image contains an unfinished setup build.' >&2; exit 1; }
   chroot "$mount_dir" /bin/true || { echo 'Use a native ARM Linux builder, or configure ARM binfmt/QEMU first.' >&2; exit 1; }
   mkdir -p "$mount_dir/opt/openframe" "$mount_dir/dev" "$mount_dir/proc"
-  cp "$source_dir/agent.py" "$source_dir/wireguard.py" "$source_dir/bootstrap.py" "$source_dir/managed_network.py" "$source_dir/install.sh" "$mount_dir/opt/openframe/"
+  cp "$source_dir/agent.py" "$source_dir/wireguard.py" "$source_dir/bootstrap.py" "$source_dir/managed_network.py" "$source_dir/recovery.py" "$source_dir/install.sh" "$mount_dir/opt/openframe/"
   cp -R "$source_dir/web" "$source_dir/setup-web" "$mount_dir/opt/openframe/"
   if [[ -e "$mount_dir/etc/resolv.conf" || -L "$mount_dir/etc/resolv.conf" ]]; then mv -- "$mount_dir/etc/resolv.conf" "$mount_dir/etc/resolv.conf.openframe-original"; fi
   resolv_changed=true
@@ -98,7 +98,8 @@ if $hotspot; then
   exit 0
 fi
 mkdir -p "$mount_dir/opt/openframe" "$mount_dir/etc/systemd/system/multi-user.target.wants"
-cp "$source_dir/agent.py" "$source_dir/wireguard.py" "$source_dir/install.sh" "$source_dir/firstboot.sh" "$mount_dir/opt/openframe/"
+cp "$source_dir/agent.py" "$source_dir/wireguard.py" "$source_dir/bootstrap.py" "$source_dir/managed_network.py" "$source_dir/recovery.py" "$source_dir/install.sh" "$source_dir/firstboot.sh" "$mount_dir/opt/openframe/"
+cp -R "$source_dir/setup-web" "$mount_dir/opt/openframe/"
 cp -R "$source_dir/web" "$mount_dir/opt/openframe/"
 cp "$config_file" "$mount_dir/boot/firmware/openframe.json"
 python3 "$source_dir/wireguard.py" stage "$config_file" --destination "$mount_dir/boot/firmware"

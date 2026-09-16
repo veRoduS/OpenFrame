@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { version } from '../package.json';
+import { DeviceRecovery } from './device-recovery';
 import {
   Monitor,
   FileCog,
@@ -956,8 +957,8 @@ function DeviceRow({
           />
           <span>
             {device.lastSeen
-              ? `Last seen ${new Date(device.lastSeen).toLocaleString()}`
-              : 'Waiting for first connection'}
+              ? `Last heartbeat: ${new Date(device.lastSeen).toLocaleString()}`
+              : 'Last heartbeat: not yet received'}
           </span>
         </div>
         <span className={`badge ${device.approved && online ? 'green' : ''}`}>
@@ -1038,6 +1039,7 @@ function DeviceRow({
               {device.command.type === 'reboot' ? 'Restart' : 'Refresh'} queued
             </p>
           )}
+          <DeviceRecovery id={device.id} phase={device.status?.recovery} />
           {device.status?.error && (
             <p className="inline-error">{device.status.error}</p>
           )}

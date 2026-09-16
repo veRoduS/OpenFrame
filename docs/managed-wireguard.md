@@ -57,7 +57,7 @@ The setup service uses NetworkManager on `wlan0`, a temporary 2.4 GHz WPA2 hotsp
 
 The managed path is VPN-only after setup, not merely a priority hint: it does not retain public HTTPS or Access credentials as an automatic fallback. The output guard rejects traffic to the private server address when it would leave through a different interface. It runs before the content agent so a missing VPN route cannot send its HTTP token onto a coincidentally matching LAN. Cached playback does not need a VPN handshake. The regular agent continues to poll for content and commands using its existing authenticated synchronization protocol.
 
-If setup fails, the hotspot returns with a non-secret error on the display. Pending enrollment state survives a reboot. A later outage during normal operation does not automatically create a hotspot. There is no remote Wi-Fi recovery, key-rotation/reset UI, or automatic player/OS update service. If the public WireGuard endpoint's DNS address changes after connection, restarting the client's WireGuard service may be necessary to resolve it again.
+If setup fails, the hotspot returns with a non-secret error on the display. Pending enrollment state survives a reboot. Updated players support [time-boxed hidden Wi-Fi recovery](player-recovery.md) after sustained Wi-Fi loss; VPN/server-only outages do not activate it. There is no key-rotation/reset UI or automatic player/OS update service. If the public WireGuard endpoint's DNS address changes after connection, restarting the client's WireGuard service may be necessary to resolve it again.
 
 ## Security and revocation
 

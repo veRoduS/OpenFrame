@@ -15,6 +15,93 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 
+void test('recovery Wi-Fi is approval-gated, encrypted, stable, admin-only and removed on revocation', async (t) => {
+  const { request, db, base, dir } = await fixture(t);
+  const enroll = async () =>
+    (
+      await request(
+        '/api/player/enroll',
+        'POST',
+        { name: 'Recovery test' },
+        false,
+      )
+    ).data;
+  const device = await enroll();
+  const token = { Authorization: `Bearer ${device.token}` };
+  assert.equal(
+    (await request('/api/player/recovery', 'POST', {}, false, token)).status,
+    403,
+  );
+  await request(`/api/devices/${device.id}/approve`, 'POST', {
+    code: device.code,
+  });
+  const result = await request(
+    '/api/player/recovery',
+    'POST',
+    {},
+    false,
+    token,
+  );
+  assert.equal(result.status, 200);
+  assert.equal(result.data.ssid, device.id.replaceAll('-', ''));
+  assert.equal(result.data.ssid.length, 32);
+  assert.match(result.data.password, /^[A-Za-z0-9_-]{24}$/);
+  assert.equal(result.data.hidden, true);
+  assert.deepEqual(
+    (await request('/api/player/recovery', 'POST', {}, false, token)).data,
+    result.data,
+  );
+  const other = await enroll();
+  await request(`/api/devices/${other.id}/approve`, 'POST', {
+    code: other.code,
+  });
+  const second = await request('/api/player/recovery', 'POST', {}, false, {
+    Authorization: `Bearer ${other.token}`,
+  });
+  assert.notEqual(second.data.password, result.data.password);
+  const route = `/api/devices/${device.id}/recovery`;
+  assert.equal((await request(route, 'GET', undefined, false)).status, 401);
+  assert.equal(
+    (await request(route, 'GET', undefined, false, token)).status,
+    401,
+  );
+  assert.equal((await request(route)).data.password, result.data.password);
+  assert.ok(
+    !JSON.stringify((await request('/api/library')).data).includes(
+      result.data.password,
+    ),
+  );
+  assert.ok(
+    !JSON.stringify(db.prepare('SELECT * FROM records').all()).includes(
+      result.data.password,
+    ),
+  );
+  const response = await fetch(base + '/api/player/recovery', {
+    method: 'POST',
+    headers: { ...token, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  // Losing the key fails closed and never silently creates replacement credentials.
+  const keyPath = path.join(dir, 'provisioning.key');
+  const key = readFileSync(keyPath);
+  rmSync(keyPath);
+  assert.equal((await request(route)).status, 503);
+  assert.equal(existsSync(keyPath), false);
+  writeFileSync(keyPath, key);
+  await request(`/api/devices/${device.id}`, 'DELETE');
+  assert.equal(
+    (await request('/api/player/recovery', 'POST', {}, false, token)).status,
+    401,
+  );
+  assert.equal(
+    db
+      .prepare("SELECT count(*) AS n FROM records WHERE kind='recovery-wifi'")
+      .get().n,
+    1,
+  );
+});
+
 void test('playlist availability windows validate and persist into immutable publications', async (t) => {
   const { request, db } = await fixture(t);
   const slide = (await request('/api/slides', 'POST', slideData())).data;

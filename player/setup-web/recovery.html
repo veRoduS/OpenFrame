@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OpenFrame recovery</title>
+    <link rel="stylesheet" href="/setup.css" />
+    <script src="/recovery.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="brand">OpenFrame</span><span class="badge">Recovery</span>
+      </header>
+      <h1>Reconnect your screen</h1>
+      <form id="recovery-form">
+        <label
+          >Wi-Fi network (SSID)<input
+            name="ssid"
+            maxlength="32"
+            required
+            autocomplete="off" /></label
+        ><label
+          >Wi-Fi password<input
+            name="password"
+            type="password"
+            maxlength="64"
+            autocomplete="new-password" /></label
+        ><label
+          >Country code<input
+            name="country"
+            value="US"
+            minlength="2"
+            maxlength="2"
+            pattern="[A-Z]{2}"
+            required /></label
+        ><button id="connect" disabled>Connect</button>
+      </form>
+      <p id="error" role="alert"></p>
+      <output id="result"></output>
+    </main>
+  </body>
+</html>

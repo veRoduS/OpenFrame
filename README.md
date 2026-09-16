@@ -7,6 +7,7 @@ This is pre-1.0 software, not a finished Yodeck replacement. The management appl
 ## Documentation
 
 - [Simple server and screen setup](docs/quick-start.md), including the optional [managed WireGuard and hotspot flow](docs/managed-wireguard.md)
+- [Player connection and recovery Wi-Fi](docs/player-recovery.md): setup QR, offline indicator, heartbeat, and private recovery credentials
 - [Documentation index](docs/README.md) and [server setup, backup, restore, and upgrades](docs/operations.md)
 - [Prebuilt Docker images and ARM Compose setup](docs/container-images.md)
 - [Pi installation](#raspberry-pi-installation), [Cloudflare Tunnel](docs/remote-players.md), and [WireGuard](docs/wireguard-players.md)

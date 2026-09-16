@@ -8,6 +8,15 @@
   </head>
   <body>
     <main id="screen"><div id="stage"></div></main>
+    <div
+      id="connection-status"
+      role="status"
+      aria-label="Disconnected from server. Playing saved content."
+      title="Disconnected from server"
+      hidden
+    >
+      <img src="wifi-off.svg" width="20" height="20" alt="" />
+    </div>
     <div id="message">
       <div class="mark">OpenFrame</div>
       <h1 id="heading">Connecting...</h1>

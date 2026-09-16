@@ -724,6 +724,42 @@ small {
   gap: 18px;
   overflow-wrap: anywhere;
 }
+.device-recovery {
+  border-top: 1px solid #dce3df;
+  margin-top: 16px;
+  padding-top: 12px;
+  font-size: 13px;
+  min-width: 0;
+}
+.recovery-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recovery-heading .icon-button {
+  margin-left: auto;
+}
+.recovery-player-id {
+  color: #63716a;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.recovery-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.recovery-details dt {
+  color: #63716a;
+  font-size: 12px;
+}
+.recovery-details dd {
+  margin: 3px 0 0;
+  font-family: monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
 .managed-vpn h3 {
   font-size: 15px;
   font-weight: 600;

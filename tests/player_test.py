@@ -34,6 +34,34 @@ class PlayerTests(unittest.TestCase):
                 restarted.sync()
         self.assertEqual(restarted.state['manifest']['revision'], 'one')
 
+    def test_disconnect_retains_cache_and_retries_at_fifteen_second_cadence(self):
+        with patch.object(self.agent, 'request', return_value=self.response()):
+            self.agent.sync()
+        self.assertTrue(self.agent.connected)
+        with patch.object(self.agent, 'sync', side_effect=OSError('Offline')), patch.object(module.time, 'monotonic', side_effect=[100, 110]), patch.object(module.time, 'sleep', side_effect=StopIteration) as sleep:
+            with self.assertRaises(StopIteration):
+                self.agent.loop()
+        sleep.assert_called_once_with(5)
+        self.assertFalse(self.agent.connected)
+        self.assertEqual(self.agent.state['manifest']['revision'], 'one')
+        with patch.object(self.agent, 'request', return_value=self.response()):
+            self.agent.sync()
+        self.assertTrue(self.agent.connected)
+        restarted = module.Agent(self.config, self.tmp.name)
+        self.assertFalse(restarted.connected)
+
+    def test_recovery_credentials_are_cached_separately_from_playback_state(self):
+        player_id = '12345678-1234-1234-1234-123456789abc'
+        self.agent.credentials['id'] = player_id
+        self.agent.state = self.response()
+        value = dict(playerId=player_id, ssid=player_id.replace('-', ''), password='a' * 24, hidden=True)
+        with patch.object(self.agent, 'request', return_value=value) as request:
+            self.agent.ensure_recovery()
+            self.agent.recovery_next = 0
+            self.agent.ensure_recovery()
+        self.assertEqual(request.call_count, 1)
+        self.assertNotIn(value['password'], json.dumps(self.agent.state))
+        self.assertEqual(json.loads((self.agent.cache / 'recovery.json').read_text())['password'], value['password'])
     def test_failed_download_does_not_replace_last_good_manifest(self):
         with patch.object(self.agent, 'request', return_value=self.response()):
             self.agent.sync()

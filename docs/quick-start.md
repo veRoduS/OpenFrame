@@ -45,7 +45,7 @@ The builder installs the player, Chromium, Wi-Fi setup page, and VPN tools into 
 
 No VPN client file needs to be copied. The Pi generates its private key locally; approval lets the server register its public key and return connection settings. Once complete, the player uses only the private VPN server address. An outage keeps cached playback running; automatic public-HTTPS fallback is not implemented.
 
-Setup failures return to the hotspot for another attempt. Normal playback outages do not reopen the hotspot. Keep physical access during initial testing, and complete the [hardware acceptance checks](managed-wireguard.md#acceptance-checks) before unattended use.
+Setup failures return to the setup hotspot for another attempt. After configuration, sustained Wi-Fi loss can open a separate, time-boxed **hidden recovery hotspot**; its player-ID name and password are available in Screens. Server/VPN-only outages do not reopen a hotspot. See [recovery steps](player-recovery.md), keep physical access during testing, and complete the [hardware acceptance checks](managed-wireguard.md#acceptance-checks) before unattended use.
 
 For a single fresh, Internet-connected Pi, you can prepare it directly instead of building an image:
 

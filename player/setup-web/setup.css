@@ -96,6 +96,9 @@ summary {
 #error:empty {
   display: none;
 }
+#screen-error:empty {
+  display: none;
+}
 output {
   display: block;
   color: #356181;
@@ -104,6 +107,32 @@ output {
 .display main {
   max-width: 960px;
   padding-top: 48px;
+}
+.display h2 {
+  font-size: 24px;
+  margin: 0 0 18px;
+}
+.setup-steps {
+  padding-left: 22px;
+  margin: 0 0 24px;
+  color: #43554b;
+}
+.setup-steps li {
+  margin-bottom: 12px;
+  padding-left: 6px;
+}
+.display dd {
+  font-size: 20px;
+}
+.display .connection {
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+.display .connection img {
+  width: 280px;
+  height: 280px;
+  background: white;
+  border: 12px solid white;
+  border-radius: 6px;
 }
 .connection {
   display: grid;
@@ -146,8 +175,54 @@ dd {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
+  .display .connection {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .display .connection img {
+    width: 220px;
+    height: 220px;
+  }
   .connection img {
     width: 200px;
     height: 200px;
+  }
+}
+@media (max-height: 650px) and (min-width: 601px) {
+  .display main {
+    padding: 16px 24px;
+  }
+  .display header {
+    padding-bottom: 8px;
+  }
+  .display h1 {
+    font-size: 24px;
+    margin: 14px 0;
+  }
+  .display h2 {
+    font-size: 20px;
+    margin-bottom: 10px;
+  }
+  .display .connection {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 28px;
+    margin: 16px 0;
+  }
+  .display .connection img {
+    width: 220px;
+    height: 220px;
+  }
+  .display .setup-steps {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .display .setup-steps li {
+    margin-bottom: 6px;
+  }
+  .display dt {
+    font-size: 12px;
+    margin-top: 6px;
+  }
+  .display dd {
+    font-size: 16px;
   }
 }

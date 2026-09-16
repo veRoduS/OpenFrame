@@ -296,6 +296,7 @@ class Setup:
                     time.sleep(3)
             for file in ('pending.json', 'enrollment.json', 'private.key'):
                 (STATE / file).unlink(missing_ok=True)
+            subprocess.run(['nmcli', 'connection', 'delete', PROFILE], capture_output=True, timeout=10)
             command('systemctl', 'disable', 'openframe-setup.service')
             command('systemctl', 'reboot')
         finally:
