@@ -1,5 +1,11 @@
 # Validation record
 
+## GitHub milestone 0.4.0
+
+Pre-publication checks on 2026-09-17: 93 Node tests (including Python-agent integration), 58 Python tests, typecheck, lint, formatting, production build, three Pi shell syntax checks, version/repository checks, and an isolated frozen-lockfile install passed. The production dependency audit reported no known vulnerabilities. Weather, setup/connectivity/recovery, first-boot form, and screen-setup browser suites passed with isolated or mocked data. This milestone preserves the four local patch commits below.
+
+Docker is unavailable on this development machine; native AMD64/ARM64 container checks and image publication are performed by the tagged [Actions workflow](https://github.com/veRoduS/OpenFrame/actions). Consult the actual run for remote results; local checks do not establish workflow success. Physical Pi radio switching, QR scanning, HDMI smoothness, and Zero 2 W memory/soak tests remain unvalidated. No deployment or hardware-tested SD-card image is included. Update the complete player directory along with the server for the new recovery and weather features; see the compatibility and rollback notes in the [changelog](../CHANGELOG.md).
+
 ## Local revision 0.3.4
 
 Checked on 2026-09-17: 93 Node tests (including Python-agent integration), 58 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. Weather coverage includes ZIP validation, leading zeros, bounded cache/deduplication and request throttling, administrator authorization, malformed/oversized responses, independent forecast/observation retention, missing-temperature station fallback, six-hour windows, timezone labels, unit conversion, icon mapping, deferred timers/disposal, and the agent's static icon module and offline persistence.

@@ -2,6 +2,15 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.4.0] - 2026-09-17
+
+- Approved GitHub milestone: player recovery, branded onboarding, and shared weather widgets. Includes all local revisions 0.3.1 through 0.3.4 without squashing their history.
+- Add branded first-boot QR guidance, last-heartbeat labels, cached playback with a subtle disconnection indicator, and reconnect attempts approximately every 15 seconds.
+- Add single-radio hidden recovery Wi-Fi when needed, server-managed recovery credentials, and reconnect pauses of one minute, five minutes, fifteen minutes, or indefinitely.
+- Add NWS weather with shared per-location requests, US ZIP lookup, current observations or the next six forecast hours, bundled offline condition icons, and independent forecast/observation caching.
+- Compatibility: update the server and complete player directory together for the new widgets and recovery features; server container updates do not update Pi code or the OS. Existing slides, media, pairing, and manifest schemaVersion remain compatible. Review [weather upgrades](docs/weather.md), [recovery setup](docs/player-recovery.md), and [backup/rollback operations](docs/operations.md). Preserve application data and matching VPN state backups before upgrading; restore the matching backup and previous image/source for rollback.
+- Experimental limitations: physical Pi Wi-Fi switching, QR scanning, HDMI performance, and Zero 2 W memory/soak testing remain unvalidated. No automatic player updater or hardware-tested SD-card image is included. The milestone workflow publishes the application image and Compose artifact, not the optional source-built WireGuard helper.
+
 ## [0.3.4] - 2026-09-17
 
 - Add weather ZIP lookup, current observations, six-hour forecasts, and offline condition icons
