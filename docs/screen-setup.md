@@ -33,7 +33,7 @@ sudo bash player/install.sh ./openframe.json
 sudo reboot
 ```
 
-Keep `openframe-wg.conf` beside `openframe.json` when using WireGuard. For a new SD card, use the [image builder](../README.md#build-an-image-to-flash) with those files together, or replace the two files on an **OpenFrame-customized image's** visible boot partition **before first boot**. Do not clone an already provisioned Pi's identity/cache. Dropping files onto stock Raspberry Pi OS does not install OpenFrame. First boot requires Internet access for OS packages, and Wi-Fi/Ethernet must work before WireGuard can connect.
+Keep `openframe-wg.conf` beside `openframe.json` when using WireGuard. For a new SD card, use the [image builder](player-installation.md#build-an-image-to-flash) with those files together, or replace the two files on an **OpenFrame-customized image's** visible boot partition **before first boot**. Do not clone an already provisioned Pi's identity/cache. Dropping files onto stock Raspberry Pi OS does not install OpenFrame. First boot requires Internet access for OS packages, and Wi-Fi/Ethernet must work before WireGuard can connect.
 
 The Pi displays its normal pairing code. Approve it using **Screens > Pair screen**, then assign a published playlist. Setup creation does not approve devices or embed an OpenFrame device token. All subsequent content synchronization uses the existing outbound player protocol. The builder does not increase playback memory use or modify slide preparation.
 

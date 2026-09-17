@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.4.1] - 2026-09-17
+
+- Simplify the README and separate user and Pi installation guides
+
 ## [0.4.0] - 2026-09-17
 
 - Approved GitHub milestone: player recovery, branded onboarding, and shared weather widgets. Includes all local revisions 0.3.1 through 0.3.4 without squashing their history.
