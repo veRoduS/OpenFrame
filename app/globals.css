@@ -1702,6 +1702,32 @@ input[type='color'] {
 .insert-tools {
   flex-wrap: wrap;
 }
+.weather-zip,
+.weather-mode {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.weather-zip-input {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.weather-zip-input input {
+  min-width: 0;
+  flex: 1;
+}
+.weather-zip-input button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+}
+.weather-zip small,
+.weather-zip output {
+  display: block;
+  margin-top: 6px;
+}
 .properties-panel .weather-coordinates {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

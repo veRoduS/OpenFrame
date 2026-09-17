@@ -3,6 +3,7 @@ import { mountScreenSetup } from './screen-setup.mjs';
 import { mountManagedVpn } from './managed-vpn.mjs';
 import { mountRecovery } from './recovery.mjs';
 import { createWeatherCache } from './weather.mjs';
+import { createZipLookup } from './zip.mjs';
 import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
@@ -36,6 +37,7 @@ export function createApp({
   dataDir = process.env.DATA_DIR || './data',
   managedVpnTransport,
   weatherFetch,
+  zipFetch,
 } = {}) {
   const root = path.resolve(dataDir);
   mkdirSync(path.join(root, 'media'), { recursive: true });
@@ -45,6 +47,7 @@ export function createApp({
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);`);
   const weather = createWeatherCache({ db, fetcher: weatherFetch });
+  const zipLookup = createZipLookup({ fetcher: zipFetch });
   const list = (kind) =>
     db
       .prepare('SELECT body FROM records WHERE kind=? ORDER BY rowid DESC')
@@ -348,6 +351,9 @@ export function createApp({
     const manifest = snapshot(requireRecord('playlist', req.params.id));
     manifest.revision = hash(JSON.stringify([manifest.items, manifest.assets]));
     res.json({ ...manifest, weather: weather.forManifest(manifest) });
+  });
+  app.get('/api/weather/zip', admin, async (req, res) => {
+    res.json(await zipLookup.lookup(req.query.zip));
   });
   app.get('/api/weather', admin, (req, res) => {
     const config = z
@@ -710,6 +716,7 @@ export function createApp({
     db,
     close: () => {
       weather.close();
+      zipLookup.close();
       managedVpn.close();
     },
   };

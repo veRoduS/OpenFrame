@@ -15,6 +15,40 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 
+void test('ZIP lookup is admin-only, validates requests and returns normalized coordinates', async (t) => {
+  let calls = 0;
+  const { request } = await fixture(t, {
+    zipFetch: async (url) => {
+      calls++;
+      assert.equal(url, 'https://api.zippopotam.us/us/02108');
+      return Response.json({
+        places: [
+          {
+            'place name': 'Boston',
+            'state abbreviation': 'MA',
+            latitude: '42.357',
+            longitude: '-71.064',
+          },
+        ],
+      });
+    },
+  });
+  assert.equal(
+    (await request('/api/weather/zip?zip=02108', 'GET', undefined, false))
+      .status,
+    401,
+  );
+  assert.equal((await request('/api/weather/zip?zip=123')).status, 400);
+  const result = await request('/api/weather/zip?zip=02108');
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.data, {
+    zip: '02108',
+    places: [{ name: 'Boston, MA', latitude: 42.357, longitude: -71.064 }],
+  });
+  await request('/api/weather/zip?zip=02108');
+  assert.equal(calls, 1);
+});
+
 void test('weather is admin-only, shared across approved players, and updates outside publication revisions', async (t) => {
   const gate = Promise.withResolvers();
   t.after(() => gate.resolve());
@@ -119,7 +153,7 @@ void test('weather is admin-only, shared across approved players, and updates ou
       .weather,
     updated.weather,
   );
-  assert.equal(calls, 2);
+  assert.equal(calls, 3);
   const preview = (await request(`/api/preview/${playlist.id}`)).data;
   assert.equal(
     (await request(`/api/preview/${playlist.id}`)).data.revision,

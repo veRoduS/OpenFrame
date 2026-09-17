@@ -26,6 +26,8 @@ export type Layer = {
     latitude: number | null;
     longitude: number | null;
     unit: 'F' | 'C';
+    mode?: 'current' | 'six-hour';
+    zip?: string;
   };
   counter?: {
     direction: 'auto' | 'up' | 'down';
@@ -155,6 +157,7 @@ export function newLayer(type: Layer['type'], assetId?: string): Layer {
             latitude: null,
             longitude: null,
             unit: 'F' as const,
+            mode: 'current' as const,
           },
         }
       : {}),

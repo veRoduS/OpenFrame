@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.3.4
+
+Checked on 2026-09-17: 93 Node tests (including Python-agent integration), 58 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. Weather coverage includes ZIP validation, leading zeros, bounded cache/deduplication and request throttling, administrator authorization, malformed/oversized responses, independent forecast/observation retention, missing-temperature station fallback, six-hour windows, timezone labels, unit conversion, icon mapping, deferred timers/disposal, and the agent's static icon module and offline persistence.
+
+Browser checks passed for ZIP lookup and error preservation, current/six-hour controls, bundled icon geometry, units, resizing, saved settings, editor layouts at 1280/390/320px, and both player views at 1280/390px. Cached weather refreshes preserve the visible frame; weather/icon requests never leave the local player origin. Blanking, two-frame bounds, and the setup/connectivity/recovery regression also passed. Screenshots were inspected. Fixtures use isolated data and fake weather. Separate read-only live ZIP lookup, NWS station-list, and latest-observation checks for Chicago returned HTTP 200 with expected fields. No Docker/Pi hardware test, deployment, dependency audit, or GitHub push was performed. Update the complete player directory before using these settings.
+
 ## Local revision 0.3.3
 
 Checked on 2026-09-16: 88 Node tests (including Python-agent integration), 57 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. Weather tests cover location/request deduplication, persisted cache reuse, retry backoff and last-known data, request/destination/response bounds, concurrency/capacity, authenticated API access, approval and publication isolation, independent weather updates, units, stale/expired formatting, deferred widget timers and cleanup, and agent offline persistence. The agent's static module allowlist now includes weather and clock modules.

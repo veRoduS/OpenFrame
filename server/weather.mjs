@@ -9,6 +9,7 @@ const periodSchema = z.object({
   temperature: z.number().min(-150).max(180),
   temperatureUnit: z.enum(['F', 'C']),
   shortForecast: z.string().min(1).max(250),
+  isDaytime: z.boolean().optional(),
 });
 const forecastSchema = z.object({
   properties: z.object({ periods: z.array(periodSchema).min(1).max(200) }),
@@ -74,6 +75,7 @@ export function createWeatherCache({ db, fetcher = fetch, now = Date.now }) {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   }
   async function refresh(key, entry) {
+    let delay = INTERVAL;
     try {
       if (!entry.grid || now() >= entry.gridUntil) {
         const point = await request(`/points/${key}`);
@@ -90,37 +92,138 @@ export function createWeatherCache({ db, fetcher = fetch, now = Date.now }) {
           throw new Error('Invalid NWS grid');
         entry.grid = `${gridId}/${gridX},${gridY}`;
         entry.gridUntil = now() + DAY;
+        try {
+          new Intl.DateTimeFormat('en', {
+            timeZone: point.properties.timeZone,
+          }).format();
+          entry.timeZone = point.properties.timeZone;
+        } catch {
+          entry.timeZone = undefined;
+        }
       }
-      const forecast = forecastSchema.parse(
-        await request(`/gridpoints/${entry.grid}/forecast/hourly?units=us`),
-      );
-      const periods = forecast.properties.periods
-        .filter(
-          (p) =>
-            Date.parse(p.endTime) > now() &&
-            Date.parse(p.startTime) < Date.parse(p.endTime),
+      try {
+        const forecast = forecastSchema.parse(
+          await request(`/gridpoints/${entry.grid}/forecast/hourly?units=us`),
+        );
+        const periods = forecast.properties.periods
+          .filter(
+            (p) =>
+              Date.parse(p.endTime) > now() &&
+              Date.parse(p.startTime) < Date.parse(p.endTime),
+          )
+          .slice(0, 48)
+          .map((p) => ({
+            startTime: p.startTime,
+            endTime: p.endTime,
+            temperatureF:
+              p.temperatureUnit === 'C'
+                ? (p.temperature * 9) / 5 + 32
+                : p.temperature,
+            shortForecast: p.shortForecast,
+            isDaytime: p.isDaytime,
+          }));
+        if (!periods.length) throw new Error('No valid forecast periods');
+        entry.data = {
+          ...entry.data,
+          status: 'ready',
+          timeZone: entry.timeZone,
+          fetchedAt: new Date(now()).toISOString(),
+          periods,
+        };
+        entry.status = 'ready';
+      } catch (error) {
+        entry.status = 'unavailable';
+        delay = Math.max(delay, error.delay || INTERVAL);
+        if (error.status === 429) throw error;
+      }
+      // Observations and forecasts retain their last good values independently.
+      try {
+        if (!entry.stations || now() >= entry.stationsUntil) {
+          const result = await request(`/gridpoints/${entry.grid}/stations`);
+          const stations = result.features
+            ?.map((f) => f.properties?.stationIdentifier)
+            .filter(
+              (id) => typeof id === 'string' && /^[A-Z0-9]{3,8}$/.test(id),
+            )
+            .slice(0, 2);
+          if (!stations?.length) throw new Error('No observation stations');
+          entry.stations = stations;
+          entry.stationsUntil = now() + DAY;
+        }
+        let observation;
+        for (const station of entry.stations) {
+          try {
+            const result = await request(
+              `/stations/${station}/observations/latest`,
+            );
+            const p = result.properties || {};
+            const timestamp = Date.parse(p.timestamp);
+            const temperature = p.temperature?.value;
+            if (
+              !Number.isFinite(timestamp) ||
+              timestamp > now() + 300000 ||
+              !Number.isFinite(temperature) ||
+              temperature < -100 ||
+              temperature > 150 ||
+              !['wmoUnit:degC', 'wmoUnit:degF'].includes(
+                p.temperature?.unitCode,
+              )
+            )
+              continue;
+            const cloud = {
+              CLR: 'Clear',
+              SKC: 'Clear',
+              FEW: 'Few clouds',
+              SCT: 'Scattered clouds',
+              BKN: 'Mostly cloudy',
+              OVC: 'Overcast',
+            };
+            const description =
+              typeof p.textDescription === 'string' && p.textDescription.trim()
+                ? p.textDescription.trim().slice(0, 250)
+                : cloud[p.cloudLayers?.at(-1)?.amount] ||
+                  'Conditions unavailable';
+            const candidate = {
+              timestamp: new Date(timestamp).toISOString(),
+              temperatureF:
+                p.temperature.unitCode === 'wmoUnit:degC'
+                  ? (temperature * 9) / 5 + 32
+                  : temperature,
+              shortForecast: description,
+              ...(typeof p.icon === 'string' && /\/(day|night)\//.test(p.icon)
+                ? { isDaytime: !p.icon.includes('/night/') }
+                : {}),
+              station,
+            };
+            if (!observation || timestamp > Date.parse(observation.timestamp))
+              observation = candidate;
+            if (now() - timestamp < 2 * 3600000) break;
+          } catch (error) {
+            if (error.status === 429 || error.delay > INTERVAL) throw error;
+          }
+        }
+        if (!observation) throw new Error('No valid observation');
+        if (
+          !entry.data?.observation ||
+          Date.parse(observation.timestamp) >=
+            Date.parse(entry.data.observation.timestamp)
         )
-        .slice(0, 48)
-        .map((p) => ({
-          startTime: p.startTime,
-          endTime: p.endTime,
-          temperatureF:
-            p.temperatureUnit === 'C'
-              ? (p.temperature * 9) / 5 + 32
-              : p.temperature,
-          shortForecast: p.shortForecast,
-        }));
-      if (!periods.length) throw new Error('No valid forecast periods');
-      entry.data = {
-        status: 'ready',
-        fetchedAt: new Date(now()).toISOString(),
-        periods,
-      };
-      entry.status = 'ready';
-      entry.nextAt = now() + INTERVAL;
+          entry.data = {
+            periods: [],
+            ...entry.data,
+            timeZone: entry.timeZone,
+            observation,
+          };
+        entry.observationStatus = 'ready';
+      } catch (error) {
+        entry.observationStatus = 'unavailable';
+        delay = Math.max(delay, error.delay || INTERVAL);
+      }
+      entry.nextAt = now() + delay;
     } catch (error) {
       entry.status =
         error.status === 404 && !entry.grid ? 'unsupported' : 'unavailable';
+      entry.observationStatus = 'unavailable';
       if (entry.grid) entry.gridUntil = 0;
       entry.nextAt =
         now() +
@@ -155,7 +258,11 @@ export function createWeatherCache({ db, fetcher = fetch, now = Date.now }) {
       active.set(key, task);
     }
     return entry.data
-      ? { ...entry.data, status: entry.status === 'ready' ? 'ready' : 'stale' }
+      ? {
+          ...entry.data,
+          status: entry.status === 'ready' ? 'ready' : 'stale',
+          observationStatus: entry.observationStatus,
+        }
       : { status: entry.status, periods: [] };
   }
   function forManifest(manifest) {

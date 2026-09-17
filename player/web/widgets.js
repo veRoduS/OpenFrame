@@ -1,10 +1,10 @@
 import { counterText, nextCounterDelay } from './counter.js';
 import { createClockFormatter, nextClockDelay } from './clock.js';
 import {
-  weatherText,
+  weatherView,
   getWeatherSnapshot,
   subscribeWeather,
-  renderWeatherText,
+  renderWeather,
 } from './weather.js';
 
 export const widgets = new Map();
@@ -17,9 +17,11 @@ function liveText(element, text, delay, onChange, subscribe, render) {
   let timer = null,
     unsubscribe,
     disposed = false;
+  let previous;
   const paint = (force = false) => {
     const value = text();
-    if (force || element.textContent !== value) {
+    if (force || previous !== value) {
+      previous = value;
       if (render) render(element, value);
       else element.textContent = value;
       onChange();
@@ -62,11 +64,14 @@ registerWidget('clock', (element, layer, { onChange = () => {} } = {}) => {
 registerWidget('weather', (element, layer, { onChange = () => {} } = {}) =>
   liveText(
     element,
-    () => weatherText(layer.weather, getWeatherSnapshot(layer.weather)),
+    () =>
+      JSON.stringify(
+        weatherView(layer.weather, getWeatherSnapshot(layer.weather)),
+      ),
     () => 60000,
     onChange,
     subscribeWeather,
-    renderWeatherText,
+    (element, value) => renderWeather(element, JSON.parse(value)),
   ),
 );
 

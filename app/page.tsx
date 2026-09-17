@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { version } from '../package.json';
 import { DeviceRecovery } from './device-recovery';
+import { WeatherOptions } from './weather-options';
 import {
   Monitor,
   FileCog,
@@ -1442,6 +1443,13 @@ function Editor({
               )}
               {current.type === 'weather' && current.weather && (
                 <>
+                  <WeatherOptions
+                    key={current.id}
+                    config={current.weather}
+                    onChange={(patch) =>
+                      patchLayer({ weather: { ...current.weather!, ...patch } })
+                    }
+                  />
                   <label>
                     Location name
                     <input

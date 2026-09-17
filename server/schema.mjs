@@ -29,6 +29,11 @@ export const layerSchema = z
         latitude: z.number().min(-90).max(90).nullable(),
         longitude: z.number().min(-180).max(180).nullable(),
         unit: z.enum(['F', 'C']).default('F'),
+        mode: z.enum(['current', 'six-hour']).default('current'),
+        zip: z
+          .string()
+          .regex(/^\d{5}$/)
+          .optional(),
       })
       .optional(),
     clock: z

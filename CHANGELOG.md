@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.3.4] - 2026-09-17
+
+- Add weather ZIP lookup, current observations, six-hour forecasts, and offline condition icons
+
 ## [0.3.3] - 2026-09-17
 
 - Add NWS weather widgets with shared location caching and offline player snapshots

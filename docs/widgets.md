@@ -32,6 +32,10 @@ Optional `prefix` and `suffix` are plain text, each limited to 500 characters. N
 
 The shared `counter.js` module handles formatting and next-update boundaries. The player does not tick every second for a day-granularity counter. Update the complete `player/web` directory on existing Pis before publishing goal messages; updating the server alone does not update installed player code.
 
+## Weather configuration
+
+Weather layers accept `weather: { "name": "Chicago", "latitude": 41.8781, "longitude": -87.6298, "unit": "F", "mode": "current" }`. Mode is `current` or `six-hour`; optional `zip` records a five-digit US ZIP selected in the editor. Coordinates remain authoritative. `weather.js` supplies one view model and DOM renderer to both editor and player, with bundled, licensed `weather-icons.js` geometry. Current observations and forecast periods share one server cache by coordinates and survive offline restarts independently. See [weather setup, fallback labels, and request limits](weather.md).
+
 ## Add a widget
 
 1. Add its type and validated configuration fields to `server/schema.mjs`. Keep bounds on strings, URLs, update rates, and numeric values. Update `app/types.ts` with the same fields.

@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.3.3'
+VERSION = '0.3.4'
 
 
 def normalize_server(value):
@@ -180,7 +180,10 @@ class Agent:
             for key, value in response.get('weather', {}).items():
                 previous = self.state.get('weather', {}).get(key)
                 if not value.get('periods') and previous and previous.get('periods'):
-                    response['weather'][key] = {**previous, 'status': 'stale'}
+                    response['weather'][key] = {**previous, **value, 'periods': previous['periods'], 'fetchedAt': previous.get('fetchedAt'), 'status': 'stale'}
+                if previous and previous.get('observation') and not value.get('observation'):
+                    response['weather'][key]['observation'] = previous['observation']
+                    response['weather'][key]['observationStatus'] = 'unavailable'
             manifest = response['manifest']
             if manifest.get('schemaVersion') != 1:
                 raise ValueError('Unsupported playlist schema')
@@ -323,7 +326,7 @@ class Agent:
                         return
                     data = None
                     content_type = 'image/webp'
-                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/image-layout.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
+                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/weather-icons.js', '/image-layout.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
                     filename = 'index.html' if route == '/' else route[1:]
                     data = (web / filename).read_bytes()
                     content_type = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css', 'svg': 'image/svg+xml'}[filename.split('.')[-1]]

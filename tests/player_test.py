@@ -53,6 +53,25 @@ class PlayerTests(unittest.TestCase):
                 restarted.sync()
         self.assertEqual(restarted.state['weather'], weather)
 
+    def test_weather_forecast_and_observation_fallback_are_independent(self):
+        location = '41.8781,-87.6298'
+        previous = {'status': 'ready', 'fetchedAt': '2026-09-16T12:00:00Z', 'periods': [{'temperatureF': 72}], 'observation': {'temperatureF': 68}}
+        self.agent.state = {**self.response(), 'weather': {location: previous}}
+        latest = {'status': 'stale', 'periods': [], 'observation': {'temperatureF': 70}, 'observationStatus': 'ready'}
+        with patch.object(self.agent, 'request', return_value={**self.response(), 'weather': {location: latest}}):
+            self.agent.sync()
+        merged = self.agent.state['weather'][location]
+        self.assertEqual(merged['periods'], previous['periods'])
+        self.assertEqual(merged['observation']['temperatureF'], 70)
+        self.assertEqual(merged['observationStatus'], 'ready')
+        latest = {'status': 'ready', 'periods': [{'temperatureF': 75}], 'fetchedAt': '2026-09-16T13:00:00Z'}
+        with patch.object(self.agent, 'request', return_value={**self.response(), 'weather': {location: latest}}):
+            self.agent.sync()
+        merged = self.agent.state['weather'][location]
+        self.assertEqual(merged['periods'], latest['periods'])
+        self.assertEqual(merged['observation']['temperatureF'], 70)
+        self.assertEqual(merged['observationStatus'], 'unavailable')
+
     def test_disconnect_retains_cache_and_retries_at_fifteen_second_cadence(self):
         with patch.object(self.agent, 'request', return_value=self.response()):
             self.agent.sync()
@@ -268,7 +287,7 @@ class PlayerTests(unittest.TestCase):
                 self.assertEqual(response.read(), data)
             with module.urllib.request.urlopen(base + '/local/state') as response:
                 self.assertEqual(response.headers.get('Cache-Control'), 'no-store')
-            for script in ('weather.js', 'clock.js'):
+            for script in ('weather.js', 'weather-icons.js', 'clock.js'):
                 with module.urllib.request.urlopen(base + '/' + script) as response:
                     self.assertEqual(response.status, 200)
                     self.assertIn(b'export', response.read())

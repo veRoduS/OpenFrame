@@ -13,8 +13,8 @@ import { counterText } from '../player/web/counter.js';
 import { clockText } from '../player/web/clock.js';
 import {
   weatherKey,
-  weatherText,
-  weatherLineStyle,
+  weatherView,
+  renderWeather,
 } from '../player/web/weather.js';
 
 function WeatherContent({
@@ -32,6 +32,19 @@ function WeatherContent({
     snapshot: unknown;
   } | null>(null);
   const [now, setNow] = useState(Date.now());
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (!ref.current?.parentElement) return;
+    renderWeather(
+      ref.current,
+      weatherView(
+        layer.weather,
+        weather?.key === key ? weather.snapshot : null,
+        now,
+      ),
+    );
+    layoutText(ref.current.parentElement, ref.current, layer, scale);
+  }, [layer, scale, weather, key, now]);
   useEffect(() => {
     if (!key || !active) return;
     let stopped = false;
@@ -66,17 +79,7 @@ function WeatherContent({
       abort.abort();
     };
   }, [key, active]);
-  return (
-    <TextContent
-      layer={layer}
-      scale={scale}
-      text={weatherText(
-        layer.weather,
-        weather?.key === key ? weather.snapshot : null,
-        now,
-      )}
-    />
-  );
+  return <span ref={ref} />;
 }
 
 function TextContent({
@@ -93,21 +96,7 @@ function TextContent({
     if (ref.current?.parentElement)
       layoutText(ref.current.parentElement, ref.current, layer, scale);
   }, [layer, scale, text]);
-  return (
-    <span ref={ref}>
-      {layer.type === 'weather'
-        ? text.split('\n').map((line, index) => (
-            <span
-              key={index}
-              style={weatherLineStyle(index) as React.CSSProperties}
-            >
-              {line}
-              {'\n'}
-            </span>
-          ))
-        : text}
-    </span>
-  );
+  return <span ref={ref}>{text}</span>;
 }
 
 export function SlideCanvas({

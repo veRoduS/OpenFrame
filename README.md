@@ -45,7 +45,7 @@ OpenFrame can also host an optional WireGuard service and enroll Pi players thro
 
 The playlist's Add slides tab marks slides already included with **In playlist**, including their entry count when repeated. Adding another copy requires confirmation; Cancel leaves the playlist unchanged. Existing repeated entries remain supported and can have independent durations and schedules.
 
-1. Create a slide. New slides have a white background; change it with the Background color swatch in the editor header. Add text, images, a clock, a count-up/countdown widget, or [NWS weather](docs/weather.md). Weather uses shared server requests for matching coordinates and cached player snapshots; no API key is needed.
+1. Create a slide. New slides have a white background; change it with the Background color swatch in the editor header. Add text, images, a clock, a count-up/countdown widget, or [NWS weather](docs/weather.md). Weather supports US ZIP lookup, current observations or a six-hour forecast, and offline weather icons. Matching locations share server requests and cached player snapshots; no API key is needed.
 2. Drag layers on the canvas or resize photos with the four corner handles. Proportions stay locked unless disabled in Properties. Text supports top/middle/bottom alignment and automatic sizing to fit its box. With Image fit set to Fill, choose Adjust crop to drag the photo inside its frame. Zoom and horizontal/vertical sliders adjust the crop without changing the source file. Reset crop restores the centered, unzoomed view. Save the slide.
 3. Create a playlist, add slides, choose durations, and reorder them with the arrows.
 4. Publish the playlist. Publishing stores a snapshot; later slide edits do not change screens until you publish again.
