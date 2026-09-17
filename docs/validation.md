@@ -1,5 +1,9 @@
 # Validation record
 
+## GitHub milestone 0.5.0
+
+Documentation-only milestone checked on 2026-09-17: the README was reduced from 3,376 to 319 words, detailed usage and Pi installation instructions were preserved in dedicated guides, and affected links were updated. Repository/version checks, 93 Node tests (including Python-agent integration), 58 Python tests, typecheck, lint, formatting, production build, shell syntax, and an isolated frozen-lockfile install passed. The production dependency audit reported no known vulnerabilities. No behavior, dependency, configuration, or data-format changes were made; browser/hardware tests were not repeated for this documentation revision. Docker remains unavailable locally. Consult [Actions](https://github.com/veRoduS/OpenFrame/actions) for this tag's remote container checks and publication result.
+
 ## GitHub milestone 0.4.0
 
 Pre-publication checks on 2026-09-17: 93 Node tests (including Python-agent integration), 58 Python tests, typecheck, lint, formatting, production build, three Pi shell syntax checks, version/repository checks, and an isolated frozen-lockfile install passed. The production dependency audit reported no known vulnerabilities. Weather, setup/connectivity/recovery, first-boot form, and screen-setup browser suites passed with isolated or mocked data. This milestone preserves the four local patch commits below.

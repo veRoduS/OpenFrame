@@ -2,6 +2,12 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.0] - 2026-09-17
+
+- Approved documentation milestone: concise project overview, features, and setup in the README; detailed usage and Raspberry Pi instructions now live in dedicated guides.
+- Present OpenFrame independently, remove product comparisons, and update documentation links. Preserve the local 0.4.1 revision in history.
+- Documentation and version metadata only; no application behavior, stored-data format, configuration, or player protocol changes. No player reinstall is needed solely for this milestone. Existing backup/rollback guidance and experimental hardware limitations still apply.
+
 ## [0.4.1] - 2026-09-17
 
 - Simplify the README and separate user and Pi installation guides
