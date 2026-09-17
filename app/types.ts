@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid';
 
 export type Layer = {
   id: string;
-  type: 'text' | 'image' | 'clock' | 'counter';
+  type: 'text' | 'image' | 'clock' | 'counter' | 'weather';
   x: number;
   y: number;
   width: number;
@@ -21,6 +21,12 @@ export type Layer = {
   cropY?: number;
   cropZoom?: number;
   clock?: { showSeconds?: boolean; hour12?: boolean };
+  weather?: {
+    name: string;
+    latitude: number | null;
+    longitude: number | null;
+    unit: 'F' | 'C';
+  };
   counter?: {
     direction: 'auto' | 'up' | 'down';
     prefix?: string;
@@ -139,6 +145,19 @@ export function newLayer(type: Layer['type'], assetId?: string): Layer {
     cropX: 50,
     cropY: 50,
     cropZoom: 1,
+    ...(type === 'weather'
+      ? {
+          width: 60,
+          height: 40,
+          autoSize: true,
+          weather: {
+            name: 'Weather',
+            latitude: null,
+            longitude: null,
+            unit: 'F' as const,
+          },
+        }
+      : {}),
     ...(type === 'clock'
       ? { clock: { showSeconds: false, hour12: true } }
       : {}),

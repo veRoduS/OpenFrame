@@ -29,10 +29,29 @@ class PlayerTests(unittest.TestCase):
             self.agent.sync()
         restarted = module.Agent(self.config, self.tmp.name)
         self.assertEqual(restarted.state['manifest']['revision'], 'one')
+
         with patch.object(restarted, 'request', side_effect=OSError('Offline')):
             with self.assertRaises(OSError):
                 restarted.sync()
         self.assertEqual(restarted.state['manifest']['revision'], 'one')
+
+    def test_weather_persists_offline_and_retains_last_snapshot_for_assigned_locations(self):
+        weather = {'41.8781,-87.6298': {'status': 'ready', 'fetchedAt': '2026-09-16T12:00:00Z', 'periods': [{'temperatureF': 72}]}}
+        with patch.object(self.agent, 'request', return_value={**self.response(), 'weather': weather}):
+            self.agent.sync()
+        restarted = module.Agent(self.config, self.tmp.name)
+        self.assertEqual(restarted.state['weather'], weather)
+        with patch.object(self.agent, 'request', return_value={**self.response(), 'weather': {'41.8781,-87.6298': {'status': 'loading', 'periods': []}}}):
+            self.agent.sync()
+        self.assertEqual(self.agent.state['weather']['41.8781,-87.6298']['periods'], weather['41.8781,-87.6298']['periods'])
+        self.assertEqual(self.agent.state['weather']['41.8781,-87.6298']['status'], 'stale')
+        with patch.object(self.agent, 'request', return_value={**self.response(), 'weather': {}}):
+            self.agent.sync()
+        self.assertEqual(self.agent.state['weather'], {})
+        with patch.object(restarted, 'request', side_effect=OSError('Offline')):
+            with self.assertRaises(OSError):
+                restarted.sync()
+        self.assertEqual(restarted.state['weather'], weather)
 
     def test_disconnect_retains_cache_and_retries_at_fifteen_second_cadence(self):
         with patch.object(self.agent, 'request', return_value=self.response()):
@@ -249,6 +268,10 @@ class PlayerTests(unittest.TestCase):
                 self.assertEqual(response.read(), data)
             with module.urllib.request.urlopen(base + '/local/state') as response:
                 self.assertEqual(response.headers.get('Cache-Control'), 'no-store')
+            for script in ('weather.js', 'clock.js'):
+                with module.urllib.request.urlopen(base + '/' + script) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn(b'export', response.read())
             request = module.urllib.request.Request(base + '/local/state', headers={'Host': 'attacker.example'})
             with self.assertRaises(module.urllib.error.HTTPError) as error:
                 module.urllib.request.urlopen(request)

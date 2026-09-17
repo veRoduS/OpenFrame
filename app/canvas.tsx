@@ -11,6 +11,73 @@ import { resizeLayer } from './geometry.mjs';
 import { imageStyle, panCrop } from '../player/web/image-layout.js';
 import { counterText } from '../player/web/counter.js';
 import { clockText } from '../player/web/clock.js';
+import {
+  weatherKey,
+  weatherText,
+  weatherLineStyle,
+} from '../player/web/weather.js';
+
+function WeatherContent({
+  layer,
+  scale,
+  active,
+}: {
+  layer: Layer;
+  scale: number;
+  active: boolean;
+}) {
+  const key = weatherKey(layer.weather);
+  const [weather, setWeather] = useState<{
+    key: string;
+    snapshot: unknown;
+  } | null>(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!key || !active) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const abort = new AbortController();
+    async function poll() {
+      try {
+        const [latitude, longitude] = key!.split(',');
+        const response = await fetch(
+          `/api/weather?latitude=${latitude}&longitude=${longitude}`,
+          {
+            cache: 'no-store',
+            signal: AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]),
+          },
+        );
+        if (!response.ok) throw new Error('Weather unavailable');
+        const snapshot = await response.json();
+        if (!stopped) setWeather({ key: key!, snapshot });
+      } catch {
+        // Preserve the latest forecast while the editor reconnects.
+      } finally {
+        if (!stopped) {
+          setNow(Date.now());
+          timer = setTimeout(poll, 15000);
+        }
+      }
+    }
+    timer = setTimeout(poll, 400);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [key, active]);
+  return (
+    <TextContent
+      layer={layer}
+      scale={scale}
+      text={weatherText(
+        layer.weather,
+        weather?.key === key ? weather.snapshot : null,
+        now,
+      )}
+    />
+  );
+}
 
 function TextContent({
   layer,
@@ -26,7 +93,21 @@ function TextContent({
     if (ref.current?.parentElement)
       layoutText(ref.current.parentElement, ref.current, layer, scale);
   }, [layer, scale, text]);
-  return <span ref={ref}>{text}</span>;
+  return (
+    <span ref={ref}>
+      {layer.type === 'weather'
+        ? text.split('\n').map((line, index) => (
+            <span
+              key={index}
+              style={weatherLineStyle(index) as React.CSSProperties}
+            >
+              {line}
+              {'\n'}
+            </span>
+          ))
+        : text}
+    </span>
+  );
 }
 
 export function SlideCanvas({
@@ -220,6 +301,8 @@ export function SlideCanvas({
               src={assets.find((a) => a.id === layer.assetId)?.url}
               style={imageStyle(layer) as React.CSSProperties}
             />
+          ) : layer.type === 'weather' ? (
+            <WeatherContent layer={layer} scale={scale} active={interactive} />
           ) : (
             <TextContent
               layer={layer}
@@ -241,7 +324,7 @@ export function SlideCanvas({
           .filter(
             (l) =>
               l.id === selected &&
-              ['image', 'clock', 'counter'].includes(l.type),
+              ['image', 'clock', 'counter', 'weather'].includes(l.type),
           )
           .map((layer) =>
             (['nw', 'ne', 'sw', 'se'] as const).map((corner) => (

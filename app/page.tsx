@@ -17,6 +17,7 @@ import {
   ImagePlus,
   Clock,
   Timer,
+  CloudSun,
   Crop,
   Undo2,
   Redo2,
@@ -1267,6 +1268,12 @@ function Editor({
               <Clock size={20} />
             </IconButton>
             <IconButton
+              label="Add weather widget"
+              onClick={() => add('weather')}
+            >
+              <CloudSun size={20} />
+            </IconButton>
+            <IconButton
               label="Add counter widget"
               onClick={() => add('counter')}
             >
@@ -1287,6 +1294,8 @@ function Editor({
                   <Images size={16} />
                 ) : layer.type === 'counter' ? (
                   <Timer size={16} />
+                ) : layer.type === 'weather' ? (
+                  <CloudSun size={16} />
                 ) : layer.type === 'clock' ? (
                   <Clock size={16} />
                 ) : (
@@ -1297,10 +1306,12 @@ function Editor({
                     ? layer.text || 'Text'
                     : layer.type === 'counter'
                       ? 'Counter'
-                      : layer.type === 'clock'
-                        ? 'Clock'
-                        : assets.find((a) => a.id === layer.assetId)?.name ||
-                          'Image'}
+                      : layer.type === 'weather'
+                        ? layer.weather?.name || 'Weather'
+                        : layer.type === 'clock'
+                          ? 'Clock'
+                          : assets.find((a) => a.id === layer.assetId)?.name ||
+                            'Image'}
                 </span>
                 <small>{slide.layers.length - i}</small>
               </button>
@@ -1398,9 +1409,11 @@ function Editor({
                     ? 'Text'
                     : current.type === 'counter'
                       ? 'Counter widget'
-                      : current.type === 'clock'
-                        ? 'Clock widget'
-                        : 'Image'}
+                      : current.type === 'weather'
+                        ? 'Weather widget'
+                        : current.type === 'clock'
+                          ? 'Clock widget'
+                          : 'Image'}
                 </strong>
                 <IconButton
                   label="Delete layer"
@@ -1426,6 +1439,86 @@ function Editor({
                     onChange={(e) => patchLayer({ text: e.target.value })}
                   />
                 </label>
+              )}
+              {current.type === 'weather' && current.weather && (
+                <>
+                  <label>
+                    Location name
+                    <input
+                      value={current.weather.name}
+                      maxLength={80}
+                      onChange={(e) =>
+                        patchLayer({
+                          weather: {
+                            ...current.weather!,
+                            name: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="number-grid weather-coordinates">
+                    <label>
+                      Latitude
+                      <input
+                        type="number"
+                        min={-90}
+                        max={90}
+                        step="0.0001"
+                        value={current.weather.latitude ?? ''}
+                        onChange={(e) =>
+                          patchLayer({
+                            weather: {
+                              ...current.weather!,
+                              latitude:
+                                e.target.value === ''
+                                  ? null
+                                  : Number(e.target.value),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Longitude
+                      <input
+                        type="number"
+                        min={-180}
+                        max={180}
+                        step="0.0001"
+                        value={current.weather.longitude ?? ''}
+                        onChange={(e) =>
+                          patchLayer({
+                            weather: {
+                              ...current.weather!,
+                              longitude:
+                                e.target.value === ''
+                                  ? null
+                                  : Number(e.target.value),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    Temperature unit
+                    <select
+                      value={current.weather.unit}
+                      onChange={(e) =>
+                        patchLayer({
+                          weather: {
+                            ...current.weather!,
+                            unit: e.target.value as 'F' | 'C',
+                          },
+                        })
+                      }
+                    >
+                      <option value="F">Fahrenheit</option>
+                      <option value="C">Celsius</option>
+                    </select>
+                  </label>
+                </>
               )}
               {current.type === 'clock' && (
                 <>

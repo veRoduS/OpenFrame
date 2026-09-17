@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.3.2'
+VERSION = '0.3.3'
 
 
 def normalize_server(value):
@@ -176,6 +176,11 @@ class Agent:
         response['generation'] = self.state.get('generation', 0)
         response['commandAck'] = self.state.get('commandAck')
         if response.get('approved'):
+            # Keep last-known weather if a cold server cache has no replacement yet.
+            for key, value in response.get('weather', {}).items():
+                previous = self.state.get('weather', {}).get(key)
+                if not value.get('periods') and previous and previous.get('periods'):
+                    response['weather'][key] = {**previous, 'status': 'stale'}
             manifest = response['manifest']
             if manifest.get('schemaVersion') != 1:
                 raise ValueError('Unsupported playlist schema')
@@ -318,7 +323,7 @@ class Agent:
                         return
                     data = None
                     content_type = 'image/webp'
-                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/image-layout.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
+                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/image-layout.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
                     filename = 'index.html' if route == '/' else route[1:]
                     data = (web / filename).read_bytes()
                     content_type = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css', 'svg': 'image/svg+xml'}[filename.split('.')[-1]]

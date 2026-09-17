@@ -1,6 +1,6 @@
 # Widget extension contract
 
-The built-in widgets are a clock and a count-up/countdown counter. Both work without a network connection and share typography, alignment, and auto-sizing with text layers. Widgets are trusted source-code extensions, not remotely installed packages.
+The built-in widgets are a clock, a count-up/countdown counter, and [NWS weather](weather.md). Clock and counter work without a network connection; weather uses cached server snapshots. All share typography, alignment, and auto-sizing with text layers. Widgets are trusted source-code extensions, not remotely installed packages.
 
 ## Clock configuration
 
@@ -70,6 +70,6 @@ registerWidget('example', (element, layer, { onChange }) => {
 
 Use `textContent` or DOM construction; never inject arbitrary HTML. Reuse the existing layer geometry and typography fields instead of building a second layout system. Registering a renderer alone does not extend the server's allowlist or editor.
 
-For weather, calendars, feeds, or business data, fetch and normalize data on the home server with restricted destinations and timeouts. Store a timestamped snapshot in the published manifest. This keeps credentials off players and makes the widget available offline. Decide explicitly whether data updates require republishing or a separately versioned snapshot channel; the latter is not implemented in this release.
+For calendars, feeds, or business data, follow the weather widget's pattern: fetch and normalize data on the home server with restricted destinations and timeouts. Weather uses timestamped snapshots in the sync response's `weather` map, outside the immutable publication. The agent persists them with playback state, and `setWeatherSnapshots` updates active weather renderers without restarting the playlist. Prepared weather frames resolve immediately with the last snapshot or an explicit unavailable state; they subscribe and start their timer only on activation. Data never comes from an arbitrary layer-provided URL.
 
 Avoid full web-page embeds on Zero 2 W. A simple DOM renderer and cached data keep resource usage predictable. A server-rendered bitmap widget is another option for expensive layouts, but is not implemented yet.

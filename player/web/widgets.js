@@ -1,5 +1,11 @@
 import { counterText, nextCounterDelay } from './counter.js';
 import { createClockFormatter, nextClockDelay } from './clock.js';
+import {
+  weatherText,
+  getWeatherSnapshot,
+  subscribeWeather,
+  renderWeatherText,
+} from './weather.js';
 
 export const widgets = new Map();
 export function registerWidget(type, renderer) {
@@ -7,29 +13,38 @@ export function registerWidget(type, renderer) {
   widgets.set(type, renderer);
 }
 
-function liveText(element, text, delay, onChange) {
+function liveText(element, text, delay, onChange, subscribe, render) {
   let timer = null,
+    unsubscribe,
     disposed = false;
-  const paint = () => {
-    element.textContent = text();
-    onChange();
+  const paint = (force = false) => {
+    const value = text();
+    if (force || element.textContent !== value) {
+      if (render) render(element, value);
+      else element.textContent = value;
+      onChange();
+    }
   };
-  paint();
+  paint(true);
   const tick = () => {
     if (disposed) return;
-    paint();
+    paint(true);
     const next = delay();
     if (next !== null) timer = setTimeout(tick, Math.max(16, next));
   };
   return {
     ready: Promise.resolve(),
     activate() {
+      if (disposed) return;
+      unsubscribe?.();
+      unsubscribe = subscribe?.(paint);
       clearTimeout(timer);
       tick();
     },
     dispose() {
       disposed = true;
       clearTimeout(timer);
+      unsubscribe?.();
     },
   };
 }
@@ -43,6 +58,17 @@ registerWidget('clock', (element, layer, { onChange = () => {} } = {}) => {
     onChange,
   );
 });
+
+registerWidget('weather', (element, layer, { onChange = () => {} } = {}) =>
+  liveText(
+    element,
+    () => weatherText(layer.weather, getWeatherSnapshot(layer.weather)),
+    () => 60000,
+    onChange,
+    subscribeWeather,
+    renderWeatherText,
+  ),
+);
 
 registerWidget('counter', (element, layer, { onChange = () => {} } = {}) => {
   if (!layer.counter) throw new Error('Counter configuration is missing');

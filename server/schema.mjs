@@ -5,7 +5,7 @@ const id = z.uuid();
 export const layerSchema = z
   .object({
     id,
-    type: z.enum(['text', 'image', 'clock', 'counter']),
+    type: z.enum(['text', 'image', 'clock', 'counter', 'weather']),
     x: z.number().min(0).max(100),
     y: z.number().min(0).max(100),
     width: z.number().min(1).max(100),
@@ -23,6 +23,14 @@ export const layerSchema = z
     cropX: z.number().min(0).max(100).default(50),
     cropY: z.number().min(0).max(100).default(50),
     cropZoom: z.number().min(1).max(4).default(1),
+    weather: z
+      .object({
+        name: z.string().trim().max(80).default('Weather'),
+        latitude: z.number().min(-90).max(90).nullable(),
+        longitude: z.number().min(-180).max(180).nullable(),
+        unit: z.enum(['F', 'C']).default('F'),
+      })
+      .optional(),
     clock: z
       .object({
         showSeconds: z.boolean().default(false),
@@ -49,7 +57,8 @@ export const layerSchema = z
     'Layer must fit inside the slide',
   )
   .refine((l) => l.type !== 'image' || !!l.assetId, 'Choose an image')
-  .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter');
+  .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter')
+  .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather');
 export const slideSchema = z.object({
   name: z.string().trim().min(1).max(100),
   width: z.number().int().min(320).max(3840),

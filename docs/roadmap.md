@@ -4,7 +4,7 @@
 
 - Single-administrator management and Docker-hosted server with persistent SQLite/media storage.
 - Text/images, image cropping and resize handles, backgrounds, vertical alignment, and text auto-sizing.
-- Clock formats (HH:MM/HH:MM:SS, 12/24 hour) and automatic counters with affixes and goal messages.
+- Clock formats (HH:MM/HH:MM:SS, 12/24 hour), automatic counters with affixes and goal messages, and NWS hourly weather with shared server caching and offline snapshots.
 - Media folders, tags, sorting, search, and batch operations.
 - Playlist entry timing, optional start/expiration windows, active-status indicators, and duplicate confirmation.
 - Explicit publication snapshots, pairing/assignment, rotation/blanking, readiness reports, refresh/restart/revocation.

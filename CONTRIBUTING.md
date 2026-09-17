@@ -41,6 +41,8 @@ After `pnpm build`, run `node tests/screen-setup.browser.mjs` with the same Play
 
 ## Change requirements
 
+After building, `node tests/weather.browser.mjs` checks weather editing, resize handles, units, save/reload data, responsive layouts, and player weather updates without replacing the active frame. It starts an isolated database/server and injects fake NWS responses; it never modifies your normal library or contacts NWS. Use the same Playwright environment settings as the other browser tests.
+
 For `node tests/player-connectivity.browser.mjs`, provide a generated, non-secret Wi-Fi QR PNG at `work/setup-qr.png` or set `OPENFRAME_TEST_QR_PNG`. For example, with Python `qrcode[pil]` installed in a separate test environment, generate `WIFI:T:WPA;S:OpenFrame-Setup-AB12;P:fake-password;;` into that file. The test uses the same Playwright settings, mocks all networking, and checks the HDMI setup view at 1920x1080 and 800x480, mobile layout, offline cached frames, agent interruption, blanking, and the recovery form. It does not validate the Pi's native `qrencode` binary or physical scanning.
 
 Run `node tests/bootstrap.browser.mjs` with the same Playwright settings to check the first-boot form at desktop and phone sizes. Its network requests are mocked and it never configures your Wi-Fi. Managed VPN tests use an injected helper; Python provisioning tests mock privileged commands. Actual Compose networking, image chroot/package installation, regulatory settings, and Pi AP/client switching need the separate [acceptance checklist](docs/managed-wireguard.md#acceptance-checks).

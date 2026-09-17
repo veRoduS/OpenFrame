@@ -2,6 +2,7 @@ import express from 'express';
 import { mountScreenSetup } from './screen-setup.mjs';
 import { mountManagedVpn } from './managed-vpn.mjs';
 import { mountRecovery } from './recovery.mjs';
+import { createWeatherCache } from './weather.mjs';
 import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
@@ -34,6 +35,7 @@ const fail = (status, message) => Object.assign(new Error(message), { status });
 export function createApp({
   dataDir = process.env.DATA_DIR || './data',
   managedVpnTransport,
+  weatherFetch,
 } = {}) {
   const root = path.resolve(dataDir);
   mkdirSync(path.join(root, 'media'), { recursive: true });
@@ -42,6 +44,7 @@ export function createApp({
     CREATE TABLE IF NOT EXISTS records (kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(kind,id));
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);`);
+  const weather = createWeatherCache({ db, fetcher: weatherFetch });
   const list = (kind) =>
     db
       .prepare('SELECT body FROM records WHERE kind=? ORDER BY rowid DESC')
@@ -341,9 +344,30 @@ export function createApp({
     put('playlist', p);
     res.json({ publishedAt: p.published.publishedAt });
   });
-  app.get('/api/preview/:id', admin, (req, res) =>
-    res.json(snapshot(requireRecord('playlist', req.params.id))),
-  );
+  app.get('/api/preview/:id', admin, (req, res) => {
+    const manifest = snapshot(requireRecord('playlist', req.params.id));
+    manifest.revision = hash(JSON.stringify([manifest.items, manifest.assets]));
+    res.json({ ...manifest, weather: weather.forManifest(manifest) });
+  });
+  app.get('/api/weather', admin, (req, res) => {
+    const config = z
+      .object({
+        latitude: z
+          .string()
+          .trim()
+          .min(1)
+          .transform(Number)
+          .pipe(z.number().min(-90).max(90)),
+        longitude: z
+          .string()
+          .trim()
+          .min(1)
+          .transform(Number)
+          .pipe(z.number().min(-180).max(180)),
+      })
+      .parse(req.query);
+    res.json(weather.read(config));
+  });
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 15 * 1024 * 1024, files: 1 },
@@ -648,6 +672,7 @@ export function createApp({
       blank: device.blank,
       rotation: device.rotation,
       command: device.command,
+      weather: weather.forManifest(published),
       manifest: published || {
         schemaVersion: 1,
         revision: 'empty',
@@ -680,5 +705,12 @@ export function createApp({
             : err.message,
     });
   });
-  return { app, db, close: () => managedVpn.close() };
+  return {
+    app,
+    db,
+    close: () => {
+      weather.close();
+      managedVpn.close();
+    },
+  };
 }

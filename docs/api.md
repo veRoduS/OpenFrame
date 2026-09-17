@@ -8,6 +8,8 @@ These routes exist only on the temporary player hotspot at `http://192.168.50.1`
 
 ## Home server
 
+`GET /api/weather?latitude=41.8781&longitude=-87.6298` requires an administrator session and returns the current shared forecast snapshot immediately, scheduling refresh if needed. Coordinates must be finite and within geographic bounds. Weather layers accept `weather:{name,latitude,longitude,unit}`; name is at most 80 characters, coordinates may be null while editing an unconfigured widget, and unit is `F` or `C`. Published player sync responses add `weather:{"latitude,longitude":snapshot}` only for approved players' assigned published locations; previews include the same map alongside their manifest. Keys use four decimal places. A snapshot has `status`, optional ISO `fetchedAt`, and `periods:[{startTime,endTime,temperatureF,shortForecast}]`. Status is `loading`, `ready`, `stale`, `unavailable`, `unsupported`, or `capacity`. Live snapshots are not accepted from slide writes and do not change playlist publication revisions. See [weather caching and lifecycle](weather.md).
+
 This contract follows the application source; it is not a separate versioned URL namespace. Software versions, publication revisions, and manifest schemaVersion are independent. See [release compatibility](releases.md).
 
 All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an appropriate HTTP status. Administrator requests require the `openframe_session` HttpOnly cookie, issued by setup/login and valid for 24 hours. Browser writes must use the server's origin (or configured `PUBLIC_URL`). Devices use `Authorization: Bearer <token>`.

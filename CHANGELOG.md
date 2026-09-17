@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.3.3] - 2026-09-17
+
+- Add NWS weather widgets with shared location caching and offline player snapshots
+
 ## [0.3.2] - 2026-09-16
 
 - Polish first-boot branding and add timed or indefinite recovery reconnect pauses

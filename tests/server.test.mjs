@@ -15,6 +15,135 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 
+void test('weather is admin-only, shared across approved players, and updates outside publication revisions', async (t) => {
+  const gate = Promise.withResolvers();
+  t.after(() => gate.resolve());
+  let calls = 0;
+  const { request } = await fixture(t, {
+    weatherFetch: async (url) => {
+      calls++;
+      if (url.includes('/points/'))
+        return Response.json({
+          properties: { gridId: 'LOT', gridX: 75, gridY: 73 },
+        });
+      await gate.promise;
+      return Response.json({
+        properties: {
+          periods: [
+            {
+              startTime: new Date(Date.now() - 3600000).toISOString(),
+              endTime: new Date(Date.now() + 3600000).toISOString(),
+              temperature: 72,
+              temperatureUnit: 'F',
+              shortForecast: 'Partly Sunny',
+            },
+          ],
+        },
+      });
+    },
+  });
+  const endpoint = '/api/weather?latitude=41.8781&longitude=-87.6298';
+  assert.equal((await request(endpoint, 'GET', undefined, false)).status, 401);
+  assert.equal(
+    (await request('/api/weather?latitude=91&longitude=0')).status,
+    400,
+  );
+  assert.equal(
+    (await request('/api/weather?latitude=&longitude=0')).status,
+    400,
+  );
+  const draft = slideData();
+  draft.layers = [
+    {
+      ...draft.layers[0],
+      type: 'weather',
+      weather: {
+        latitude: 41.8781,
+        longitude: -87.6298,
+        name: 'Office',
+        unit: 'F',
+      },
+    },
+  ];
+  const slide = (await request('/api/slides', 'POST', draft)).data;
+  const playlist = (
+    await request('/api/playlists', 'POST', {
+      name: 'Weather',
+      items: [{ slideId: slide.id, duration: 60 }],
+    })
+  ).data;
+  await request(`/api/playlists/${playlist.id}/publish`, 'POST');
+  const devices = [];
+  for (const name of ['First screen', 'Second screen']) {
+    const device = (
+      await request('/api/player/enroll', 'POST', { name }, false)
+    ).data;
+    const token = { Authorization: `Bearer ${device.token}` };
+    assert.equal(
+      (await request('/api/player/sync', 'POST', {}, false, token)).data
+        .weather,
+      undefined,
+    );
+    await request(`/api/devices/${device.id}/approve`, 'POST', {
+      code: device.code,
+    });
+    await request(`/api/devices/${device.id}`, 'PUT', {
+      name,
+      playlistId: playlist.id,
+      blank: false,
+      rotation: 0,
+    });
+    devices.push(token);
+  }
+  const first = (
+    await request('/api/player/sync', 'POST', {}, false, devices[0])
+  ).data;
+  const second = (
+    await request('/api/player/sync', 'POST', {}, false, devices[1])
+  ).data;
+  assert.equal(first.manifest.revision, second.manifest.revision);
+  assert.deepEqual(Object.keys(first.weather), ['41.8781,-87.6298']);
+  assert.equal(first.weather['41.8781,-87.6298'].status, 'loading');
+  gate.resolve();
+  for (let i = 0; i < 50; i++) {
+    if ((await request(endpoint)).data.periods.length) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const updated = (
+    await request('/api/player/sync', 'POST', {}, false, devices[0])
+  ).data;
+  assert.equal(updated.manifest.revision, first.manifest.revision);
+  assert.equal(updated.weather['41.8781,-87.6298'].periods[0].temperatureF, 72);
+  assert.deepEqual(
+    (await request('/api/player/sync', 'POST', {}, false, devices[1])).data
+      .weather,
+    updated.weather,
+  );
+  assert.equal(calls, 2);
+  const preview = (await request(`/api/preview/${playlist.id}`)).data;
+  assert.equal(
+    (await request(`/api/preview/${playlist.id}`)).data.revision,
+    preview.revision,
+  );
+  assert.equal(preview.weather['41.8781,-87.6298'].periods[0].temperatureF, 72);
+  assert.equal(
+    (await request(endpoint, 'GET', undefined, false, devices[0])).status,
+    401,
+  );
+  await request(`/api/playlists/${playlist.id}`, 'PUT', {
+    name: 'Weather',
+    items: [],
+  });
+  // Draft edits do not remove a location from the published playlist.
+  assert.equal(
+    Object.keys(
+      (await request('/api/player/sync', 'POST', {}, false, devices[0])).data
+        .weather,
+    ).length,
+    1,
+  );
+});
+
 void test('recovery Wi-Fi is approval-gated, encrypted, stable, admin-only and removed on revocation', async (t) => {
   const { request, db, base, dir } = await fixture(t);
   const enroll = async () =>
@@ -249,9 +378,9 @@ async function uploadImage(request, name = 'photo.png', folderId) {
   return request('/api/assets', 'POST', form);
 }
 
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'openframe-test-'));
-  const { app, db } = createApp({ dataDir: dir });
+  const { app, db, close } = createApp({ dataDir: dir, ...options });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -291,6 +420,7 @@ async function fixture(t) {
     };
   };
   t.after(async () => {
+    close();
     server.closeAllConnections();
     await new Promise((r) => server.close(r));
     db.close();

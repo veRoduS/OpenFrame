@@ -1,5 +1,6 @@
 import { Playback } from './playback.js';
 import { prepareFrame, commitFrame } from './frame.js';
+import { setWeatherSnapshots } from './weather.js';
 
 const stage = document.getElementById('stage'),
   message = document.getElementById('message');
@@ -43,6 +44,9 @@ const playback = new Playback({
 });
 function applyState(state) {
   lastState = state;
+  setWeatherSnapshots(
+    state.approved ? state.weather || state.manifest?.weather : {},
+  );
   connectionStatus.hidden =
     !!preview ||
     !state.approved ||
@@ -102,7 +106,14 @@ async function poll() {
       showMessage('Waiting for connection', error.message);
   } finally {
     clearTimeout(timeout);
-    if (!preview || !lastState) setTimeout(poll, 3000);
+    if (
+      !preview ||
+      !lastState ||
+      lastState.manifest?.items.some((item) =>
+        item.slide.layers.some((layer) => layer.type === 'weather'),
+      )
+    )
+      setTimeout(poll, preview ? 15000 : 3000);
   }
 }
 async function reportPlayback() {

@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.3.3
+
+Checked on 2026-09-16: 88 Node tests (including Python-agent integration), 57 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. Weather tests cover location/request deduplication, persisted cache reuse, retry backoff and last-known data, request/destination/response bounds, concurrency/capacity, authenticated API access, approval and publication isolation, independent weather updates, units, stale/expired formatting, deferred widget timers and cleanup, and agent offline persistence. The agent's static module allowlist now includes weather and clock modules.
+
+The weather browser suite passed at 1280/390/320px for editor controls, resize handles, units, saving, text fitting, and responsive layout, plus player weather refresh without replacing the visible frame, offline content, two-frame bounds, and blanking. The first-boot/connectivity/recovery browser regression also passed. Screenshots were inspected. Browser weather tests use injected NWS fixtures and an isolated database. Separate read-only live NWS points and hourly-forecast requests for the Chicago example both returned HTTP 200 with the expected fields. This is not a physical-Pi performance or long-term NWS availability test. No Docker/hardware test, deployment, dependency audit, or GitHub push was performed.
+
 ## Local revision 0.3.2
 
 Checked on 2026-09-16: 81 Node tests (including Python-agent integration), 56 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. New recovery coverage includes each monotonic pause deadline, indefinite pause, invalid inputs, expiry/submission ordering, restart defaults, protected pause/resume endpoints, and retaining the hotspot past its original deadline until resumed. Privileged networking remains mocked.
