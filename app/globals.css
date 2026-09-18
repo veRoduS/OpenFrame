@@ -1702,6 +1702,33 @@ input[type='color'] {
 .insert-tools {
   flex-wrap: wrap;
 }
+.playlist-transition {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: end;
+}
+.playlist-transition label {
+  min-width: 0;
+}
+.playlist-transition input[type='range'] {
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  accent-color: #226d4d;
+}
+.transition-duration-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 500px) {
+  .playlist-transition {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
 .weather-zip,
 .weather-mode {
   grid-column: 1 / -1;

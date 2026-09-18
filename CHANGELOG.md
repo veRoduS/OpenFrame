@@ -2,6 +2,14 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.1] - 2026-09-18
+
+- Add prepared whole-slide fade and slide transitions with playlist controls
+- Keep Cut as the default; offer Fade, Slide left, and Slide right with 0.2-2.0 second durations. Save and publish transition settings with the playlist.
+- Wait for decoded photos, widget readiness, fonts, and layout before transitioning. Retain at most two frames, dispose outgoing resources before preparing another, and give each incoming slide its full duration after animation.
+- Cancel effects on replacement, expiration, blanking, and revocation. Use Cut for initial/replacement frames, reduced motion, and unsupported animation backends.
+- Compatibility: update the server and complete `player/web` directory, then restart the kiosk. Existing publications default to Cut; older players ignore these additive settings. No database migration or automatic player update is included. Follow [upgrade/rollback operations](docs/operations.md) and [Pi acceptance checks](docs/playback-testing.md); physical-device smoothness is not validated.
+
 ## [0.5.0] - 2026-09-17
 
 - Approved documentation milestone: concise project overview, features, and setup in the README; detailed usage and Raspberry Pi instructions now live in dedicated guides.

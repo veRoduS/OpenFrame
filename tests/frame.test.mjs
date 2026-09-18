@@ -230,6 +230,110 @@ void test('activation failure leaves the old frame visible', () => {
   assert.throws(() => commitFrame(next, previous), /Activation failed/);
   assert.equal(previous.element.style.visibility, 'visible');
 });
+
+function animatedFrames(t) {
+  const f = fixture(t),
+    animations = [];
+  const make = () => {
+    const element = new f.host.constructor('div');
+    element.style.transform = 'translate(-50%, -50%) rotate(90deg)';
+    element.style.visibility = 'visible';
+    element.animate = (frames, options) => {
+      const pending = deferred();
+      const animation = {
+        frames,
+        options,
+        finished: pending.promise,
+        cancelled: false,
+        finish: () => pending.resolve(),
+        cancel() {
+          this.cancelled = true;
+          pending.reject(new Error('Cancelled'));
+        },
+      };
+      animations.push(animation);
+      return animation;
+    };
+    return { element, activate() {} };
+  };
+  return { next: make(), previous: make(), animations };
+}
+void test('fade keeps the outgoing frame opaque and clears effects on completion', async (t) => {
+  const { next, previous, animations } = animatedFrames(t);
+  const effect = commitFrame(next, previous, { type: 'fade', durationMs: 800 });
+  assert.equal(animations.length, 1);
+  assert.deepEqual(animations[0].frames, [{ opacity: 0 }, { opacity: 1 }]);
+  assert.equal(animations[0].options.duration, 800);
+  assert.equal(previous.element.style.visibility, 'visible');
+  assert.equal(next.element.style.zIndex, '2');
+  animations[0].finish();
+  await effect.finished;
+  assert.equal(previous.element.style.visibility, 'hidden');
+  assert.equal(next.element.style.visibility, 'visible');
+  assert.equal(next.element.style.zIndex, '');
+  assert.ok(animations[0].cancelled);
+});
+void test('slide effects preserve rotation and cancel to a complete incoming frame', async (t) => {
+  const { next, previous, animations } = animatedFrames(t);
+  for (const { type, distance } of [
+    { type: 'slide-left', distance: 1920 },
+    { type: 'slide-right', distance: -1920 },
+  ]) {
+    animations.length = 0;
+    const effect = commitFrame(next, previous, { type, durationMs: 500 });
+    assert.equal(animations.length, 2);
+    assert.equal(
+      animations[0].frames[0].transform,
+      `translateX(${distance}px) translate(-50%, -50%) rotate(90deg)`,
+    );
+    assert.equal(
+      animations[1].frames[1].transform,
+      `translateX(${-distance}px) translate(-50%, -50%) rotate(90deg)`,
+    );
+    effect.cancel();
+    effect.cancel();
+    await effect.finished;
+    assert.ok(animations.every((animation) => animation.cancelled));
+    assert.equal(previous.element.style.visibility, 'hidden');
+    assert.equal(next.element.style.visibility, 'visible');
+  }
+});
+void test('animation failures and watchdog completion fall back to a full cut', async (t) => {
+  const { next, previous, animations } = animatedFrames(t);
+  previous.element.animate = () => {
+    throw new Error('Backend unavailable');
+  };
+  await commitFrame(next, previous, { type: 'slide-left' }).finished;
+  assert.ok(animations[0].cancelled);
+  assert.equal(previous.element.style.visibility, 'hidden');
+  let watchdog;
+  t.mock.method(globalThis, 'setTimeout', (fn, delay) => {
+    watchdog = fn;
+    assert.equal(delay, 750);
+  });
+  const effect = commitFrame(next, previous, { type: 'fade' });
+  watchdog();
+  await effect.finished;
+  assert.ok(animations.every((animation) => animation.cancelled));
+});
+void test('cut, initial load, reduced motion and unsupported browsers do not animate', (t) => {
+  const { next, previous, animations } = animatedFrames(t);
+  assert.equal(commitFrame(next, previous), undefined);
+  assert.equal(commitFrame(next, null, { type: 'fade' }), undefined);
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia');
+  Object.defineProperty(globalThis, 'matchMedia', {
+    configurable: true,
+    value: () => ({ matches: true }),
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'matchMedia', original);
+    else delete globalThis.matchMedia;
+  });
+  assert.equal(commitFrame(next, previous, { type: 'fade' }), undefined);
+  delete next.element.animate;
+  assert.equal(commitFrame(next, previous, { type: 'fade' }), undefined);
+  assert.equal(animations.length, 0);
+});
 void test('clock widgets defer timers until activation and respect seconds precision', (t) => {
   const timers = new Map();
   let id = 0;

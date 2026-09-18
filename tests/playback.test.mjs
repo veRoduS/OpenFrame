@@ -17,7 +17,7 @@ const manifest = (revision = 'one', ids = ['a', 'b']) => ({
   assets: [],
   items: ids.map((id) => ({ slide: { id }, duration: 2 })),
 });
-function fixture(t) {
+function fixture(t, effect = () => undefined) {
   let time = 0,
     id = 0;
   const tasks = new Map(),
@@ -51,7 +51,10 @@ function fixture(t) {
           reject,
         });
       }),
-    commit: (next) => shown.push(next.slideId),
+    commit: (next, previous, transition) => {
+      shown.push(next.slideId);
+      return effect(next, previous, transition);
+    },
   });
   const advance = async (ms) => {
     const until = time + ms;
@@ -240,6 +243,133 @@ void test('hundreds of switches retain at most one current and one prepared fram
     await f.advance(2000);
   }
   assert.equal(f.playback.missedDeadlines, 0);
+});
+function animatedFixture(t) {
+  const animations = [];
+  const f = fixture(t, (next, previous, transition) => {
+    if (!previous || transition?.type !== 'fade') return;
+    const task = Promise.withResolvers();
+    const animation = {
+      finished: task.promise,
+      cancel() {
+        this.cancelled = true;
+        task.resolve();
+      },
+      finish: task.resolve,
+    };
+    animations.push(animation);
+    return animation;
+  });
+  const doc = manifest();
+  doc.transition = { type: 'fade', durationMs: 500 };
+  return { ...f, doc, animations };
+}
+void test('transitions await readiness and retain only two frames, then give the incoming slide its full duration', async (t) => {
+  const f = animatedFixture(t);
+  f.playback.update(f.doc);
+  await flush();
+  f.requests[0].resolve();
+  await flush();
+  await f.advance(2400);
+  assert.equal(f.animations.length, 0);
+  f.requests[1].resolve();
+  await flush();
+  assert.equal(f.animations.length, 1);
+  assert.equal(
+    f.requests.length,
+    2,
+    'no third frame is prepared during a transition',
+  );
+  assert.equal(f.requests[0].frame.disposed, false);
+  await f.advance(500);
+  f.animations[0].finish();
+  await flush();
+  assert.equal(f.requests[0].frame.disposed, true);
+  assert.equal(f.requests.length, 3);
+  f.requests[2].resolve();
+  await flush();
+  await f.advance(1999);
+  assert.equal(f.shown.length, 2);
+  await f.advance(1);
+  assert.equal(f.shown.length, 3);
+});
+void test('blanking during an animation cancels it, disposes both slides, and cannot restart stale work', async (t) => {
+  const f = animatedFixture(t);
+  f.playback.update(f.doc);
+  await flush();
+  f.requests[0].resolve();
+  await flush();
+  f.requests[1].resolve();
+  await flush();
+  await f.advance(2000);
+  f.playback.stop('blank');
+  await flush();
+  assert.ok(f.animations[0].cancelled);
+  assert.ok(f.requests.every((r) => r.frame.disposed));
+  assert.equal(f.tasks.size, 0);
+  await f.advance(10000);
+  assert.equal(f.requests.length, 2);
+});
+void test('publication/rotation changes cancel animation before staging a replacement', async (t) => {
+  const f = animatedFixture(t);
+  f.playback.update(f.doc);
+  await flush();
+  f.requests[0].resolve();
+  await flush();
+  f.requests[1].resolve();
+  await flush();
+  await f.advance(2000);
+  f.playback.update(manifest('new', ['c']), 90);
+  await flush();
+  assert.ok(f.animations[0].cancelled);
+  assert.ok(f.requests[0].frame.disposed);
+  assert.equal(f.requests[1].frame.disposed, false);
+  assert.equal(f.requests.filter((r) => !r.frame.disposed).length, 2);
+  f.requests[2].resolve();
+  await flush();
+  assert.deepEqual(f.shown, ['a', 'b', 'c']);
+  assert.equal(f.requests[1].frame.disposed, true);
+  assert.equal(f.requests.length, 3);
+});
+void test('incoming and outgoing expiration interrupt an active transition', async (t) => {
+  for (const index of [0, 1]) {
+    const f = animatedFixture(t);
+    f.doc.items[index].expiresAt = new Date(2200).toISOString();
+    f.playback.update(f.doc);
+    await flush();
+    f.requests[0].resolve();
+    await flush();
+    f.requests[1].resolve();
+    await flush();
+    await f.advance(2000);
+    assert.equal(f.animations.length, 1);
+    await f.advance(200);
+    assert.ok(f.animations[0].cancelled);
+    assert.ok(f.requests[index].frame.disposed);
+    f.requests.at(-1).resolve();
+    await flush();
+    assert.equal(f.playback.current.slideId, index === 0 ? 'b' : 'a');
+    assert.ok(f.requests.filter((r) => !r.frame.disposed).length <= 2);
+  }
+});
+void test('hundreds of animated switches remain bounded and release all timers', async (t) => {
+  const f = animatedFixture(t);
+  f.playback.update(f.doc);
+  await flush();
+  f.requests[0].resolve();
+  await flush();
+  for (let i = 0; i < 150; i++) {
+    f.requests.at(-1).resolve();
+    await flush();
+    await f.advance(2000);
+    assert.ok(f.requests.filter((r) => !r.frame.disposed).length <= 2);
+    await f.advance(500);
+    f.animations.at(-1).finish();
+    await flush();
+    assert.ok(f.requests.filter((r) => !r.frame.disposed).length <= 2);
+  }
+  f.playback.stop();
+  assert.equal(f.tasks.size, 0);
 });
 void test('counter units round correctly and legacy directions are automatic', () => {
   const targetAt = '2026-09-06T12:00:00-05:00',

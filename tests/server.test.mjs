@@ -15,6 +15,61 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 
+void test('playlist transitions validate, persist and remain isolated in publications', async (t) => {
+  const { request, db } = await fixture(t);
+  const slide = (await request('/api/slides', 'POST', slideData())).data;
+  const body = {
+    name: 'Transitions',
+    items: [{ slideId: slide.id, duration: 2 }],
+  };
+  const playlist = (await request('/api/playlists', 'POST', body)).data;
+  assert.deepEqual(playlist.transition, { type: 'cut', durationMs: 500 });
+  let oldRevision;
+  for (const type of ['fade', 'slide-left', 'slide-right', 'cut']) {
+    const transition = { type, durationMs: 800 };
+    const result = await request(`/api/playlists/${playlist.id}`, 'PUT', {
+      ...body,
+      transition,
+    });
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.data.transition, transition);
+    const preview = (await request(`/api/preview/${playlist.id}`)).data;
+    assert.notEqual(preview.revision, oldRevision);
+    oldRevision = preview.revision;
+    assert.deepEqual(preview.transition, transition);
+    await request(`/api/playlists/${playlist.id}/publish`, 'POST');
+    const record = JSON.parse(
+      db
+        .prepare('SELECT body FROM records WHERE kind=? AND id=?')
+        .get('playlist', playlist.id).body,
+    );
+    assert.deepEqual(record.published.transition, transition);
+  }
+  await request(`/api/playlists/${playlist.id}`, 'PUT', {
+    ...body,
+    transition: { type: 'fade', durationMs: 500 },
+  });
+  const record = JSON.parse(
+    db
+      .prepare('SELECT body FROM records WHERE kind=? AND id=?')
+      .get('playlist', playlist.id).body,
+  );
+  assert.deepEqual(record.published.transition, {
+    type: 'cut',
+    durationMs: 800,
+  });
+  for (const transition of [
+    { type: 'spin' },
+    { type: 'fade', durationMs: 0 },
+    { type: 'fade', durationMs: 2001 },
+    { type: 'fade', durationMs: 250 },
+  ])
+    assert.equal(
+      (await request('/api/playlists', 'POST', { ...body, transition })).status,
+      400,
+    );
+});
+
 void test('ZIP lookup is admin-only, validates requests and returns normalized coordinates', async (t) => {
   let calls = 0;
   const { request } = await fixture(t, {

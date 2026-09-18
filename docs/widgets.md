@@ -47,6 +47,7 @@ The lifecycle separates preparation from display:
 
 - Render initial content into `element` during preparation. `ready` must resolve only when initial data and visual assets are complete. Reject if it cannot render; the player holds the current slide and retries. Readiness is bounded by a 15-second frame timeout.
 - Do not start animation or recurring updates during preparation. `activate()` runs synchronously immediately before the prepared frame becomes visible. Refresh time-dependent values there, without waiting for a network call.
+- During a slide transition both incoming and outgoing widgets are visible and may update. The outgoing controller is disposed when the transition completes or is cancelled. There is no third prepared frame during the animation; all layers move together as one frame.
 - Call `onChange()` after changing text so auto-sizing can be recomputed.
 - `dispose()` must release every timer, listener, observer, and fetch, even if activation never happened. The supplied abort signal is cancelled when pending preparation is replaced or fails. Use it for preparation fetches, and also clean up in `dispose()` when the visible slide ends.
 - Cleanup-only return functions are supported for older widgets, but cannot provide explicit asynchronous readiness or deferred activation. New widgets should use the controller contract.

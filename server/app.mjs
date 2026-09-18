@@ -335,6 +335,7 @@ export function createApp({
       revision: randomUUID(),
       name: p.name,
       publishedAt: new Date().toISOString(),
+      transition: p.transition || { type: 'cut', durationMs: 500 },
       items,
       assets: ids.map((id) => requireRecord('asset', id)),
     };
@@ -349,7 +350,9 @@ export function createApp({
   });
   app.get('/api/preview/:id', admin, (req, res) => {
     const manifest = snapshot(requireRecord('playlist', req.params.id));
-    manifest.revision = hash(JSON.stringify([manifest.items, manifest.assets]));
+    manifest.revision = hash(
+      JSON.stringify([manifest.items, manifest.assets, manifest.transition]),
+    );
     res.json({ ...manifest, weather: weather.forManifest(manifest) });
   });
   app.get('/api/weather/zip', admin, async (req, res) => {

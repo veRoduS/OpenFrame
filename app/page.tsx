@@ -75,6 +75,7 @@ import {
 import {
   api,
   newLayer,
+  playlistDuration,
   type Asset,
   type Device,
   type Layer,
@@ -625,8 +626,7 @@ export default function App() {
                             <span>
                               {p.items.length} slides{' '}
                               <span className="dot-separator">/</span>{' '}
-                              {p.items.reduce((s, i) => s + i.duration, 0)}{' '}
-                              seconds
+                              {playlistDuration(p)} seconds
                             </span>
                           </button>
                           <span
@@ -2047,6 +2047,59 @@ function PlaylistEditor({
               <TabsTrigger value="library">Add slides</TabsTrigger>
             </TabsList>
           </Tabs>
+          <div className="playlist-transition">
+            <label>
+              Transition
+              <select
+                aria-label="Transition"
+                value={p.transition?.type || 'cut'}
+                onChange={(e) =>
+                  setP({
+                    ...p,
+                    transition: {
+                      durationMs: p.transition?.durationMs ?? 500,
+                      type: e.target.value as NonNullable<
+                        Playlist['transition']
+                      >['type'],
+                    },
+                  })
+                }
+              >
+                <option value="cut">Cut</option>
+                <option value="fade">Fade</option>
+                <option value="slide-left">Slide left</option>
+                <option value="slide-right">Slide right</option>
+              </select>
+            </label>
+            {p.transition && p.transition.type !== 'cut' && (
+              <label>
+                <span className="transition-duration-label">
+                  Duration{' '}
+                  <output>
+                    {(p.transition.durationMs / 1000).toFixed(1)} s
+                  </output>
+                </span>
+                <input
+                  aria-label="Transition duration"
+                  type="range"
+                  min={200}
+                  max={2000}
+                  step={100}
+                  value={p.transition.durationMs}
+                  aria-valuetext={`${(p.transition.durationMs / 1000).toFixed(1)} seconds`}
+                  onChange={(e) =>
+                    setP({
+                      ...p,
+                      transition: {
+                        ...p.transition!,
+                        durationMs: Number(e.target.value),
+                      },
+                    })
+                  }
+                />
+              </label>
+            )}
+          </div>
           {tab === 'sequence' ? (
             <div className="sequence">
               {p.items.length ? (
@@ -2279,9 +2332,7 @@ function PlaylistEditor({
           )}
           <div className="playlist-total">
             <span>{p.items.length} slides</span>
-            <strong>
-              {p.items.reduce((a, i) => a + i.duration, 0)} seconds / loop
-            </strong>
+            <strong>{playlistDuration(p)} seconds / loop</strong>
           </div>
         </div>
         {error && (

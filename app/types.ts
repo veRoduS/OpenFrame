@@ -51,6 +51,10 @@ export type Slide = {
 export type Playlist = {
   id: string;
   name: string;
+  transition?: {
+    type: 'cut' | 'fade' | 'slide-left' | 'slide-right';
+    durationMs: number;
+  };
   items: {
     slideId: string;
     duration: number;
@@ -61,6 +65,21 @@ export type Playlist = {
   publishedAt?: string | null;
   updatedAt?: string;
 };
+export function playlistDuration(playlist: Playlist) {
+  const animation =
+    playlist.items.length > 1 &&
+    playlist.transition &&
+    playlist.transition.type !== 'cut'
+      ? (playlist.items.length * playlist.transition.durationMs) / 1000
+      : 0;
+  return (
+    Math.round(
+      (playlist.items.reduce((sum, item) => sum + item.duration, 0) +
+        animation) *
+        10,
+    ) / 10
+  );
+}
 export type Asset = {
   id: string;
   name: string;

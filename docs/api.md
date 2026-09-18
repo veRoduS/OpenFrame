@@ -66,6 +66,8 @@ Inventory returns `{vpns,setups,defaultServer}`. VPN metadata is `{id,name,serve
 
 Slide structure is defined in `server/schema.mjs`; positions and sizes are percentages. Durations are integer seconds from 2 to 3600. Rotation is 0, 90, 180, or 270 degrees.
 
+Playlist create/replace accepts optional `transition:{type,durationMs}`. Type is `cut` (default), `fade`, `slide-left`, or `slide-right`; durationMs is an integer from 200 to 2000 in multiples of 100, default 500. The saved draft, preview, and published manifest include this object. Legacy manifests without it use Cut. Draft changes do not affect a publication until republished. Transition settings participate in the preview revision hash. Display durations exclude the incoming animation; initial/replacement frames and a one-entry rotation cut without animation. This is an additive schemaVersion 1 field; older players ignore it.
+
 Layers also accept `verticalAlign` (top/middle/bottom, default top), `autoSize` (default false), and `lockAspect` (default true). Auto-size is applied by the shared renderer and does not overwrite the stored manual font size. Corner resizing keeps the opposite corner fixed and clamps to the canvas.
 
 Slides default to a white `background` (`#ffffff`); new layers default to dark text (`#202923`). Explicit saved colors are preserved. Image layers accept `cropX` and `cropY` (0-100, default 50) and `cropZoom` (1-4, default 1). They define the cover-mode focal point and zoom without changing the source image; contain mode displays the complete image centered. Counter layers require `counter: {direction, targetAt, unit, showUnit?}`; see [widgets.md](widgets.md). Crop, background, and widget changes require republishing to reach assigned players.

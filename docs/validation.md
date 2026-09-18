@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.5.1
+
+103 Node tests (including real Python-agent integration), 58 Python tests, lint, typecheck, formatting, production build, shell syntax, and version/repository checks passed. New tests cover transition validation/publication isolation, complete-frame readiness, full display timing after animations, two-frame bounds over repeated loops, cancellation on publication/rotation/expiration/blanking, reduced-motion/cut fallbacks, and animation disposal/watchdog behavior.
+
+Isolated browser checks passed for transition controls and saved settings at 1280/390/320px, decoded photo/text/clock layers, native whole-frame animation targets, fade/slide midpoint pixels, portrait rotation, and cleanup. Screenshots were inspected. Weather, playlist selection/duplicate confirmation, and player connectivity/recovery browser regressions passed. The updated local server reports 0.5.1. No GitHub push, Docker/deployment test, dependency audit, or physical Pi performance/soak test was performed. Server updates do not update installed player code; see [player compatibility](user-guide.md#prepared-playback).
+
 ## GitHub milestone 0.5.0
 
 Documentation-only milestone checked on 2026-09-17: the README was reduced from 3,376 to 319 words, detailed usage and Pi installation instructions were preserved in dedicated guides, and affected links were updated. Repository/version checks, 93 Node tests (including Python-agent integration), 58 Python tests, typecheck, lint, formatting, production build, shell syntax, and an isolated frozen-lockfile install passed. The production dependency audit reported no known vulnerabilities. No behavior, dependency, configuration, or data-format changes were made; browser/hardware tests were not repeated for this documentation revision. Docker remains unavailable locally. Consult [Actions](https://github.com/veRoduS/OpenFrame/actions) for this tag's remote container checks and publication result.

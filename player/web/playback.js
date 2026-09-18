@@ -6,7 +6,7 @@ export function eligible(item, now) {
   );
 }
 
-/** One visible frame and one prepared frame; stale work never becomes visible. */
+/** At most two frames, including transitions; stale work never becomes visible. */
 export class Playback {
   constructor({
     prepare,
@@ -52,6 +52,15 @@ export class Playback {
       this.pending = null;
     }
   }
+  finishTransition(advance = false) {
+    const active = this.transition;
+    if (!active) return;
+    this.transition = null;
+    active.animation.cancel();
+    active.previous?.dispose();
+    if (advance && active.slot.epoch === this.epoch)
+      this.startDuration(active.slot);
+  }
   update(manifest, rotation = 0, generation = 0) {
     this.sourceManifest = manifest;
     this.generation = generation;
@@ -82,6 +91,7 @@ export class Playback {
     this.key = key;
     this.epoch++;
     this.clearPending();
+    this.finishTransition();
     this.manifest = {
       ...manifest,
       items: indices.map((index) => manifest.items[index]),
@@ -170,8 +180,13 @@ export class Playback {
       this.update(this.sourceManifest, this.rotation, this.generation);
       return;
     }
+    let animation;
     try {
-      this.commit(slot.frame, this.current);
+      animation = this.commit(
+        slot.frame,
+        this.current,
+        slot.immediate ? undefined : this.manifest.transition,
+      );
     } catch (error) {
       this.failed(slot, error);
       return;
@@ -182,7 +197,20 @@ export class Playback {
     this.current = slot.frame;
     this.currentItem = this.manifest.items[slot.index];
     this.pending = null;
+    if (animation?.finished) {
+      const active = { animation, previous, slot };
+      this.transition = active;
+      this.status('playing');
+      const complete = () => {
+        if (this.transition === active) this.finishTransition(true);
+      };
+      void animation.finished.then(complete, complete);
+      return;
+    }
     previous?.dispose();
+    this.startDuration(slot);
+  }
+  startDuration(slot) {
     this.due =
       this.now() + Math.max(2, this.manifest.items[slot.index].duration) * 1000;
     this.status('playing');
@@ -195,6 +223,7 @@ export class Playback {
     this.epoch++;
     this.key = null;
     this.clearPending();
+    this.finishTransition();
     this.current?.dispose();
     this.current = null;
     this.status(phase);

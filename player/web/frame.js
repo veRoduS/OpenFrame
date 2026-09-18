@@ -148,12 +148,82 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
   }
 }
 
-export function commitFrame(next, previous) {
+export function commitFrame(next, previous, transition = {}) {
   next.activate();
   next.element.style.visibility = 'visible';
   next.element.setAttribute('aria-hidden', 'false');
-  if (previous) {
+  const hidePrevious = () => {
+    if (!previous) return;
     previous.element.style.visibility = 'hidden';
     previous.element.setAttribute('aria-hidden', 'true');
+  };
+  if (
+    !previous ||
+    !['fade', 'slide-left', 'slide-right'].includes(transition.type) ||
+    !next.element.animate ||
+    !previous.element.animate ||
+    globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  ) {
+    hidePrevious();
+    return;
   }
+  const duration = Number.isFinite(transition.durationMs)
+    ? Math.max(200, Math.min(2000, transition.durationMs))
+    : 500;
+  const animations = [];
+  let settle,
+    timer,
+    done = false;
+  const finished = new Promise((resolve) => {
+    settle = resolve;
+  });
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    animations.forEach((animation) => animation.cancel());
+    next.element.style.zIndex = '';
+    previous.element.style.zIndex = '';
+    hidePrevious();
+    settle();
+  };
+  next.element.style.zIndex = '2';
+  previous.element.style.zIndex = '1';
+  const animate = (element, frames) => {
+    const animation = element.animate(frames, {
+      duration,
+      easing: 'ease-in-out',
+      fill: 'both',
+    });
+    animations.push(animation);
+    // Cancelling an animation rejects finished; cancellation is normal cleanup.
+    void animation.finished.catch(() => {});
+    return animation.finished;
+  };
+  try {
+    const pending = [];
+    if (transition.type === 'fade') {
+      pending.push(animate(next.element, [{ opacity: 0 }, { opacity: 1 }]));
+    } else {
+      const distance = (transition.type === 'slide-left' ? 1 : -1) * innerWidth;
+      for (const [frame, from, to] of [
+        [next, distance, 0],
+        [previous, 0, -distance],
+      ]) {
+        const base = frame.element.style.transform;
+        pending.push(
+          animate(frame.element, [
+            { transform: `translateX(${from}px) ${base}` },
+            { transform: `translateX(${to}px) ${base}` },
+          ]),
+        );
+      }
+    }
+    timer = setTimeout(finish, duration + 250);
+    void Promise.all(pending).then(finish, finish);
+  } catch {
+    // An unavailable animation backend falls back to a complete, synchronous cut.
+    finish();
+  }
+  return { finished, cancel: finish };
 }

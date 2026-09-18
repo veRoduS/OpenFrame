@@ -100,6 +100,18 @@ export const assetBatchSchema = z
   .strict();
 export const playlistSchema = z.object({
   name: z.string().trim().min(1).max(100),
+  transition: z
+    .object({
+      type: z.enum(['cut', 'fade', 'slide-left', 'slide-right']).default('cut'),
+      durationMs: z
+        .number()
+        .int()
+        .min(200)
+        .max(2000)
+        .multipleOf(100)
+        .default(500),
+    })
+    .default({ type: 'cut', durationMs: 500 }),
   items: z
     .array(
       z
