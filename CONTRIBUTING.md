@@ -49,6 +49,8 @@ For `node tests/player-connectivity.browser.mjs`, provide a generated, non-secre
 
 Run `node tests/bootstrap.browser.mjs` with the same Playwright settings to check the first-boot form at desktop and phone sizes. Its network requests are mocked and it never configures your Wi-Fi. Managed VPN tests use an injected helper; Python provisioning tests mock privileged commands. Actual Compose networking, image chroot/package installation, regulatory settings, and Pi AP/client switching need the separate [acceptance checklist](docs/managed-wireguard.md#acceptance-checks).
 
+Recovery browser coverage includes saved Wi-Fi add/edit/remove/reorder, password retention/clearing, hidden/open settings, save conflicts, and saving without closing the hotspot. `wifi_test.py` exercises real temporary keyfiles with mocked NetworkManager commands; `recovery_test.py` checks portal authorization and pause-preserving saves. Neither establishes radio/failover behavior on a physical Pi. Regenerate the bundled recovery icons with `node scripts/generate-recovery-icons.mjs` when changing the selected Lucide icons.
+
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.
 - Validate inputs in `server/schema.mjs`, mirror them in `app/types.ts`, and bound player memory/network/timer work.
 - Update the relevant [documentation](docs/README.md) and describe user-visible behavior, compatibility, and migration needs.

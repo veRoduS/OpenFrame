@@ -212,6 +212,50 @@ class RecoveryTests(unittest.TestCase):
         self.assertIsNone(portal.pending.get_nowait())
         self.assertTrue(portal.state()['closing'])
 
+    def test_network_api_saves_without_ending_pause_and_rejects_untrusted_stale_or_closing_writes(self):
+        portal = recovery.Portal()
+        portal.pause({'duration': None})
+        server = recovery.SetupHTTPServer(('127.0.0.1', 0), portal.handler())
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        def request(method, body=None, extra=None):
+            conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+            headers = {'Host': recovery.IP, 'Origin': 'http://' + recovery.IP, 'X-Setup-Token': portal.token, **(extra or {})}
+            conn.request(method, '/setup/networks', json.dumps(body) if body is not None else None, headers)
+            response = conn.getresponse()
+            data = json.loads(response.read())
+            status = response.status
+            conn.close()
+            return status, data
+        state = dict(revision='opaque-revision', networks=[], country='US', limit=20)
+        with patch.object(recovery.wifi, 'snapshot', return_value=state), patch.object(recovery.wifi, 'save', return_value=state) as save:
+            self.assertEqual(request('GET'), (200, state))
+            self.assertEqual(request('GET', extra={'Host': 'evil.example'})[0], 403)
+            for extra in ({'Origin': 'http://evil.example'}, {'Host': 'evil.example'}, {'X-Setup-Token': 'wrong'}):
+                self.assertEqual(request('POST', state, extra)[0], 403)
+            save.assert_not_called()
+            self.assertEqual(request('POST', state), (200, state))
+            self.assertTrue(portal.paused)
+            self.assertIsNone(portal.deadline)
+            self.assertFalse(portal.submitted)
+            self.assertTrue(portal.pending.empty())
+            save.side_effect = recovery.wifi.Conflict('Reload the page')
+            self.assertEqual(request('POST', state)[0], 409)
+            save.side_effect = RuntimeError('Private detail')
+            self.assertEqual(request('POST', state), (503, {'error': 'Could not save Wi-Fi networks. Reload the list and check the player.'}))
+            portal.close()
+            save.reset_mock()
+            self.assertEqual(request('POST', state)[0], 409)
+            save.assert_not_called()
+
+    def test_saved_network_reconnect_applies_country_and_uses_networkmanager_selection(self):
+        with patch.object(recovery.wifi, 'apply_country') as country, patch.object(recovery, 'command') as command:
+            recovery.reconnect()
+            country.assert_called_once()
+            command.assert_any_call('nmcli', 'device', 'set', 'wlan0', 'autoconnect', 'yes')
+            command.assert_any_call('nmcli', '--wait', '30', 'device', 'connect', 'wlan0', timeout=40)
+
 
 if __name__ == '__main__':
     unittest.main()

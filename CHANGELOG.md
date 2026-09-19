@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.2] - 2026-09-19
+
+- Add saved Wi-Fi networks and priority ordering to the recovery portal
+- Add/edit/remove up to 20 personal/open networks, reorder with arrow controls, retain stored passwords, and support hidden networks. Save without ending a recovery pause; reconnect explicitly when ready.
+- Persist priority in root-only NetworkManager profiles, preserve other settings on retained profiles, reject stale edits, and attempt rollback after save failures. Keep Wi-Fi secrets off the home server and out of browser responses and command arguments.
+- Compatibility: update the complete player source and rerun the installer, including `wifi.py` and all `setup-web` assets; a Docker-only update cannot update the local recovery page. Existing pairing, VPN, and cached content remain intact. No server data migration or automatic player update is included. See [recovery setup and hardware acceptance](docs/player-recovery.md) and [private backup/rollback guidance](docs/operations.md). Physical NetworkManager/radio failover remains untested; priority does not force roaming from a healthy Wi-Fi connection or detect server-only outages.
+
 ## [0.5.1] - 2026-09-18
 
 - Add prepared whole-slide fade and slide transitions with playlist controls

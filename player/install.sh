@@ -42,7 +42,7 @@ if [[ "$source_dir" != /opt/openframe ]]; then
   install -m 644 "$source_dir/agent.py" /opt/openframe/agent.py
   install -m 644 "$source_dir/wireguard.py" /opt/openframe/wireguard.py
   cp -R "$source_dir/web" /opt/openframe/
-  install -m 644 "$source_dir/bootstrap.py" "$source_dir/managed_network.py" "$source_dir/recovery.py" /opt/openframe/
+  install -m 644 "$source_dir/bootstrap.py" "$source_dir/managed_network.py" "$source_dir/recovery.py" "$source_dir/wifi.py" /opt/openframe/
   cp -R "$source_dir/setup-web" /opt/openframe/
 fi
 if ! $prepare; then

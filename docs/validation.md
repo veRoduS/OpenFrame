@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.5.2
+
+103 Node tests including Python-agent integration and 71 Python tests passed, along with lint, typecheck, formatting, production build, Pi shell syntax, and version/repository checks. New Python coverage uses temporary real keyfiles and mocked NetworkManager commands for imported-profile inventory, secret-free responses, password retention/replacement, hidden/open profiles, priority persistence, static IP preservation, stale/invalid input rejection, unrelated-profile preservation, rollback, country application on reconnect, and authenticated pause-preserving portal saves.
+
+Recovery browser checks passed at 900/390/320px for adding/editing/removing/reordering networks, save and reload, retained/cleared password fields, hidden/open settings, save conflicts with retained drafts, all pause choices, explicit resume, offline playback, and blanking. The first-boot form regression also passed. Screenshots were inspected. Radio operations, actual NetworkManager profile loading, regulatory-domain changes, fallback timing, power-loss recovery, and physical Pi Wi-Fi/HDMI behavior still need the [hardware checklist](player-recovery.md#validation-before-unattended-use). No Docker test, deployment, dependency audit, or GitHub push was performed. Install the updated complete player directory; the local hotspot UI is not hosted by the home-server container.
+
 ## Local revision 0.5.1
 
 103 Node tests (including real Python-agent integration), 58 Python tests, lint, typecheck, formatting, production build, shell syntax, and version/repository checks passed. New tests cover transition validation/publication isolation, complete-frame readiness, full display timing after animations, two-frame bounds over repeated loops, cancellation on publication/rotation/expiration/blanking, reduced-motion/cut fallbacks, and animation disposal/watchdog behavior.

@@ -17,6 +17,7 @@ import uuid
 from agent import atomic_json, read_json
 from bootstrap import SetupHTTPServer, command
 from wireguard import atomic_write
+import wifi
 
 CACHE = Path('/var/lib/openframe')
 CONFIG = Path('/etc/openframe/config.json')
@@ -142,20 +143,31 @@ class Portal:
                     return self.reply(403, {})
                 if self.path == '/setup/state':
                     return self.reply(200, portal.state())
-                files = {'/': ('recovery.html', 'text/html'), '/setup.css': ('setup.css', 'text/css'), '/recovery.js': ('recovery.js', 'text/javascript')}
+                if self.path == '/setup/networks':
+                    try:
+                        return self.reply(200, wifi.snapshot())
+                    except Exception:
+                        return self.reply(503, {'error': 'Saved networks are unavailable. Try again.'})
+                files = {'/': ('recovery.html', 'text/html'), '/setup.css': ('setup.css', 'text/css'), '/recovery.js': ('recovery.js', 'text/javascript'), '/recovery-icons.js': ('recovery-icons.js', 'text/javascript')}
                 if self.path not in files:
                     return self.reply(404, {})
                 file, kind = files[self.path]
                 self.reply(200, (WEB / file).read_bytes(), kind)
 
             def do_POST(self):
-                if not self.trusted() or self.path not in ('/setup', '/setup/pause', '/setup/resume') or self.headers.get('Origin') != 'http://' + IP or self.headers.get('X-Setup-Token') != portal.token:
+                if not self.trusted() or self.path not in ('/setup', '/setup/pause', '/setup/resume', '/setup/networks') or self.headers.get('Origin') != 'http://' + IP or self.headers.get('X-Setup-Token') != portal.token:
                     return self.reply(403, {})
                 try:
                     size = int(self.headers.get('Content-Length', '0'))
-                    if not 0 < size <= 2048:
+                    if not 0 < size <= (16384 if self.path == '/setup/networks' else 2048):
                         return self.reply(413, {})
                     value = json.loads(self.rfile.read(size))
+                    if self.path == '/setup/networks':
+                        with portal.lock:
+                            if not portal._open() or portal.submitted:
+                                return self.reply(409, {'error': 'Recovery is closing. Rejoin the hotspot to edit networks.'})
+                            result = wifi.save(value)
+                        return self.reply(200, result)
                     if self.path == '/setup/pause':
                         if not portal.pause(value):
                             return self.reply(409, {})
@@ -169,6 +181,10 @@ class Portal:
                     if not portal.submit(value):
                         return self.reply(409, {})
                     self.reply(202, {'ok': True})
+                except wifi.Conflict as error:
+                    self.reply(409, {'error': str(error)})
+                except RuntimeError:
+                    self.reply(503, {'error': 'Could not save Wi-Fi networks. Reload the list and check the player.'})
                 except (ValueError, TypeError, OSError, queue.Full):
                     self.reply(400, {'error': 'Check the recovery settings'})
         return Handler
@@ -275,6 +291,7 @@ def reconnect(value=None):
             args += ['password', value['password']]
         command(*args, timeout=40)
     else:
+        wifi.apply_country()
         command('nmcli', '--wait', '30', 'device', 'connect', 'wlan0', timeout=40)
 
 

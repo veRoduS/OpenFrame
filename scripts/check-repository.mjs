@@ -27,7 +27,9 @@ for (const file of files) {
   if (
     !example &&
     (privatePath.test(file) ||
-      /(^|\/)(\.env|(?:server-key|recovery)\.json$)/.test(file))
+      /(^|\/)(\.env|(?:server-key|recovery|wifi)\.json$)|\.nmconnection$/i.test(
+        file,
+      ))
   )
     failures.push(`Private/generated path: ${file}`);
   const full = resolve(root, file);

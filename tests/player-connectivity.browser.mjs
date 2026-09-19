@@ -201,6 +201,22 @@ try {
     let submitted;
     let resumed = false;
     let failPause = false;
+    let failSave = false;
+    let networkState = {
+      revision: 'revision-1',
+      country: 'US',
+      limit: 20,
+      networks: [
+        {
+          id: 'office-id',
+          ssid: 'Office',
+          security: 'wpa-psk',
+          hidden: false,
+          hasPassword: true,
+          priority: 999,
+        },
+      ],
+    };
     const state = {
       csrf: 'fixture-token',
       paused: false,
@@ -210,6 +226,35 @@ try {
     await page.route('http://192.168.50.1/**', (route) => {
       const path = new URL(route.request().url()).pathname;
       if (path === '/setup/state') return route.fulfill({ json: state });
+      if (path === '/setup/networks') {
+        if (route.request().method() === 'GET')
+          return route.fulfill({ json: networkState });
+        assert.equal(route.request().headers()['x-setup-token'], state.csrf);
+        if (failSave)
+          return route.fulfill({
+            status: 409,
+            json: {
+              error:
+                'Saved networks changed. Reload the page before editing again.',
+            },
+          });
+        submitted = route.request().postDataJSON();
+        assert.equal(submitted.revision, networkState.revision);
+        networkState = {
+          ...networkState,
+          revision: `revision-${Date.now()}`,
+          country: submitted.country,
+          networks: submitted.networks.map((network, index) => ({
+            id: network.id || `new-${index}`,
+            ssid: network.ssid,
+            security: network.security,
+            hidden: network.hidden,
+            hasPassword: network.security !== 'open',
+            priority: 999 - index,
+          })),
+        };
+        return route.fulfill({ json: networkState });
+      }
       if (path === '/setup/pause') {
         assert.equal(route.request().headers()['x-setup-token'], state.csrf);
         if (failPause) return route.fulfill({ status: 503, json: {} });
@@ -226,14 +271,6 @@ try {
         resumed = true;
         return route.fulfill({ status: 202, json: { ok: true } });
       }
-      if (path === '/setup') {
-        submitted = route.request().postDataJSON();
-        assert.equal(
-          route.request().headers()['x-setup-token'],
-          'fixture-token',
-        );
-        return route.fulfill({ status: 202, json: { ok: true } });
-      }
       return sendFile(
         route,
         'player/setup-web',
@@ -241,7 +278,10 @@ try {
       );
     });
     await page.goto('http://192.168.50.1/');
-    await page.getByLabel('Wi-Fi network (SSID)').fill('Office');
+    await page
+      .getByRole('button', { name: 'Add network', exact: true })
+      .click();
+    await page.getByLabel('Wi-Fi network (SSID)').last().fill('Backup');
     await page.getByLabel('Wi-Fi password').fill('fake-password');
     for (const [value, label] of [
       ['60', 'Paused - 1:00 remaining'],
@@ -255,10 +295,32 @@ try {
         .click();
       await page.getByText(label, { exact: true }).waitFor();
       assert.equal(
-        await page.getByLabel('Wi-Fi network (SSID)').inputValue(),
-        'Office',
+        await page.getByLabel('Wi-Fi network (SSID)').last().inputValue(),
+        'Backup',
       );
     }
+    await page
+      .getByRole('button', { name: 'Move network 2 up', exact: true })
+      .click();
+    assert.equal(
+      await page.locator('#networks summary strong').first().textContent(),
+      'Backup',
+    );
+    await page.getByLabel('Hidden network').first().check();
+    await page
+      .getByRole('button', { name: 'Save networks', exact: true })
+      .click();
+    await page.getByText('Networks saved.', { exact: true }).waitFor();
+    assert.equal(resumed, false);
+    assert.equal(submitted.networks[0].ssid, 'Backup');
+    assert.equal(submitted.networks[0].password, 'fake-password');
+    assert.equal(submitted.networks[0].hidden, true);
+    assert.equal(Object.hasOwn(submitted.networks[1], 'password'), false);
+    assert.ok(await page.locator('#recovery-form').isVisible());
+    assert.equal(
+      await page.getByLabel('Replacement password').first().inputValue(),
+      '',
+    );
     await page.reload();
     await page.getByText('Paused indefinitely', { exact: true }).waitFor();
     assert.equal(
@@ -270,6 +332,44 @@ try {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
+    assert.equal(
+      await page.locator('#networks summary strong').first().textContent(),
+      'Backup',
+    );
+    await page.locator('#networks summary').first().click();
+    await page
+      .getByLabel('Replacement password')
+      .first()
+      .fill('changed-password');
+    failSave = true;
+    await page
+      .getByRole('button', { name: 'Save networks', exact: true })
+      .click();
+    await page.getByText(/Saved networks changed/).waitFor();
+    assert.equal(
+      await page.getByLabel('Replacement password').first().inputValue(),
+      'changed-password',
+    );
+    failSave = false;
+    await page
+      .getByRole('button', { name: 'Save networks', exact: true })
+      .click();
+    await page.getByText('Networks saved.', { exact: true }).waitFor();
+    await page.locator('#networks summary').first().click();
+    await page.screenshot({
+      path: `work/player-recovery-networks-${width}.png`,
+      fullPage: true,
+    });
+    page.once('dialog', (dialog) => dialog.accept());
+    await page
+      .getByRole('button', { name: 'Remove network 2', exact: true })
+      .click();
+    assert.equal(await page.locator('#networks li').count(), 1);
+    await page
+      .getByRole('button', { name: 'Save networks', exact: true })
+      .click();
+    await page.getByText('Networks saved.', { exact: true }).waitFor();
+    await page.locator('#networks summary').first().click();
     await page.screenshot({
       path: `work/player-recovery-paused-${width}.png`,
       fullPage: true,
@@ -297,20 +397,27 @@ try {
       .getByRole('button', { name: 'Pause reconnects', exact: true })
       .click();
     await page.getByText('Paused indefinitely', { exact: true }).waitFor();
-    await page.getByLabel('Wi-Fi network (SSID)').fill('Office');
-    await page.getByLabel('Wi-Fi password').fill('fake-password');
-    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Add network', exact: true })
+      .click();
+    await page.getByLabel('Wi-Fi network (SSID)').last().fill('Guest');
+    await page.getByLabel('Security').last().selectOption('open');
+    assert.equal(await page.getByLabel('Wi-Fi password').isDisabled(), true);
+    await page
+      .getByRole('button', { name: 'Save networks', exact: true })
+      .click();
+    await page.getByText('Networks saved.', { exact: true }).waitFor();
+    assert.equal(submitted.networks[1].ssid, 'Guest');
+    assert.equal(Object.hasOwn(submitted.networks[1], 'password'), false);
+    await page
+      .getByRole('button', { name: 'Resume reconnects', exact: true })
+      .click();
     await page.getByText(/your saved playlist/).waitFor();
-    assert.deepEqual(submitted, {
-      ssid: 'Office',
-      password: 'fake-password',
-      country: 'US',
-    });
-    assert.equal(await page.getByLabel('Wi-Fi password').inputValue(), '');
+    assert.equal(await page.locator('#networks li').count(), 0);
     await page.close();
   }
   console.log(
-    'Branded setup QR/layout, approval, cached playback/connection indicator, agent failure, blanking, recovery pause choices/reload/resume/errors and Wi-Fi submission passed. Wi-Fi networking mocked.',
+    'Setup/approval, cached playback/offline indicator, blanking, recovery pause/reload/resume, saved Wi-Fi add/edit/remove/reorder, hidden/open networks, secret retention, conflicts and mobile layouts passed. Wi-Fi networking mocked.',
   );
 } finally {
   await browser.close();

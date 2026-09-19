@@ -55,6 +55,8 @@ openframe-screen-*.zip
 identity.json
 server-key.json
 recovery.json
+wifi.json
+*.nmconnection
 *.private.json
 *.key
 *.p12

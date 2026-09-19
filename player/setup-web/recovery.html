@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>OpenFrame recovery</title>
     <link rel="stylesheet" href="/setup.css" />
-    <script src="/recovery.js" defer></script>
+    <script src="/recovery.js" type="module"></script>
   </head>
   <body>
     <main>
@@ -43,27 +43,25 @@
         <p id="pause-error" role="alert"></p>
       </section>
       <form id="recovery-form">
+        <div class="network-heading">
+          <h2>Saved Wi-Fi networks</h2>
+          <span id="network-count"></span>
+        </div>
+        <ol id="networks" aria-label="Wi-Fi priority order"></ol>
+        <button id="add-network" type="button" class="secondary" disabled>
+          Add network
+        </button>
         <label
-          >Wi-Fi network (SSID)<input
-            name="ssid"
-            maxlength="32"
-            required
-            autocomplete="off" /></label
-        ><label
-          >Wi-Fi password<input
-            name="password"
-            type="password"
-            maxlength="64"
-            autocomplete="new-password" /></label
-        ><label
           >Country code<input
             name="country"
-            value="US"
             minlength="2"
             maxlength="2"
             pattern="[A-Z]{2}"
             required /></label
-        ><button id="connect" disabled>Connect</button>
+        ><button id="connect" disabled>Save networks</button>
+        <button id="reload-networks" type="button" class="secondary">
+          Reload saved networks
+        </button>
       </form>
       <p id="error" role="alert"></p>
       <output id="result"></output>
