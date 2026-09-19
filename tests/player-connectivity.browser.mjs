@@ -208,8 +208,8 @@ try {
       limit: 20,
       networks: [
         {
-          id: 'office-id',
-          ssid: 'Office',
+          id: 'phone-hotspot-id',
+          ssid: 'Phone Hotspot',
           security: 'wpa-psk',
           hidden: false,
           hasPassword: true,
@@ -281,7 +281,7 @@ try {
     await page
       .getByRole('button', { name: 'Add network', exact: true })
       .click();
-    await page.getByLabel('Wi-Fi network (SSID)').last().fill('Backup');
+    await page.getByLabel('Wi-Fi network (SSID)').last().fill('Home Wi-Fi');
     await page.getByLabel('Wi-Fi password').fill('fake-password');
     for (const [value, label] of [
       ['60', 'Paused - 1:00 remaining'],
@@ -296,7 +296,7 @@ try {
       await page.getByText(label, { exact: true }).waitFor();
       assert.equal(
         await page.getByLabel('Wi-Fi network (SSID)').last().inputValue(),
-        'Backup',
+        'Home Wi-Fi',
       );
     }
     await page
@@ -304,7 +304,7 @@ try {
       .press('ArrowUp');
     assert.equal(
       await page.locator('#networks summary strong').first().textContent(),
-      'Backup',
+      'Home Wi-Fi',
     );
     await page
       .getByRole('button', { name: 'Reorder network 1', exact: true })
@@ -344,7 +344,7 @@ try {
     }
     assert.equal(
       await page.locator('#networks summary strong').first().textContent(),
-      'Backup',
+      'Home Wi-Fi',
     );
     assert.equal(await page.locator('.dragging, [data-drop]').count(), 0);
     assert.equal(submitted, undefined, 'reordering does not save or reconnect');
@@ -360,7 +360,7 @@ try {
     await page.mouse.up();
     assert.equal(
       await page.locator('#networks summary strong').first().textContent(),
-      'Backup',
+      'Home Wi-Fi',
     );
     assert.equal(await page.locator('.dragging, [data-drop]').count(), 0);
     await page.locator('#networks summary').first().click();
@@ -374,7 +374,7 @@ try {
       .click();
     await page.getByText('Networks saved.', { exact: true }).waitFor();
     assert.equal(resumed, false);
-    assert.equal(submitted.networks[0].ssid, 'Backup');
+    assert.equal(submitted.networks[0].ssid, 'Home Wi-Fi');
     assert.equal(submitted.networks[0].password, 'fake-password');
     assert.equal(submitted.networks[0].hidden, true);
     assert.equal(Object.hasOwn(submitted.networks[1], 'password'), false);
@@ -396,7 +396,7 @@ try {
     );
     assert.equal(
       await page.locator('#networks summary strong').first().textContent(),
-      'Backup',
+      'Home Wi-Fi',
     );
     await page.locator('#networks summary').first().click();
     await page

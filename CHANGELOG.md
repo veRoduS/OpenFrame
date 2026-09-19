@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.4] - 2026-09-19
+
+- Clarify example Wi-Fi network names in recovery previews
+
 ## [0.5.3] - 2026-09-19
 
 - Add draggable Wi-Fi priorities and automatic promotion from backup networks
