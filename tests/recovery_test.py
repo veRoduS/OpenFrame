@@ -16,6 +16,11 @@ WIFI = dict(ssid='Office', password='fake-password', country='US')
 
 
 class RecoveryTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(recovery.wifi, 'Roamer')
+        self.roamer = patcher.start().return_value
+        self.addCleanup(patcher.stop)
+
     def test_unpaused_window_expires_and_restart_clears_pause(self):
         with patch.object(recovery.time, 'monotonic', return_value=0) as clock:
             portal = recovery.Portal()
@@ -137,6 +142,11 @@ class RecoveryTests(unittest.TestCase):
                 with self.assertRaises(StopIteration):
                     recovery.run()
             self.assertEqual(windows, [] if connected else [60, 120])
+            if connected:
+                self.assertTrue(self.roamer.tick.called)
+            else:
+                self.roamer.tick.assert_not_called()
+            self.roamer.reset_mock()
 
     def test_unknown_wifi_status_does_not_start_hotspot(self):
         with patch.object(recovery, 'credentials', return_value=VALUE), patch.object(recovery, 'wifi_state', side_effect=ValueError()), patch.object(recovery, 'window') as window, patch.object(recovery, 'report'), patch.object(recovery, 'firewall'), patch.object(recovery.subprocess, 'run'), patch.object(recovery.time, 'sleep', side_effect=StopIteration):

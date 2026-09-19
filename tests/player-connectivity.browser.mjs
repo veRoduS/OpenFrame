@@ -300,11 +300,73 @@ try {
       );
     }
     await page
-      .getByRole('button', { name: 'Move network 2 up', exact: true })
-      .click();
+      .getByRole('button', { name: 'Reorder network 2', exact: true })
+      .press('ArrowUp');
     assert.equal(
       await page.locator('#networks summary strong').first().textContent(),
       'Backup',
+    );
+    await page
+      .getByRole('button', { name: 'Reorder network 1', exact: true })
+      .press('End');
+    await page.locator('#networks details[open] > summary').click();
+    await page.locator('#networks').scrollIntoViewIfNeeded();
+    const start = await page.locator('.network-grip').last().boundingBox();
+    const destination = await page
+      .locator('#networks li')
+      .first()
+      .boundingBox();
+    const x = start.x + start.width / 2,
+      y = start.y + start.height / 2;
+    if (width === 900) {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x, destination.y + 8, { steps: 10 });
+      await page.mouse.up();
+    } else {
+      const session = await page.context().newCDPSession(page);
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x, y, id: 1 }],
+      });
+      for (let step = 1; step <= 10; step++)
+        await session.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [
+            { x, y: y + ((destination.y + 8 - y) * step) / 10, id: 1 },
+          ],
+        });
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchEnd',
+        touchPoints: [],
+      });
+      await session.detach();
+    }
+    assert.equal(
+      await page.locator('#networks summary strong').first().textContent(),
+      'Backup',
+    );
+    assert.equal(await page.locator('.dragging, [data-drop]').count(), 0);
+    assert.equal(submitted, undefined, 'reordering does not save or reconnect');
+    // Escape cancels an in-progress mouse drag without losing the draft order.
+    const firstGrip = await page.locator('.network-grip').first().boundingBox();
+    const lastRow = await page.locator('#networks li').last().boundingBox();
+    await page.mouse.move(firstGrip.x + 10, firstGrip.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(firstGrip.x + 10, lastRow.y + lastRow.height - 5, {
+      steps: 5,
+    });
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    assert.equal(
+      await page.locator('#networks summary strong').first().textContent(),
+      'Backup',
+    );
+    assert.equal(await page.locator('.dragging, [data-drop]').count(), 0);
+    await page.locator('#networks summary').first().click();
+    assert.equal(
+      await page.getByLabel('Wi-Fi password').inputValue(),
+      'fake-password',
     );
     await page.getByLabel('Hidden network').first().check();
     await page

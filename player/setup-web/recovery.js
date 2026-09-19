@@ -13,6 +13,7 @@ const list = document.getElementById('networks');
 const add = document.getElementById('add-network');
 const reload = document.getElementById('reload-networks');
 const result = document.getElementById('result');
+let drag;
 let networks = [],
   revision,
   loaded = false,
@@ -25,12 +26,129 @@ let generation = 0,
   initialized = false;
 
 function disable(value) {
+  if (value) finishDrag(false);
   for (const element of [duration, pause, resume]) element.disabled = value;
   button.disabled = value || !loaded || !dirty || !networks.length;
   add.disabled = value || !loaded || networks.length >= 20;
   reload.disabled = busy || finished;
   list.inert = value;
   form.elements.country.disabled = value || !loaded;
+}
+
+function moveNetwork(from, to) {
+  if (from === to) return;
+  const [network] = networks.splice(from, 1);
+  networks.splice(to, 0, network);
+  changed();
+  renderNetworks();
+  list.children[to].querySelector('.network-grip').focus();
+  document.getElementById('reorder-status').textContent =
+    `${network.ssid || 'Network'} is now priority ${to + 1}.`;
+}
+
+function finishDrag(commit) {
+  if (!drag) return;
+  const active = drag;
+  drag = undefined;
+  cancelAnimationFrame(active.frame);
+  if (active.handle.hasPointerCapture(active.pointer))
+    active.handle.releasePointerCapture(active.pointer);
+  active.row.classList.remove('dragging');
+  active.row.style.transform = '';
+  for (const row of list.children) row.removeAttribute('data-drop');
+  if (commit && active.moved) moveNetwork(active.from, active.to);
+}
+
+function positionDrag() {
+  if (!drag) return;
+  const { row, from, y, origin, scroll } = drag;
+  if (drag.moved) {
+    const edge = 64;
+    const delta = y < edge ? -10 : y > innerHeight - edge ? 10 : 0;
+    if (delta) window.scrollBy(0, delta);
+    row.style.transform = `translateY(${y - origin + window.scrollY - scroll}px)`;
+    const others = [...list.children].filter((item) => item !== row);
+    let to = others.findIndex((item) => {
+      const bounds = item.getBoundingClientRect();
+      return y < bounds.top + bounds.height / 2;
+    });
+    if (to < 0) to = others.length;
+    drag.to = to;
+    for (const item of list.children) item.removeAttribute('data-drop');
+    if (to !== from) {
+      const target = others[to] || others.at(-1);
+      target?.setAttribute('data-drop', others[to] ? 'before' : 'after');
+    }
+  }
+}
+
+function dragStep() {
+  if (!drag) return;
+  positionDrag();
+  drag.frame = requestAnimationFrame(dragStep);
+}
+
+function attachDrag(handle, row, index) {
+  handle.addEventListener('pointerdown', (event) => {
+    if (
+      event.button !== 0 ||
+      !event.isPrimary ||
+      busy ||
+      finished ||
+      closing ||
+      list.inert
+    )
+      return;
+    event.preventDefault();
+    handle.focus();
+    finishDrag(false);
+    drag = {
+      handle,
+      row,
+      from: index,
+      to: index,
+      pointer: event.pointerId,
+      origin: event.clientY,
+      y: event.clientY,
+      scroll: window.scrollY,
+      moved: false,
+    };
+    handle.setPointerCapture(event.pointerId);
+    drag.frame = requestAnimationFrame(dragStep);
+  });
+  handle.addEventListener('pointermove', (event) => {
+    if (!drag || drag.pointer !== event.pointerId) return;
+    drag.y = event.clientY;
+    if (Math.abs(drag.y - drag.origin) > 5) {
+      drag.moved = true;
+      row.classList.add('dragging');
+    }
+  });
+  handle.addEventListener('pointerup', (event) => {
+    if (!drag || drag.pointer !== event.pointerId) return;
+    drag.y = event.clientY;
+    positionDrag();
+    finishDrag(true);
+  });
+  handle.addEventListener('pointercancel', () => finishDrag(false));
+  handle.addEventListener('lostpointercapture', () => finishDrag(false));
+  handle.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      finishDrag(false);
+      return;
+    }
+    if (drag || busy || closing) return;
+    const target = {
+      ArrowUp: index - 1,
+      ArrowDown: index + 1,
+      Home: 0,
+      End: networks.length - 1,
+    }[event.key];
+    if (target === undefined) return;
+    event.preventDefault();
+    moveNetwork(index, Math.max(0, Math.min(networks.length - 1, target)));
+  });
 }
 
 function changed() {
@@ -70,6 +188,7 @@ function iconButton(name, title, action) {
 }
 
 function renderNetworks() {
+  finishDrag(false);
   list.replaceChildren();
   document.getElementById('network-count').textContent =
     `${networks.length} / 20`;
@@ -152,44 +271,28 @@ function renderNetworks() {
     field('Hidden network', hidden);
     fields.lastElementChild.className = 'network-check';
     details.append(fields);
-    const actions = document.createElement('div');
-    actions.className = 'network-actions';
-    const move = (offset) => {
-      [networks[index], networks[index + offset]] = [
-        networks[index + offset],
-        networks[index],
-      ];
+    const grip = iconButton(
+      'grip-vertical',
+      `Reorder network ${index + 1}`,
+      () => {},
+    );
+    grip.className = 'network-icon network-grip';
+    grip.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown Home End');
+    attachDrag(grip, row, index);
+    const remove = iconButton('trash-2', `Remove network ${index + 1}`, () => {
+      if (
+        network.id &&
+        !confirm(
+          `Remove ${network.ssid} from this player's saved Wi-Fi networks?`,
+        )
+      )
+        return;
+      networks.splice(index, 1);
       changed();
       renderNetworks();
-      list.children[index + offset].querySelector('summary').focus();
-    };
-    const up = iconButton('arrow-up', `Move network ${index + 1} up`, () =>
-      move(-1),
-    );
-    const down = iconButton(
-      'arrow-down',
-      `Move network ${index + 1} down`,
-      () => move(1),
-    );
-    up.disabled = index === 0;
-    down.disabled = index === networks.length - 1;
-    actions.append(
-      up,
-      down,
-      iconButton('trash-2', `Remove network ${index + 1}`, () => {
-        if (
-          network.id &&
-          !confirm(
-            `Remove ${network.ssid} from this player's saved Wi-Fi networks?`,
-          )
-        )
-          return;
-        networks.splice(index, 1);
-        changed();
-        renderNetworks();
-      }),
-    );
-    row.append(details, actions);
+    });
+    remove.classList.add('network-remove');
+    row.append(grip, details, remove);
     list.append(row);
   });
 }
@@ -372,11 +475,13 @@ window.addEventListener('beforeunload', (event) => {
   event.preventDefault();
 });
 window.addEventListener('pagehide', () => {
+  finishDrag(false);
   finished = true;
   generation += 1;
   clearTimeout(timer);
   controller?.abort();
 });
+window.addEventListener('blur', () => finishDrag(false));
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) window.location.reload();
 });

@@ -45,31 +45,53 @@ SOFTWARE.
 
 */
 export const recoveryIcons = {
-  'arrow-up': [
+  'grip-vertical': [
     [
-      'path',
+      'circle',
       {
-        d: 'm5 12 7-7 7 7',
+        cx: '9',
+        cy: '12',
+        r: '1',
       },
     ],
     [
-      'path',
+      'circle',
       {
-        d: 'M12 19V5',
-      },
-    ],
-  ],
-  'arrow-down': [
-    [
-      'path',
-      {
-        d: 'M12 5v14',
+        cx: '9',
+        cy: '5',
+        r: '1',
       },
     ],
     [
-      'path',
+      'circle',
       {
-        d: 'm19 12-7 7-7-7',
+        cx: '9',
+        cy: '19',
+        r: '1',
+      },
+    ],
+    [
+      'circle',
+      {
+        cx: '15',
+        cy: '12',
+        r: '1',
+      },
+    ],
+    [
+      'circle',
+      {
+        cx: '15',
+        cy: '5',
+        r: '1',
+      },
+    ],
+    [
+      'circle',
+      {
+        cx: '15',
+        cy: '19',
+        r: '1',
       },
     ],
   ],

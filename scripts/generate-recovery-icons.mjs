@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const icons = {};
-for (const name of ['arrow-up', 'arrow-down', 'trash-2']) {
+for (const name of ['grip-vertical', 'trash-2']) {
   const { __iconNode } = await import(
     `../node_modules/lucide-react/dist/esm/icons/${name}.mjs`
   );

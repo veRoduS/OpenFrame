@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.5.3
+
+103 Node tests including Python-agent integration and 85 Python tests passed, along with lint, typecheck, formatting, production build, Pi shell syntax, and version/repository checks. New roaming tests cover one-minute cadence, consecutive-scan confirmation, highest-priority and staged promotion, signal/security filtering, exact UTF-8/whitespace SSID matching, hidden probes, disabled profiles, stale edits, connection/approval changes, activation failures, restoration attempts, bounded cooldowns, and scan failures. NetworkManager commands remain mocked.
+
+Recovery browser checks passed at 900/390/320px for mouse/touch dragging, keyboard reordering, cancellation, retained unsaved passwords, save/reload, hidden/open networks, conflicts, pause/resume, cached offline playback, and blanking. First-boot form regressions also passed; screenshots were inspected. Physical Pi scans, network switching, restoration timing, HDMI continuity, and unattended reliability require the [hardware checklist](player-recovery.md#validation-before-unattended-use). No Docker test, deployment, dependency audit, or GitHub push was performed. Update the complete player source and setup web assets, then restart the recovery service or reboot; updating the home-server container alone does not update this behavior.
+
 ## Local revision 0.5.2
 
 103 Node tests including Python-agent integration and 71 Python tests passed, along with lint, typecheck, formatting, production build, Pi shell syntax, and version/repository checks. New Python coverage uses temporary real keyfiles and mocked NetworkManager commands for imported-profile inventory, secret-free responses, password retention/replacement, hidden/open profiles, priority persistence, static IP preservation, stale/invalid input rejection, unrelated-profile preservation, rollback, country application on reconnect, and authenticated pause-preserving portal saves.

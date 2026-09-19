@@ -138,11 +138,13 @@ button.secondary {
   list-style: none;
 }
 #networks li {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) 36px;
   gap: 8px;
   padding: 16px 0;
   border-bottom: 1px solid #dce3df;
+  background: #f5f7f6;
 }
 #networks details {
   border: 0;
@@ -158,17 +160,47 @@ button.secondary {
   display: block;
   margin: 2px 0 0 16px;
 }
-.network-actions {
-  display: flex;
-  gap: 4px;
-  align-items: start;
-}
 .network-icon {
   width: 36px;
   min-height: 44px;
   padding: 8px;
   display: grid;
   place-items: center;
+  align-self: start;
+}
+.network-grip {
+  width: 32px;
+  padding: 6px;
+  background: transparent;
+  color: #738179;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.network-grip:active {
+  cursor: grabbing;
+}
+button.network-remove {
+  background: transparent;
+}
+#networks li.dragging {
+  z-index: 2;
+  box-shadow: 0 4px 16px #20392b26;
+}
+#networks li[data-drop='before'] {
+  box-shadow: inset 0 3px #216c49;
+}
+#networks li[data-drop='after'] {
+  box-shadow: inset 0 -3px #216c49;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .network-fields {
   display: grid;
@@ -191,10 +223,18 @@ button.secondary {
 }
 @media (max-width: 420px) {
   #networks li {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 28px minmax(0, 1fr) 32px;
+    gap: 4px;
   }
-  .network-actions {
-    justify-content: flex-end;
+  .network-grip {
+    width: 28px;
+  }
+  .network-remove {
+    width: 32px;
+  }
+  .network-fields input,
+  .network-fields select {
+    padding: 9px 6px;
   }
 }
 details {

@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.3] - 2026-09-19
+
+- Add draggable Wi-Fi priorities and automatic promotion from backup networks
+- Replace arrow controls with left-side drag grips supporting mouse, touch, keyboard reordering, and cancellation. Preserve unsaved edits and require Save networks to apply the order.
+- Check higher saved priorities about once a minute while connected to a backup. Require two stable scans and matching security; attempt restoration after failed activation, with increasing candidate cooldowns. Do not scan or promote during recovery-hotspot windows.
+- Compatibility: update the complete player source and setup web assets, then restart the recovery service or reboot. No new dependency, service, data migration, or automatic player update. Existing pairing, VPN, and cached playback are preserved. Switching briefly interrupts networking; physical Pi/radio behavior remains unvalidated. See [recovery acceptance](docs/player-recovery.md) and [upgrade/rollback](docs/operations.md).
+
 ## [0.5.2] - 2026-09-19
 
 - Add saved Wi-Fi networks and priority ordering to the recovery portal

@@ -4,10 +4,12 @@ import hashlib
 import hmac
 import io
 import json
+import os
 from pathlib import Path
 import re
 import secrets
 import subprocess
+import time
 import uuid
 
 from wireguard import atomic_write
@@ -22,8 +24,9 @@ class Conflict(ValueError):
     pass
 
 
-def command(*args):
-    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=15).stdout.strip()
+def command(*args, timeout=15):
+    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=timeout,
+                          env={**os.environ, 'LC_ALL': 'C', 'NO_COLOR': '1'}).stdout.strip()
 
 
 def parser(text):
@@ -213,3 +216,140 @@ def apply_country():
     country = json.loads(settings).get('country', '') if settings else ''
     if re.fullmatch('[A-Z]{2}', country):
         command('raspi-config', 'nonint', 'do_wifi_country', country)
+
+
+def connected_uuid():
+    state = command('nmcli', '-g', 'GENERAL.STATE', 'device', 'show', 'wlan0')
+    if not re.match(r'^100(?:\s|$)', state):
+        return None
+    value = command('nmcli', '-g', 'GENERAL.CON-UUID', 'device', 'show', 'wlan0')
+    try:
+        return str(uuid.UUID(value))
+    except ValueError:
+        return None
+
+
+def scan_rows(text):
+    # Hex SSIDs preserve whitespace, punctuation, and UTF-8 without display escaping.
+    if len(text) > 65536 or len(text.splitlines()) > 512:
+        raise ValueError('Oversized Wi-Fi scan')
+    rows = []
+    for line in text.splitlines():
+        fields = line.split(':')
+        if len(fields) != 3:
+            continue
+        encoded, signal, security = fields
+        if not re.fullmatch(r'(?:[0-9a-fA-F]{2}){1,32}', encoded):
+            continue
+        try:
+            ssid = bytes.fromhex(encoded).decode('utf-8')
+        except UnicodeDecodeError:
+            continue
+        if valid_ssid(ssid) and signal.isascii() and signal.isdigit() and 0 <= int(signal) <= 100:
+            rows.append((ssid, int(signal), security.split()))
+    return rows
+
+
+def scan_networks(candidates):
+    hidden = [record['public']['ssid'] for record in candidates if record['public']['hidden']]
+    if hidden:
+        args = ['nmcli', 'device', 'wifi', 'rescan', 'ifname', 'wlan0']
+        for ssid in hidden:
+            args.extend(['ssid', ssid])
+        command(*args)
+    return scan_rows(command('nmcli', '-t', '--escape', 'yes', '-f', 'SSID-HEX,SIGNAL,SECURITY',
+                             'device', 'wifi', 'list', 'ifname', 'wlan0', '--rescan', 'yes'))
+
+
+def scan_matches(record, scan):
+    value = record['public']
+    for ssid, strength, security in scan:
+        if ssid != value['ssid'] or strength < 35 or '802.1X' in security:
+            continue
+        if value['security'] == 'open' and security in ([], ['--']):
+            return True
+        if value['security'] == 'sae' and 'WPA3' in security:
+            return True
+        if value['security'] == 'wpa-psk' and any(kind in security for kind in ('WPA1', 'WPA2')):
+            return True
+    return False
+
+
+class Roamer:
+    """Bounded preferred-network promotion; called only outside recovery windows."""
+    INTERVAL = 60
+
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.next_check = 0
+        self.active = None
+        self.seen = set()
+        self.failures = {}
+
+    def reset(self):
+        self.active = None
+        self.seen.clear()
+        self.next_check = self.clock() + self.INTERVAL
+
+    def tick(self, allowed=lambda: True):
+        now = self.clock()
+        if now < self.next_check:
+            return
+        self.next_check = now + self.INTERVAL
+        try:
+            active = connected_uuid()
+            if not active or not allowed():
+                self.reset()
+                return
+            if active != self.active:
+                self.active = active
+                self.seen.clear()
+                return
+            records = inventory()
+            self.failures = {key: value for key, value in self.failures.items() if key in records}
+            if active not in records:
+                self.seen.clear()
+                return
+            priority = records[active]['public']['priority']
+            candidates = sorted((record for record in records.values()
+                                 if record['public']['priority'] > priority
+                                 and record['value']['connection'].getboolean('autoconnect', True)
+                                 and self.failures.get(record['public']['id'], (0, 0))[1] <= now),
+                                key=lambda record: -record['public']['priority'])
+            if not candidates:
+                self.seen.clear()
+                return
+            scan = scan_networks(candidates)
+            available = {record['public']['id'] for record in candidates if scan_matches(record, scan)}
+            stable = available & self.seen
+            self.seen = available
+            candidate = next((record for record in candidates if record['public']['id'] in stable), None)
+            if not candidate or not allowed() or connected_uuid() != active:
+                return
+            target = candidate['public']['id']
+            fresh = inventory()
+            if (target not in fresh or active not in fresh or fresh[target]['text'] != candidate['text']
+                    or fresh[target]['public']['priority'] <= fresh[active]['public']['priority']):
+                self.seen.clear()
+                return
+            self.seen.clear()
+            try:
+                command('nmcli', '--wait', '25', 'connection', 'up', 'uuid', target, 'ifname', 'wlan0', timeout=30)
+                if connected_uuid() != target:
+                    raise RuntimeError('Preferred network did not activate')
+                self.failures.pop(target, None)
+                self.active = target
+            except Exception:
+                count = min(4, self.failures.get(target, (0, 0))[0] + 1)
+                self.failures[target] = (count, self.clock() + min(1800, 300 * 2 ** (count - 1)))
+                # Let an already-working NM fallback stand; otherwise restore the old UUID.
+                try:
+                    if connected_uuid() is None and allowed():
+                        command('nmcli', '--wait', '20', 'connection', 'up', 'uuid', active, 'ifname', 'wlan0', timeout=25)
+                except Exception:
+                    pass
+            finally:
+                self.next_check = self.clock() + self.INTERVAL
+        except Exception:
+            # Inspection/scan failures never deliberately tear down a working connection.
+            self.seen.clear()

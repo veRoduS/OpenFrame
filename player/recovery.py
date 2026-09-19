@@ -299,6 +299,7 @@ def run():
     lost_at = None
     retry_at = 0
     setup_removed = False
+    roamer = wifi.Roamer()
     # Remove a leftover recovery profile activation before inspecting connectivity.
     subprocess.run(['nmcli', '--wait', '10', 'connection', 'down', PROFILE], capture_output=True, timeout=15)
     subprocess.run(['nmcli', 'connection', 'delete', PROFILE], capture_output=True, timeout=10)
@@ -308,6 +309,7 @@ def run():
         try:
             if not value:
                 lost_at = None
+                roamer.reset()
             else:
                 if not setup_removed:
                     subprocess.run(['nmcli', 'connection', 'delete', 'openframe-setup'], capture_output=True, timeout=10)
@@ -317,7 +319,9 @@ def run():
                 if state == 100:
                     lost_at = None
                     report(value, 'standby')
+                    roamer.tick(lambda: credentials() == value)
                 elif lost_at is None:
+                    roamer.reset()
                     lost_at = now
                     report(value, 'reconnecting')
                 elif now - lost_at >= WAIT_SECONDS:
