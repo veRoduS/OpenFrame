@@ -15,12 +15,15 @@ tests
 .pnpm-store
 outputs
 player-cache
-player/__pycache__
+**/__pycache__
+*.tsbuildinfo
 openframe.json
 openframe-screen-*.zip
 identity.json
 server-key.json
 recovery.json
+wifi.json
+*.nmconnection
 *.private.json
 *.key
 *.pem

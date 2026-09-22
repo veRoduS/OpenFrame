@@ -43,4 +43,4 @@ Allow outbound HTTPS from the server to `api.weather.gov` and, for ZIP search, `
 
 Deterministic tests cover lookup, sharing, limits, station fallback, persistence, rendering, and offline state. Read-only live ZIP, station-list, and observation requests have also been checked for Chicago. These checks are not a physical-Pi performance or uptime guarantee. Test transitions and recovery on your target devices before unattended use.
 
-Icon geometry and its bundled license are in `player/web/weather-icons.js`. Maintainers can regenerate it from the pinned Lucide dependency with `node scripts/generate-weather-icons.mjs`, then run `pnpm format`. It is a checked-in source asset, not a runtime dependency on React or an external image service.
+Icon geometry and its bundled license are in `player/web/weather-icons.js`. Maintainers can regenerate the weather and recovery bundles from the pinned Lucide dependency with `pnpm icons:generate`, then run `pnpm format`. These are checked-in source assets, not a runtime dependency on React or an external image service.

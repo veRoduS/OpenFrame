@@ -6,7 +6,7 @@ import ts from 'typescript';
 
 const source = ts.transpileModule(
   readFileSync(
-    new URL('../app/use-unsaved-navigation.ts', import.meta.url),
+    new URL('../app/hooks/use-unsaved-navigation.ts', import.meta.url),
     'utf8',
   ),
   {

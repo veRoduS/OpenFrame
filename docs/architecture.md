@@ -42,12 +42,13 @@ Software `X.Y.Z` versions, publication revisions, and manifest `schemaVersion` s
 | Path | Responsibility |
 | --- | --- |
 | `app/` | Management, editor, media library, navigation guards |
+| `app/components/ui/`, `app/hooks/`, `app/lib/` | Shared management UI components, hooks, utilities; `@/` resolves to `app/` |
 | `server/app.mjs`, `server/schema.mjs` | API, authentication, persistence, validation |
 | `player/agent.py` | Enrollment, polling, cache, local HTTP |
 | `player/web/` | Prepared frames, rendering, scheduling, widgets |
 | `player/wireguard.py` | Validated provisioning through distro WireGuard tools |
 | `player/*.sh` | Dedicated Pi installation and first-boot image customization |
 | `tests/` | API, agent, editor, renderer, and optional browser regressions |
-| `scripts/` | Local versioning and publication hygiene checks |
+| `scripts/` | Local versioning, publication hygiene checks, player icon generation |
 
 See the [API](api.md), [widget contract](widgets.md), and [security policy](../SECURITY.md) before extending these boundaries.

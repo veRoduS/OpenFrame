@@ -88,7 +88,7 @@ import { SlideCanvas } from './canvas';
 import { MediaLibrary } from './media-library';
 import { ScreenSetup } from './screen-setup';
 import { resizeLayer } from './geometry.mjs';
-import { useUnsavedNavigation } from './use-unsaved-navigation';
+import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 import { localDateTime } from '../player/web/counter.js';
 import { playlistItemStatus } from './playlist-status.mjs';
 import { v4 as uuid } from 'uuid';

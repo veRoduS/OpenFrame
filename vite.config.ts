@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: { '@': fileURLToPath(new URL('.', import.meta.url)) } },
+  resolve: { alias: { '@': fileURLToPath(new URL('./app', import.meta.url)) } },
   css: { postcss: { plugins: [tailwindcss()] } },
   build: { outDir: 'dist' },
 });

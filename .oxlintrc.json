@@ -22,13 +22,10 @@
     "typeCheck": true
   },
   "ignorePatterns": [
-    ".next/**",
-    ".vinext/**",
     "out/**",
     "build/**",
     "dist/**",
-    "coverage/**",
-    "next-env.d.ts"
+    "coverage/**"
   ],
   "rules": {
     "no-array-constructor": "error",

@@ -49,7 +49,15 @@ For `node tests/player-connectivity.browser.mjs`, provide a generated, non-secre
 
 Run `node tests/bootstrap.browser.mjs` with the same Playwright settings to check the first-boot form at desktop and phone sizes. Its network requests are mocked and it never configures your Wi-Fi. Managed VPN tests use an injected helper; Python provisioning tests mock privileged commands. Actual Compose networking, image chroot/package installation, regulatory settings, and Pi AP/client switching need the separate [acceptance checklist](docs/managed-wireguard.md#acceptance-checks).
 
-Recovery browser coverage includes saved Wi-Fi add/edit/remove/reorder, mouse/touch drag grips, keyboard reordering and cancellation, password retention/clearing, hidden/open settings, save conflicts, and saving without closing the hotspot. `wifi_test.py` exercises real temporary keyfiles with mocked NetworkManager commands; `recovery_test.py` checks portal authorization and pause-preserving saves. `roaming_test.py` models scan cadence, stable priority promotion, restoration attempts, cooldowns, and inspection failures. These do not establish radio/failover behavior on a physical Pi. Regenerate the bundled recovery icons with `node scripts/generate-recovery-icons.mjs` when changing the selected Lucide icons.
+Recovery browser coverage includes saved Wi-Fi add/edit/remove/reorder, mouse/touch drag grips, keyboard reordering and cancellation, password retention/clearing, hidden/open settings, save conflicts, and saving without closing the hotspot. `wifi_test.py` exercises real temporary keyfiles with mocked NetworkManager commands; `recovery_test.py` checks portal authorization and pause-preserving saves. `roaming_test.py` models scan cadence, stable priority promotion, restoration attempts, cooldowns, and inspection failures. These do not establish radio/failover behavior on a physical Pi. Regenerate the bundled weather and recovery icons with `pnpm icons:generate`, then `pnpm format`, when changing the selected Lucide icons.
+
+## Source layout
+
+Management UI code lives under `app/`, including shared components in `app/components/ui/`, hooks in `app/hooks/`, and utilities in `app/lib/`. The `@/` import alias resolves to `app/` in both Vite and TypeScript. Keep only components used by the application; add new ones as needed. Formatting and linting cover this entire tree.
+
+The API lives in `server/`. The independently installed Pi agent and browser assets live in `player/`; do not move these into the management UI. See the [source map](docs/architecture.md#source-map) for the remaining boundaries.
+
+Only server runtime packages belong in `dependencies`. Frontend libraries, CSS tooling, and development tools belong in `devDependencies`: the Docker build stage compiles them into `dist/` before the runtime stage installs production dependencies. Use a full install for `pnpm dev` or `pnpm build`; a production-only install runs the already-built server and assets.
 
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.
 - Validate inputs in `server/schema.mjs`, mirror them in `app/types.ts`, and bound player memory/network/timer work.
