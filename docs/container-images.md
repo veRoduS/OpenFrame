@@ -35,7 +35,7 @@ docker compose up -d
 
 On PowerShell use `Copy-Item .env.example .env`. Read the unique initial password with `docker compose logs openframe`. Open http://localhost:3100 or the server's LAN address, sign in as `superadmin`, and change the password under **Users & Groups > My password**. Keep the directory/project name stable so subsequent upgrades reuse the same named data volume and accounts.
 
-From a full repository checkout instead of an artifact, set `OPENFRAME_IMAGE` in `.env` to an existing milestone image such as `ghcr.io/verodus/openframe:0.2.0` (or preferably its published `@sha256:...` manifest digest), then run:
+From a full repository checkout instead of an artifact, set `OPENFRAME_IMAGE` in `.env` to `ghcr.io/verodus/openframe:latest` to follow the latest successfully published milestone, or use a fixed version such as `ghcr.io/verodus/openframe:0.6.0` (preferably its published `@sha256:...` digest) to keep deployments reproducible, then run:
 
 ```sh
 docker compose -f compose.registry.yaml config --quiet
@@ -43,7 +43,7 @@ docker compose -f compose.registry.yaml pull
 docker compose -f compose.registry.yaml up -d
 ```
 
-The registry stack has no `build:` section and refuses to start without an explicit image selection. It is a standalone alternative to `compose.yaml`; do not merge them. There is deliberately no mutable `latest` tag and no automatic updater. The same persistent `openframe-data` volume declaration is used by both stacks; preserve the Compose project name when switching. Never use `down -v` for an upgrade.
+The registry stack has no `build:` section and refuses to start without an explicit image selection. It is a standalone alternative to `compose.yaml`; do not merge them. Each successful approved milestone publishes both its immutable version tag and the mutable `latest` alias. `latest` moves only when a milestone image finishes publishing; it does not track ordinary commits or update a running server. To move an existing deployment using `latest` forward, run `docker compose -f compose.registry.yaml pull` and then `docker compose -f compose.registry.yaml up -d`. For repeatable deployments and rollback, use a fixed version or image digest. The same persistent `openframe-data` volume declaration is used by both stacks; preserve the Compose project name when switching. Never use `down -v` for an upgrade.
 
 The image is published to GitHub Container Registry (GHCR). A new GHCR package may initially be private even when its repository is public. The owner must make the package public in its Package settings for anonymous pulls, or authenticate Docker to GHCR with a credential permitted to read that package. Never put a registry credential in the Compose file or commit it. Public source does not imply the image already exists: check the workflow result first.
 
@@ -55,11 +55,11 @@ Players still use the server's stable LAN/VPN/HTTPS origin in their private conf
 
 ## Action behavior
 
-Normal branch pushes and pull requests run CI only. Publishing requires an approved Git tag of the form `vX.Y.0`, or an explicit manual run selecting an existing approved tag. Patch tags and tag/package version mismatches are rejected. The pipeline checks the exact tagged commit, runs Node/Python checks plus native AMD64 and ARM64 Docker smoke tests, then builds both architectures and publishes one versioned multi-platform image.
+Normal branch pushes and pull requests run CI only. Publishing requires an approved Git tag of the form `vX.Y.0`, or an explicit manual run selecting an existing approved tag. Patch tags and tag/package version mismatches are rejected. The pipeline checks the exact tagged commit, runs Node/Python checks plus native AMD64 and ARM64 Docker smoke tests, then builds both architectures and publishes a versioned multi-platform image under both `X.Y.0` and `latest` tags. GitHub release tags remain versioned so each build is tied to an immutable milestone; `latest` is only the convenience image alias.
 
 The frontend is built on the builder's native platform; production dependencies, including Sharp, install inside the target-platform stage. This avoids copying x64 native modules into ARM images. Buildx/QEMU supplies cross-platform builds; native ARM CI exercises SQLite startup and actual WebP encoding/decoding.
 
-The action uses its repository-scoped `GITHUB_TOKEN` for `packages: write`; no personal token is needed in workflow secrets. Other jobs remain read-only. It verifies both platform entries in the registry manifest and creates a digest-pinned Compose artifact from an allowlist of public files. Published version tags are not intentionally overwritten. If publishing succeeded but artifact upload failed, recover the existing digest rather than replacing the image. Artifacts expire after 90 days; maintainers can attach the reviewed bundle to a manual GitHub Release for longer retention.
+The action uses its repository-scoped `GITHUB_TOKEN` for `packages: write`; no personal token is needed in workflow secrets. Other jobs remain read-only. It verifies both platform entries in the registry manifest and creates a digest-pinned Compose artifact from an allowlist of public files. Published version tags are not intentionally overwritten; only the `latest` alias moves forward when a new approved milestone succeeds. If publishing succeeded but artifact upload failed, recover the existing digest rather than replacing the versioned image. Artifacts expire after 90 days; maintainers can attach the reviewed bundle to a manual GitHub Release for longer retention.
 
 Source commits, Git tags, image publication, and deployment are separate operations. Routine local work still receives patch bumps without pushing. The owner approves minor milestones and explicitly requests major releases. This workflow never commits code, creates GitHub releases, or updates installed servers/players.
 

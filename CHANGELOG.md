@@ -2,6 +2,17 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.6.0] - 2026-09-29
+
+- Approved GitHub milestone: public homepage, persistent sign-in, team access, smoother slide playback, and a `latest` GHCR image alias. Includes local revisions 0.5.1 through 0.5.9 without squashing their history.
+- Add a public product homepage, 30-day renewable sign-in sessions, and the bookmarkable `/dashboard` route. Existing `/app` links remain compatible.
+- Add individual accounts, password invitations, groups, resource sharing and screen assignments; generate a unique initial super-admin credential for every fresh installation.
+- Prepare slide transitions only after the next frame is ready, and add editable prioritized recovery Wi-Fi networks with automatic return to higher-priority connections.
+- Publish each successful milestone image under both its fixed `X.Y.0` version and the mutable `latest` alias. GitHub publication still uses an immutable `vX.Y.0` milestone tag; `latest` advances only after its CI and image workflow succeeds. It does not update running servers automatically.
+- Upgrade Multer to 2.4.0 to address the moderate denial-of-service advisory affecting aborted multipart uploads.
+- Compatibility: preserve the server data volume during upgrades. Older shared-admin installations migrate their password to the `admin` super-admin account; old browser sessions are cleared during account migration. Server container upgrades do not update Pi code or its local recovery page; follow the player update instructions for the accumulated Wi-Fi and playback changes. No automatic player updater is included.
+- Experimental limitations: physical Pi Zero 2 W memory/performance, HDMI transitions, and Wi-Fi priority roaming remain unvalidated. The milestone workflow runs AMD64 and ARM64 container checks; consult the actual GitHub Actions result and hardware checklist before unattended deployment.
+
 ## [0.5.9] - 2026-09-29
 
 - Keep user sessions signed in for 30 days with daily renewal and a bookmarkable dashboard

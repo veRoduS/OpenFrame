@@ -90,7 +90,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.IMAGE }}:${{ env.VERSION }}
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION }}
+            ${{ env.IMAGE }}:latest
           build-args: |
             VERSION=${{ env.VERSION }}
             VCS_REF=${{ needs.prepare.outputs.sha }}

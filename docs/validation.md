@@ -1,5 +1,11 @@
 # Validation record
 
+## Pre-publication 0.6.0
+
+Checked on 2026-09-29: 111 Node tests (including Python-agent integration), 85 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. The landing, account, playlist-picker, transition, weather, screen-setup, player-connectivity/recovery, and first-boot browser suites passed against isolated data; external APIs and player networking were mocked. The production dependency audit identified [GHSA-3pph-fpjx-jg34](https://github.com/advisories/GHSA-3pph-fpjx-jg34); Multer was upgraded to 2.4.0, the first patched version, and the repeated audit found no known vulnerabilities. The publish workflow now assigns both the fixed milestone version and `latest` to the same successful multi-platform image build.
+
+Docker is not installed here, so local image build, AMD64/ARM64 container smoke, and volume-backup tests were unavailable; the tagged GitHub Actions workflow is configured to run both architecture checks before publishing. Physical Pi Zero 2 W resource use and behavior remain unvalidated; see the [hardware checklist](playback-testing.md) before unattended use. Review the actual Actions result after pushing; it determines whether `latest` advances.
+
 ## Local revision 0.5.3
 
 103 Node tests including Python-agent integration and 85 Python tests passed, along with lint, typecheck, formatting, production build, Pi shell syntax, and version/repository checks. New roaming tests cover one-minute cadence, consecutive-scan confirmation, highest-priority and staged promotion, signal/security filtering, exact UTF-8/whitespace SSID matching, hidden probes, disabled profiles, stale edits, connection/approval changes, activation failures, restoration attempts, bounded cooldowns, and scan failures. NetworkManager commands remain mocked.
