@@ -93,6 +93,7 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
           import pkg from './package.json' with {type: 'json'};
           const base = 'http://127.0.0.1:3100';
           const health = await (await fetch(base + '/api/health')).json();
@@ -104,7 +105,21 @@ jobs:
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({password: 'openframe-ci-fixture-password'}),
           });
-          assert.equal(setup.ok, true);
+          assert.equal(setup.status, 409, 'The seeded administrator must block public setup');
+          const logs = execFileSync('docker', ['compose', 'logs', 'openframe'], {encoding: 'utf8'});
+          const initialPassword = logs.match(/Initial password: (\S+)/)?.[1];
+          assert.ok(initialPassword, 'A fresh container must print its one-time administrator password');
+          console.log(`::add-mask::${initialPassword}`);
+          const login = await fetch(base + '/api/login', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: 'superadmin', password: initialPassword}),
+          });
+          assert.equal(login.ok, true, 'The generated administrator must be able to sign in');
+          const cookie = login.headers.get('set-cookie')?.split(';')[0];
+          assert.ok(cookie, 'Administrator sign-in must create a session');
+          const auth = await (await fetch(base + '/api/auth', {headers: {cookie}})).json();
+          assert.equal(auth.authenticated, true);
+          assert.equal(auth.user.username, 'superadmin');
           JS
       - run: docker compose up -d --force-recreate --wait --wait-timeout 120
       - name: Administrator persists after replacement

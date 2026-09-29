@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.7.0] - 2026-09-29
+
+- Approved GitHub milestone follow-up: fix the seeded-administrator Docker smoke test so the multi-platform image can complete publishing. Preserve the existing `v0.6.0` tag and history.
+- Verify that fresh installations reject public administrator setup and that the unique startup credential signs in; mask it before any failure-log output.
+- Publish this milestone's GHCR image under both `0.7.0` and `latest` after the general and AMD64/ARM64 container checks pass. `latest` remains unchanged if any check fails.
+- No additional application schema or player behavior changes beyond the accumulated 0.6.0 milestone. Existing data volumes remain in place during upgrades. Physical Pi Zero 2 W performance and roaming are still unvalidated.
+
 ## [0.6.0] - 2026-09-29
 
 - Approved GitHub milestone: public homepage, persistent sign-in, team access, smoother slide playback, and a `latest` GHCR image alias. Includes local revisions 0.5.1 through 0.5.9 without squashing their history.
