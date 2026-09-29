@@ -65,7 +65,10 @@ try {
         body: JSON.stringify(data),
       });
     });
-    await page.goto(process.env.OPENFRAME_URL || 'http://127.0.0.1:3100/');
+    await page.goto(
+      new URL('/app', process.env.OPENFRAME_URL || 'http://127.0.0.1:3100/')
+        .href,
+    );
     await page.getByText('Playlists', { exact: true }).first().click();
     await page.getByText(playlist.name, { exact: true }).click();
     const editor = page.locator('.of-modal.wide');

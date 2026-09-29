@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.8] - 2026-09-29
+
+- Add a public landing page with local imagery and connected login navigation
+
 ## [0.5.7] - 2026-09-29
 
 - Seed a unique random super-admin on each fresh server installation

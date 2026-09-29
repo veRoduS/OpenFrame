@@ -48,7 +48,7 @@ try {
   page.setDefaultTimeout(7000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(base);
+  await page.goto(`${base}/app`);
   await page.getByText('Screens', { exact: true }).first().click();
   await page.getByRole('button', { name: 'Screen setup', exact: true }).click();
   const dialog = page.getByRole('dialog', {

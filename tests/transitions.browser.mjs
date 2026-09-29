@@ -75,7 +75,7 @@ try {
   page.setDefaultTimeout(10000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(base);
+  await page.goto(`${base}/app`);
   await page.getByText('Playlists', { exact: true }).first().click();
   await page.getByText(playlist.name, { exact: true }).click();
   const editor = page.locator('.of-modal.wide');

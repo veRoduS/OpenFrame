@@ -2,6 +2,8 @@
 
 ## Install and operate
 
+- [Public website](public-website.md): landing page, sign-in routes, and public sample imagery.
+
 - [Users and groups](users-and-groups.md): individual passwords, invitations, screen assignments, and shared libraries.
 
 - [NWS weather widget](weather.md): shared location caching, forecast setup, offline behavior, and player upgrades.

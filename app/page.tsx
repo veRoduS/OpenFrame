@@ -230,7 +230,15 @@ export default function App() {
   };
   useEffect(() => {
     api<Auth>('/api/auth')
-      .then(setAuth)
+      .then((next) => {
+        if (!new URLSearchParams(location.hash.slice(1)).has('activate'))
+          history.replaceState(
+            history.state,
+            '',
+            next.authenticated ? '/app' : '/login',
+          );
+        setAuth(next);
+      })
       .catch((e) => setError(e.message));
   }, []);
   useEffect(() => {
@@ -313,10 +321,14 @@ export default function App() {
         </div>
       ) : !auth.authenticated || activation ? (
         <div className="auth-screen">
-          <div className="auth-brand">
+          <a
+            className="auth-brand"
+            href="/"
+            style={{ color: 'inherit', textDecoration: 'none' }}
+          >
             <Monitor />
             <span>OpenFrame</span>
-          </div>
+          </a>
           <form
             className="auth-form"
             onSubmit={(e) => {
@@ -345,7 +357,7 @@ export default function App() {
                 setPlaylist(null);
                 setPreview(null);
                 setActivation(null);
-                history.replaceState(null, '', location.pathname);
+                history.replaceState(null, '', '/app');
                 setAuth(signedIn);
               });
             }}
@@ -477,6 +489,7 @@ export default function App() {
                     run(async () => {
                       await api('/api/logout', 'POST');
                       setLibrary(emptyLibrary);
+                      history.replaceState(null, '', '/login');
                       setAuth({ setup: false, authenticated: false });
                     })
                   }

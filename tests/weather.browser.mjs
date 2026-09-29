@@ -114,7 +114,7 @@ try {
   page.setDefaultTimeout(10000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(base);
+  await page.goto(`${base}/app`);
   await page.getByRole('button', { name: 'New slide', exact: true }).click();
   await page.locator('.layer-list button').first().click();
   await page.getByRole('button', { name: 'Delete layer', exact: true }).click();

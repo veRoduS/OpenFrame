@@ -34,7 +34,7 @@ try {
   });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto(base);
+  await page.goto(`${base}/login`);
   await page
     .getByLabel('Password', { exact: true })
     .fill('browser-password-long-enough');

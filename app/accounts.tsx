@@ -511,7 +511,7 @@ export function Accounts({
                 invitation
                   ? invitation.group
                     ? invitation.value
-                    : `${location.origin}/#activate=${invitation.value}`
+                    : `${location.origin}/login#activate=${invitation.value}`
                   : ''
               }
               onFocus={(e) => e.target.select()}
@@ -524,7 +524,7 @@ export function Accounts({
                   await navigator.clipboard.writeText(
                     invitation.group
                       ? invitation.value
-                      : `${location.origin}/#activate=${invitation.value}`,
+                      : `${location.origin}/login#activate=${invitation.value}`,
                   );
                   setNotice('Invitation copied.');
                 }

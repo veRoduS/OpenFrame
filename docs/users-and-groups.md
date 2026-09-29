@@ -2,6 +2,8 @@
 
 Open **Users & Groups** in the sidebar. Each person signs in with their own username and password.
 
+Select **Log in** on the public homepage, or go directly to `/login`. The management workspace is at `/app`.
+
 ## First sign-in
 
 Each fresh installation automatically creates `superadmin` with its own cryptographically random, 32-character password before the server accepts connections. For Docker, read it with `docker compose logs openframe`; for a local server, read the startup terminal output. Sign in and change it under **My password**. No account database or reusable password is bundled with the source or container image.
