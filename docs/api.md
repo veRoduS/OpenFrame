@@ -42,7 +42,7 @@ The array order also governs background promotion from an active backup network.
 
 This contract follows the application source; it is not a separate versioned URL namespace. Software versions, publication revisions, and manifest schemaVersion are independent. See [release compatibility](releases.md).
 
-All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an appropriate HTTP status. Administrator requests require the `openframe_session` HttpOnly cookie, issued by setup/login and valid for 24 hours. Browser writes must use the server's origin (or configured `PUBLIC_URL`). Devices use `Authorization: Bearer <token>`.
+All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an appropriate HTTP status. Administrator requests require the persistent `openframe_session` HttpOnly, SameSite=Strict cookie, issued by setup/login/activation and valid for 30 days. Authenticated activity renews the cookie and stored session back to 30 days at most once every 24 hours; logout and password changes clear or replace the session instead. Expired, revoked, or disabled-account sessions are never renewed. `COOKIE_SECURE=true` requires HTTPS for this cookie. Browser writes must use the server's origin (or configured `PUBLIC_URL`). Devices use `Authorization: Bearer <token>`; their authentication is unchanged.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

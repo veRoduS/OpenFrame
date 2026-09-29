@@ -57,7 +57,7 @@ async function start(dataDir, t) {
   return { base, stop, password: output.match(/Initial password: (\S+)/)?.[1] };
 }
 
-void test('fresh server boots seed unique admins; restarts preserve changed passwords', async (t) => {
+void test('fresh server boots seed unique admins; restarts preserve changed passwords and sessions', async (t) => {
   const firstDir = mkdtempSync(
     path.join(os.tmpdir(), 'openframe-first-admin-'),
   );
@@ -114,24 +114,30 @@ void test('fresh server boots seed unique admins; restarts preserve changed pass
     headers: { cookie },
   }).then((r) => r.json());
   assert.equal(auth.user.role, 'superadmin');
-  assert.equal(
-    (
-      await post(
-        first.base,
-        '/api/account/password',
-        {
-          currentPassword: first.password,
-          password: 'my-replacement-password-long',
-        },
-        cookie,
-      )
-    ).status,
-    200,
+  const changed = await post(
+    first.base,
+    '/api/account/password',
+    {
+      currentPassword: first.password,
+      password: 'my-replacement-password-long',
+    },
+    cookie,
   );
+  assert.equal(changed.status, 200);
+  const updatedCookie = changed.headers.get('set-cookie').split(';')[0];
   await first.stop();
   const restarted = await start(firstDir, t);
   running.push(restarted);
   assert.equal(restarted.password, undefined);
+  const resumed = await fetch(restarted.base + '/api/auth', {
+    headers: { cookie: updatedCookie },
+  }).then((r) => r.json());
+  assert.equal(resumed.authenticated, true);
+  assert.equal(resumed.user.username, 'superadmin');
+  const revoked = await fetch(restarted.base + '/api/auth', {
+    headers: { cookie },
+  }).then((r) => r.json());
+  assert.equal(revoked.authenticated, false);
   assert.equal(
     (
       await post(restarted.base, '/api/login', {

@@ -41,7 +41,7 @@ After `pnpm build`, run `node tests/screen-setup.browser.mjs` with the same Play
 
 ## Change requirements
 
-After building, `node tests/landing.browser.mjs` checks the public homepage, login/logout, legacy invitation links, clipboard, FAQ, mobile navigation, and image loading at five viewport sizes. Use the same Playwright settings as the other browser checks. It seeds an isolated database with fictional content, never your library. To refresh the public sample workspace image deliberately, run it with `OPENFRAME_CAPTURE_LANDING=true`, then rebuild and rerun without that flag. See [public website](docs/public-website.md) for routes and asset provenance.
+After building, `node tests/landing.browser.mjs` checks the public homepage, login/logout, bookmarked `/dashboard` access, persisted browser sessions, legacy invitation links, clipboard, FAQ, mobile navigation, and image loading at five viewport sizes. Use the same Playwright settings as the other browser checks. It seeds an isolated database with fictional content, never your library. To refresh the public sample workspace image deliberately, run it with `OPENFRAME_CAPTURE_LANDING=true`, then rebuild and rerun without that flag. See [public website](docs/public-website.md) for routes and asset provenance.
 
 After building, `node tests/accounts.browser.mjs` verifies user invitations, password changes, group joining, and desktop/mobile account layouts against an isolated database. Use the same Playwright environment settings as the other browser tests. Account authorization, migration, direct media access, and screen assignment are covered by `tests/accounts.test.mjs` in the standard Node suite.
 

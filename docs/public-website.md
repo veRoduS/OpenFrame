@@ -1,6 +1,8 @@
 # Public website
 
-The server hosts a public OpenFrame landing page at `/`. Its login links open `/login`; successful sign-in opens `/app`. Visiting `/login` with an active session also opens the workspace. Signing out returns to `/login`. Player routes and API authorization are unchanged.
+The server hosts a public OpenFrame landing page at `/`. Its login links open `/login`; successful sign-in opens `/dashboard`. Bookmark `/dashboard` to go straight to the workspace when signed in. Visiting `/login` or the legacy `/app` route with an active session also opens `/dashboard`; otherwise the workspace requests sign-in at `/login`. Signing out returns to `/login`. Player routes and API authorization are unchanged.
+
+Sessions use persistent 30-day cookies and renew during authenticated activity, at most once a day. Reloading, revisiting a bookmark, or normally closing and reopening the browser does not require another sign-in. Private browsing, clearing cookies, signing out, or account/password changes can end a session earlier. See [users and groups](users-and-groups.md#staying-signed-in).
 
 The landing page makes no account or library API requests. Its images are public product illustrations, not live content from the installation. The management application loads separately when needed. No analytics, externally hosted fonts, or third-party image requests are added. Documentation and source links point to the project on GitHub. The installation command block can be copied; FAQ entries and mobile navigation work without an account.
 

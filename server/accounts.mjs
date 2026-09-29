@@ -11,6 +11,8 @@ import { z } from 'zod';
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 const token = () => randomBytes(32).toString('hex');
+const sessionLifetime = 30 * 24 * 60 * 60 * 1000;
+const sessionRenewalInterval = 24 * 60 * 60 * 1000;
 const password = z.string().min(12).max(256);
 const username = z
   .string()
@@ -104,20 +106,44 @@ export function createAccounts(db) {
         state.groupId,
       );
   }
-  function session(req) {
+  function sessionCookie(res, value) {
+    res.cookie('openframe_session', value, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: process.env.COOKIE_SECURE === 'true',
+      maxAge: sessionLifetime,
+      path: '/',
+    });
+  }
+  function session(req, res) {
     const value = req.headers.cookie
       ?.split(';')
       .map((v) => v.trim())
       .find((v) => v.startsWith('openframe_session='))
       ?.slice(18);
     if (!value) return null;
-    return (
-      db
+    const now = Date.now();
+    const saved = db
+      .prepare(
+        'SELECT u.*, s.expires AS sessionExpires FROM users u JOIN user_sessions s ON s.userId=u.id WHERE s.token=? AND s.expires>? AND u.disabled=0',
+      )
+      .get(digest(value), now);
+    if (!saved) return null;
+    const { sessionExpires, ...user } = saved;
+    // Renew at most daily, reusing the token so parallel requests stay valid.
+    if (
+      res &&
+      sessionExpires <= now + sessionLifetime - sessionRenewalInterval
+    ) {
+      const renewed = db
         .prepare(
-          'SELECT u.* FROM users u JOIN user_sessions s ON s.userId=u.id WHERE s.token=? AND s.expires>? AND u.disabled=0',
+          'UPDATE user_sessions SET expires=? WHERE token=? AND expires>?',
         )
-        .get(digest(value), Date.now()) || null
-    );
+        .run(now + sessionLifetime, digest(value), now);
+      if (!renewed.changes) return null;
+      sessionCookie(res, value);
+    }
+    return user;
   }
   function login(res, user) {
     const value = token();
@@ -125,18 +151,16 @@ export function createAccounts(db) {
     db.prepare('INSERT INTO user_sessions VALUES (?,?,?)').run(
       digest(value),
       user.id,
-      Date.now() + 86400000,
+      Date.now() + sessionLifetime,
     );
-    res.cookie('openframe_session', value, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: process.env.COOKIE_SECURE === 'true',
-      maxAge: 86400000,
-      path: '/',
-    });
+    sessionCookie(res, value);
   }
   function admin(req, res, next) {
-    const user = session(req);
+    // These routes clear or replace the cookie themselves, without renewing it first.
+    const replacesSession =
+      req.route?.path === '/api/logout' ||
+      req.route?.path === '/api/account/password';
+    const user = session(req, replacesSession ? undefined : res);
     if (!user) return res.status(401).json({ error: 'Sign in to continue' });
     const groupId = req.get('X-OpenFrame-Group') || null;
     if (
@@ -213,7 +237,7 @@ export function createAccounts(db) {
   }
   function mount(app, rateLimit) {
     app.get('/api/auth', (req, res) => {
-      const user = session(req);
+      const user = session(req, res);
       res.json({
         setup: !db.prepare('SELECT id FROM users LIMIT 1').get(),
         authenticated: !!user,

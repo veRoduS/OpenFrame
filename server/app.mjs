@@ -606,7 +606,7 @@ export function createApp({
   app.get(
     '/media/:filename',
     (req, res, next) => {
-      const user = session(req);
+      const user = session(req, res);
       if (user) {
         res.locals.userMedia = true;
         const asset = list('asset').find(

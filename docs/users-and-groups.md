@@ -2,7 +2,13 @@
 
 Open **Users & Groups** in the sidebar. Each person signs in with their own username and password.
 
-Select **Log in** on the public homepage, or go directly to `/login`. The management workspace is at `/app`.
+Select **Log in** on the public homepage, or bookmark `/dashboard` for the management workspace. Existing `/app` links still work. A valid session opens the workspace directly without asking for a password again.
+
+## Staying signed in
+
+Sign-ins last 30 days. Authenticated activity renews the session back to 30 days, at most once a day, so a regularly used account stays signed in. Both the persistent browser cookie and the server's saved session are renewed together. Existing unexpired user sessions receive the longer duration on their next authenticated visit; expired sessions require sign-in.
+
+Sessions survive normal browser restarts and server restarts/upgrades that retain the data volume. Private browsing or clearing site cookies removes the saved sign-in. Use **Sign out** on shared computers. Signing out revokes that browser's session; a password change revokes other sessions, a password reset revokes existing sessions, and disabling an account blocks access immediately. An idle session expires 30 days after its last renewal.
 
 ## First sign-in
 

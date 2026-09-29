@@ -235,7 +235,7 @@ export default function App() {
           history.replaceState(
             history.state,
             '',
-            next.authenticated ? '/app' : '/login',
+            next.authenticated ? '/dashboard' : '/login',
           );
         setAuth(next);
       })
@@ -357,7 +357,7 @@ export default function App() {
                 setPlaylist(null);
                 setPreview(null);
                 setActivation(null);
-                history.replaceState(null, '', '/app');
+                history.replaceState(null, '', '/dashboard');
                 setAuth(signedIn);
               });
             }}

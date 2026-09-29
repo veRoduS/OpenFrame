@@ -57,7 +57,37 @@ try {
   await page.getByLabel('Password', { exact: true }).fill(credentials.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: 'New slide', exact: true }).waitFor();
-  assert.equal(new URL(page.url()).pathname, '/app');
+  assert.equal(new URL(page.url()).pathname, '/dashboard');
+  for (const route of ['/dashboard', '/login', '/app']) {
+    await page.goto(base + route);
+    await page
+      .getByRole('button', { name: 'New slide', exact: true })
+      .waitFor();
+    assert.equal(new URL(page.url()).pathname, '/dashboard');
+    assert.equal(await page.getByLabel('Password', { exact: true }).count(), 0);
+  }
+  await page.reload();
+  await page.getByRole('button', { name: 'New slide', exact: true }).waitFor();
+  const savedBrowser = await context.storageState();
+  const session = savedBrowser.cookies.find(
+    (cookie) => cookie.name === 'openframe_session',
+  );
+  assert.ok(
+    session.expires > Date.now() / 1000 + 29 * 86400,
+    'Session must survive closing the browser',
+  );
+  assert.equal(session.httpOnly, true);
+  const restored = await browser.newContext({ storageState: savedBrowser });
+  try {
+    const bookmark = await restored.newPage();
+    await bookmark.goto(`${base}/dashboard`);
+    await bookmark
+      .getByRole('button', { name: 'New slide', exact: true })
+      .waitFor();
+    assert.equal(new URL(bookmark.url()).pathname, '/dashboard');
+  } finally {
+    await restored.close();
+  }
   const invited = await context.request.post(`${base}/api/users`, {
     data: { username: 'sample-member', name: 'Sample member' },
   });
@@ -154,6 +184,20 @@ try {
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByLabel('Username', { exact: true }).waitFor();
   assert.equal(new URL(page.url()).pathname, '/login');
+  await page.goto(`${base}/dashboard`);
+  await page.getByLabel('Username', { exact: true }).waitFor();
+  assert.equal(new URL(page.url()).pathname, '/login');
+  const revokedContext = await browser.newContext({
+    storageState: savedBrowser,
+  });
+  try {
+    const bookmark = await revokedContext.newPage();
+    await bookmark.goto(`${base}/dashboard`);
+    await bookmark.getByLabel('Username', { exact: true }).waitFor();
+    assert.equal(new URL(bookmark.url()).pathname, '/login');
+  } finally {
+    await revokedContext.close();
+  }
   await page.getByRole('link', { name: 'OpenFrame', exact: true }).click();
   await page.getByRole('button', { name: 'Copy install commands' }).click();
   assert.match(

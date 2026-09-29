@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.9] - 2026-09-29
+
+- Keep user sessions signed in for 30 days with daily renewal and a bookmarkable dashboard
+
 ## [0.5.8] - 2026-09-29
 
 - Add a public landing page with local imagery and connected login navigation

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 import { hashPassword } from '../server/accounts.mjs';
@@ -49,6 +49,8 @@ async function fixture(t) {
         cookie = response.headers.get('set-cookie').split(';')[0];
       return {
         status: response.status,
+        cookie,
+        setCookies: response.headers.getSetCookie(),
         cacheControl: response.headers.get('cache-control'),
         data: response.headers.get('content-type')?.includes('json')
           ? await response.json()
@@ -77,8 +79,102 @@ async function fixture(t) {
   return { ...instance, client, admin, user };
 }
 
+void test('sessions persist for 30 days and renew at most daily, including existing shorter sessions', async (t) => {
+  const { admin, db } = await fixture(t);
+  const login = await admin('/api/login', 'POST', { password });
+  assert.equal(login.setCookies.length, 1);
+  assert.match(login.setCookies[0], /Max-Age=2592000/);
+  assert.match(login.setCookies[0], /Expires=/);
+  assert.match(login.setCookies[0], /HttpOnly/);
+  assert.match(login.setCookies[0], /SameSite=Strict/);
+  assert.match(login.setCookies[0], /Path=\//);
+  const hash = createHash('sha256')
+    .update(login.cookie.slice(18))
+    .digest('hex');
+  const saved = () =>
+    db.prepare('SELECT expires FROM user_sessions WHERE token=?').get(hash)
+      ?.expires;
+  const day = 86400000;
+  assert.ok(saved() > Date.now() + 29 * day);
+  const initialExpiry = saved();
+  assert.deepEqual((await admin('/api/auth')).setCookies, []);
+  assert.equal(saved(), initialExpiry);
+
+  // A still-valid session created by the previous 24-hour policy is upgraded.
+  db.prepare('UPDATE user_sessions SET expires=? WHERE token=?').run(
+    Date.now() + day,
+    hash,
+  );
+  const upgraded = await admin('/api/auth');
+  assert.equal(upgraded.data.authenticated, true);
+  assert.equal(upgraded.data.user.password, undefined);
+  assert.equal(upgraded.data.user.sessionExpires, undefined);
+  assert.equal(upgraded.cookie, login.cookie);
+  assert.equal(upgraded.setCookies.length, 1);
+  assert.match(upgraded.setCookies[0], /Max-Age=2592000/);
+  assert.ok(saved() > Date.now() + 29 * day);
+  const renewedExpiry = saved();
+  assert.deepEqual((await admin('/api/library')).setCookies, []);
+  assert.equal(saved(), renewedExpiry);
+
+  db.prepare('UPDATE user_sessions SET expires=? WHERE token=?').run(
+    Date.now() + 28 * day,
+    hash,
+  );
+  const active = await admin('/api/slides', 'POST', slide);
+  assert.equal(active.status, 201);
+  assert.equal(active.cookie, login.cookie);
+  assert.match(active.setCookies[0], /Max-Age=2592000/);
+  assert.ok(saved() > Date.now() + 29 * day);
+
+  db.prepare('UPDATE user_sessions SET expires=? WHERE token=?').run(
+    Date.now() - 1,
+    hash,
+  );
+  const expired = await admin('/api/auth');
+  assert.equal(expired.data.authenticated, false);
+  assert.deepEqual(expired.setCookies, []);
+  assert.equal((await admin('/api/library')).status, 401);
+  assert.ok(saved() < Date.now());
+});
+
+void test('logout revokes a session due for renewal without issuing a fresh cookie', async (t) => {
+  const { admin, db } = await fixture(t);
+  const { cookie } = await admin('/api/auth');
+  db.prepare('UPDATE user_sessions SET expires=?').run(Date.now() + 86400000);
+  const logout = await admin('/api/logout/', 'POST');
+  assert.equal(logout.status, 200);
+  assert.equal(logout.setCookies.length, 1);
+  assert.match(logout.setCookies[0], /openframe_session=;/);
+  assert.equal(
+    db.prepare('SELECT COUNT(*) AS n FROM user_sessions').get().n,
+    0,
+  );
+  const revoked = await admin('/api/auth', 'GET', undefined, { cookie });
+  assert.equal(revoked.data.authenticated, false);
+  assert.deepEqual(revoked.setCookies, []);
+});
+
+void test('secure session cookies retain their protection when renewed', async (t) => {
+  const previous = process.env.COOKIE_SECURE;
+  process.env.COOKIE_SECURE = 'true';
+  t.after(() => {
+    if (previous === undefined) delete process.env.COOKIE_SECURE;
+    else process.env.COOKIE_SECURE = previous;
+  });
+  const { admin, db } = await fixture(t);
+  const login = await admin('/api/login', 'POST', { password });
+  assert.match(login.setCookies[0], /; Secure;/);
+  db.prepare('UPDATE user_sessions SET expires=?').run(Date.now() + 86400000);
+  const renewed = await admin('/api/auth');
+  assert.equal(renewed.data.authenticated, true);
+  assert.match(renewed.setCookies[0], /; Secure;/);
+  assert.match(renewed.setCookies[0], /HttpOnly/);
+  assert.match(renewed.setCookies[0], /SameSite=Strict/);
+});
+
 void test('users are isolated, invitations are single-use and passwords revoke other sessions', async (t) => {
-  const { admin, user, client } = await fixture(t);
+  const { admin, user, client, db } = await fixture(t);
   const alice = await user('alice');
   const bob = await user('bob');
   assert.equal(
@@ -127,15 +223,17 @@ void test('users are isolated, invitations are single-use and passwords revoke o
     ).status,
     403,
   );
-  assert.equal(
-    (
-      await alice.call('/api/account/password', 'POST', {
-        currentPassword: password,
-        password: 'new-password-long-enough',
-      })
-    ).status,
-    200,
+  db.prepare('UPDATE user_sessions SET expires=? WHERE userId=?').run(
+    Date.now() + 86400000,
+    alice.user.id,
   );
+  const changed = await alice.call('/api/account/password', 'POST', {
+    currentPassword: password,
+    password: 'new-password-long-enough',
+  });
+  assert.equal(changed.status, 200);
+  assert.equal(changed.setCookies.length, 1);
+  assert.match(changed.setCookies[0], /Max-Age=2592000/);
   assert.equal((await second('/api/library')).status, 401);
   assert.equal((await alice.call('/api/library')).status, 200);
   assert.equal(
