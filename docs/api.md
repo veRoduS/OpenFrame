@@ -1,5 +1,25 @@
 # HTTP API
 
+## User accounts and access
+
+`GET /api/auth` includes `user:{id,username,name,role,disabled}` when signed in. Setup accepts `{username?,password}` and creates the first super-admin. All library reads, edits, previews, reference validation, and browser media requests are checked against ownership and direct/group grants. Inaccessible resources return 404. Player APIs retain their existing device-token authorization.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/api/activate` | Accept one-use password invitation `{token,password}`; signs in |
+| POST | `/api/account/password` | `{currentPassword,password}`; invalidates other sessions and invitations |
+| GET / POST | `/api/users` | Super-admin list/create; create `{username,name}` returns `{user,invitation}` |
+| POST | `/api/users/:id/invitation` | Super-admin replacement password invitation; returns `{invitation}` |
+| PATCH | `/api/users/:id` | Super-admin enable/disable with `{disabled:boolean}` |
+| GET / POST | `/api/groups` | List accessible groups with members; create `{name}` as group admin |
+| POST | `/api/groups/:id/invitation` | Group admin creates one-use join token; returns `{invitation}` |
+| POST | `/api/groups/join` | Signed-in user accepts `{token}` |
+| PUT | `/api/groups/:id/members/:userId` | Group admin sets `{role:"admin"|"member"|"remove"}`; last active admin protected |
+| GET | `/api/access/:kind/:id` | Returns `{canShare,grants:[{userId,groupId}]}` for an accessible item |
+| POST | `/api/access/:kind/:id` | Owner/super-admin grants `{groupId}` or super-admin grants `{userId}`; add `remove:true` to revoke |
+
+Access kinds are `device`, `slide`, `playlist`, `asset`, and `folder`. Grants are additive. Sharing includes current referenced content atomically; revocation affects only the selected resource. Existing recipients must have access to newly referenced content before an update (409 otherwise). A valid `X-OpenFrame-Group` header shares newly created resources with that group; users must be members (or super-admins). Invitations expire after 24 hours and are never returned in user listings. Super-admin permission is required for screen approval/deletion, screen-setup/VPN inventory and exports, and managed-VPN status. See [permission details](users-and-groups.md).
+
 ## Local recovery portal
 
 These routes exist only on the temporary player hotspot at `http://192.168.50.1`, not on the home server or first-boot portal. `GET /setup/state` returns `{csrf,paused,pauseSeconds,remainingSeconds,closing}`. `pauseSeconds` is the selected pause length; null means indefinite when paused. `remainingSeconds` is a rounded-up, monotonic countdown, or null while indefinitely paused. Reading state never extends the window.
@@ -29,7 +49,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | GET | `/api/health` | Health and version |
 | GET | `/api/auth` | Initial setup and session status |
 | POST | `/api/setup` | Set first administrator password; `{password}` |
-| POST | `/api/login` | Sign in; `{password}` |
+| POST | `/api/login` | Sign in; `{username,password}` (omitted username defaults to `admin` for compatibility) |
 | POST | `/api/logout` | Revoke current session |
 | GET | `/api/library` | Slides, playlist summaries, assets, folders, device status |
 | POST | `/api/slides` | Create slide |
@@ -39,7 +59,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | POST | `/api/assets/batch` | `{ids,action?,folderId?,addTags?,removeTags?}`; action is update (default) or delete |
 | POST | `/api/folders` | Create `{name}`; names are case-insensitively unique |
 | PUT / DELETE | `/api/folders/:id` | Rename with `{name}` or delete an empty folder |
-| GET | `/media/:filename` | Image, with admin session or authorized assigned-device token |
+| GET | `/media/:filename` | Image, with an authorized user session or assigned-device token |
 | POST | `/api/playlists` | Create `{name,items:[{slideId,duration}]}` |
 | PUT / DELETE | `/api/playlists/:id` | Replace draft/delete playlist; deletion blocked while assigned |
 | POST | `/api/playlists/:id/publish` | Snapshot current slides; requires nonempty playlist |

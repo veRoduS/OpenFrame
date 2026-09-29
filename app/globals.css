@@ -1,6 +1,116 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+.accounts {
+  display: grid;
+  gap: 24px;
+}
+.account-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #dbe1dd;
+  padding-bottom: 12px;
+}
+.account-tabs button {
+  border-color: transparent;
+  background: transparent;
+}
+.account-tabs button[aria-selected='true'] {
+  background: #e1ece5;
+  color: #17613d;
+}
+.account-section {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.account-form {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 440px;
+}
+.account-form label,
+.account-inline-form label {
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+}
+.account-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.account-inline-form label {
+  flex: 1;
+  min-width: 140px;
+}
+.account-inline-form button {
+  min-height: 40px;
+}
+.account-group-forms {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 32px;
+}
+.account-list,
+.group-section {
+  border-top: 1px solid #dbe1dd;
+}
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e6eae7;
+  min-width: 0;
+}
+.account-row strong,
+.account-row h2 {
+  overflow-wrap: anywhere;
+}
+.account-row > div:first-child {
+  min-width: 0;
+}
+.account-row > div > span {
+  display: block;
+  color: #67716c;
+  font-size: 13px;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.account-actions select {
+  width: auto;
+}
+.account-empty,
+.account-notice {
+  padding: 20px 0;
+  color: #42634f;
+}
+@media (max-width: 700px) {
+  .account-group-forms {
+    grid-template-columns: 1fr;
+  }
+  .account-row {
+    flex-wrap: wrap;
+  }
+  .account-actions {
+    width: 100%;
+  }
+  .account-tabs button {
+    font-size: 13px;
+    padding: 8px;
+  }
+}
 @custom-variant dark (&:is(.dark *));
 @theme inline {
   --color-background: var(--background);

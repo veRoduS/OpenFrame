@@ -26,6 +26,6 @@ Automated Node/Python checks and focused desktop/mobile browser regressions exis
 
 ## Future work
 
-Potential milestones, subject to owner prioritization: player update delivery with rollback; bounded cache cleanup; better backup/restore and administrator account recovery; recurring schedules; richer snapshot-based widgets; multi-user roles; remote screenshots; video support. These are not currently implemented. Arbitrary embedded web pages and unbounded live widgets need special scrutiny on low-memory devices.
+Potential milestones, subject to owner prioritization: player update delivery with rollback; bounded cache cleanup; better backup/restore; recurring schedules; richer snapshot-based widgets; MFA; remote screenshots; video support. These are not currently implemented. Individual accounts and group sharing are covered in [Users and groups](users-and-groups.md). Arbitrary embedded web pages and unbounded live widgets need special scrutiny on low-memory devices.
 
 Keep the core local-first: no mandatory hosted account, telemetry endpoint, subscription service, or cloud runtime dependency. Connectivity providers remain optional. Major release designation is reserved for an explicit owner decision, not the completion of any item on this page.

@@ -29,7 +29,7 @@ This is eventual synchronization, not synchronized clocks or frame-lock across s
 
 NWS weather uses a separate persisted `weather_cache` table and a timestamped `weather` map in the authenticated sync response. The server deduplicates refreshes by rounded coordinates, outside the heartbeat's critical path. The agent persists these snapshots with the last complete playback state; the browser updates active weather widgets without replacing frames or changing publication revisions. See [weather](weather.md) for limits, privacy, and offline behavior.
 
-`DATA_DIR` contains `openframe.sqlite` (with WAL/SHM sidecars while active) and `media/`. SQLite records contain JSON slide/playlist/device/asset/folder data; separate settings and session tables hold authentication state. Uploaded images become bounded-resolution WebP assets. Server-side publication snapshots contain copied slide/configuration/asset metadata, independent of later draft edits.
+`DATA_DIR` contains `openframe.sqlite` (with WAL/SHM sidecars while active) and `media/`. SQLite records contain JSON slide/playlist/device/asset/folder data. Users, user sessions, groups, memberships, invitation hashes, resource ownership, and sharing grants have separate tables. `server/accounts.mjs` binds authenticated requests to an asynchronous request context; record reads and writes check access in that context. Player requests keep device-token authorization. Global reference checks prevent deletion of content still used outside the requesting user's library. Uploaded images become bounded-resolution WebP assets. Server-side publication snapshots contain copied slide/configuration/asset metadata, independent of later draft edits. See [users and migration](users-and-groups.md).
 
 The Pi defaults to `/var/lib/openframe` for identity, cached state, manifests, and images. Its service serves only `127.0.0.1:8080`. Cache content survives server/network outages and offline restarts after a successful first download. Old cached images are currently retained, so storage use must be monitored. A changed server origin requires fresh approval.
 
@@ -44,6 +44,7 @@ Software `X.Y.Z` versions, publication revisions, and manifest `schemaVersion` s
 | `app/` | Management, editor, media library, navigation guards |
 | `app/components/ui/`, `app/hooks/`, `app/lib/` | Shared management UI components, hooks, utilities; `@/` resolves to `app/` |
 | `server/app.mjs`, `server/schema.mjs` | API, authentication, persistence, validation |
+| `server/accounts.mjs`, `app/accounts.tsx` | User sessions, resource access, groups, invitations, and account UI |
 | `player/agent.py` | Enrollment, polling, cache, local HTTP |
 | `player/web/` | Prepared frames, rendering, scheduling, widgets |
 | `player/wireguard.py` | Validated provisioning through distro WireGuard tools |

@@ -41,6 +41,8 @@ After `pnpm build`, run `node tests/screen-setup.browser.mjs` with the same Play
 
 ## Change requirements
 
+After building, `node tests/accounts.browser.mjs` verifies user invitations, password changes, group joining, and desktop/mobile account layouts against an isolated database. Use the same Playwright environment settings as the other browser tests. Account authorization, migration, direct media access, and screen assignment are covered by `tests/accounts.test.mjs` in the standard Node suite.
+
 After building, `node tests/weather.browser.mjs` checks ZIP lookup, current/six-hour weather, local icons, resize handles, units, persistence, responsive layouts, and player weather updates without replacing the active frame. It starts an isolated database/server and injects fake NWS and ZIP responses; it never modifies your normal library or contacts those services. Use the same Playwright environment settings as the other browser tests.
 
 After building, `node tests/transitions.browser.mjs` uses an isolated server/database to check playlist transition controls and persistence at desktop/phone widths, native whole-frame animations with decoded image/text/clock layers, midpoint pixels, portrait rotation, and effect cleanup. Use the same Playwright settings. Screenshots are ignored under `work/`; these browser checks do not establish physical Pi performance.

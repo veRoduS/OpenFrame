@@ -1147,8 +1147,8 @@ void test('SQLite data and administrator credentials survive reopening the datab
   );
   assert.ok(
     reopened.db
-      .prepare('SELECT value FROM settings WHERE key=?')
-      .get('password'),
+      .prepare('SELECT password FROM users WHERE username=?')
+      .get('admin')?.password,
   );
   reopened.db.close();
 });

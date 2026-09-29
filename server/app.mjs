@@ -1,4 +1,5 @@
 import express from 'express';
+import { createAccounts } from './accounts.mjs';
 import { mountScreenSetup } from './screen-setup.mjs';
 import { mountManagedVpn } from './managed-vpn.mjs';
 import { mountRecovery } from './recovery.mjs';
@@ -8,13 +9,7 @@ import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
 import { DatabaseSync } from 'node:sqlite';
-import {
-  randomBytes,
-  randomUUID,
-  createHash,
-  scryptSync,
-  timingSafeEqual,
-} from 'node:crypto';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
@@ -30,7 +25,6 @@ import {
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const { version } = packageInfo;
 const secret = () => randomBytes(32).toString('hex');
-const passwordSchema = z.object({ password: z.string().min(12).max(256) });
 const fail = (status, message) => Object.assign(new Error(message), { status });
 
 export function createApp({
@@ -46,20 +40,68 @@ export function createApp({
     CREATE TABLE IF NOT EXISTS records (kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(kind,id));
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);`);
+  const accounts = createAccounts(db);
+  const allRecords = (kind) =>
+    db
+      .prepare('SELECT body FROM records WHERE kind=?')
+      .all(kind)
+      .map((r) => JSON.parse(r.body));
   const weather = createWeatherCache({ db, fetcher: weatherFetch });
   const zipLookup = createZipLookup({ fetcher: zipFetch });
   const list = (kind) =>
     db
       .prepare('SELECT body FROM records WHERE kind=? ORDER BY rowid DESC')
       .all(kind)
-      .map((r) => JSON.parse(r.body));
+      .map((r) => JSON.parse(r.body))
+      .filter((r) => accounts.allowed(kind, r.id));
   const get = (kind, id) => {
+    if (!accounts.allowed(kind, id)) return null;
     const r = db
       .prepare('SELECT body FROM records WHERE kind=? AND id=?')
       .get(kind, id);
     return r ? JSON.parse(r.body) : null;
   };
   const put = (kind, item) => {
+    const exists = db
+      .prepare('SELECT 1 FROM records WHERE kind=? AND id=?')
+      .get(kind, item.id);
+    if (exists && !accounts.allowed(kind, item.id))
+      throw fail(404, 'Not found');
+    const state = accounts.context.getStore();
+    if (state && ['slide', 'playlist', 'device', 'asset'].includes(kind)) {
+      const audiences = db
+        .prepare(
+          'SELECT userId,groupId FROM resource_grants WHERE kind=? AND id=?',
+        )
+        .all(kind, item.id);
+      if (!exists && state.groupId)
+        audiences.push({ userId: '', groupId: state.groupId });
+      for (const [childKind, childId] of dependencies(kind, item)) {
+        if (!accounts.allowed(childKind, childId))
+          throw fail(404, 'Referenced item not found');
+        for (const audience of audiences) {
+          const granted = audience.userId
+            ? accounts.can(
+                db
+                  .prepare('SELECT * FROM users WHERE id=?')
+                  .get(audience.userId),
+                childKind,
+                childId,
+              )
+            : db
+                .prepare(
+                  'SELECT 1 FROM resource_grants WHERE kind=? AND id=? AND groupId=?',
+                )
+                .get(childKind, childId, audience.groupId);
+          if (!granted)
+            throw fail(
+              409,
+              'Share the referenced slides, images, folders or playlist with the same recipients first',
+            );
+        }
+      }
+    }
+    if (!exists) accounts.created(kind, item.id);
     db.prepare('INSERT OR REPLACE INTO records VALUES (?,?,?)').run(
       kind,
       item.id,
@@ -74,8 +116,6 @@ export function createApp({
     if (!record) throw fail(404, 'Not found');
     return record;
   };
-  const setting = (key) =>
-    db.prepare('SELECT value FROM settings WHERE key=?').get(key)?.value;
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -110,38 +150,7 @@ export function createApp({
         .json({ error: 'Too many attempts. Try again in a minute.' });
     next();
   }
-  function session(req) {
-    const token = req.headers.cookie
-      ?.split(';')
-      .map((s) => s.trim())
-      .find((s) => s.startsWith('openframe_session='))
-      ?.slice(18);
-    return (
-      token &&
-      db
-        .prepare('SELECT expires FROM sessions WHERE token=? AND expires>?')
-        .get(hash(token), Date.now())
-    );
-  }
-  function login(res) {
-    const token = secret();
-    db.prepare('DELETE FROM sessions WHERE expires<?').run(Date.now());
-    db.prepare('INSERT INTO sessions VALUES (?,?)').run(
-      hash(token),
-      Date.now() + 86400000,
-    );
-    res.cookie('openframe_session', token, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: process.env.COOKIE_SECURE === 'true',
-      maxAge: 86400000,
-      path: '/',
-    });
-  }
-  const admin = (req, res, next) =>
-    session(req)
-      ? next()
-      : res.status(401).json({ error: 'Sign in to continue' });
+  const { admin, superadmin, session } = accounts;
   const player = (req, res, next) => {
     const token = req.headers.authorization?.replace(/^Bearer /, '');
     const device =
@@ -155,49 +164,9 @@ export function createApp({
     next();
   };
   app.get('/api/health', (req, res) => res.json({ ok: true, version }));
-  app.get('/api/auth', (req, res) =>
-    res.json({ setup: !setting('password'), authenticated: !!session(req) }),
-  );
-  app.post('/api/setup', rateLimit, (req, res) => {
-    if (setting('password'))
-      throw fail(409, 'Administrator already configured');
-    const { password } = passwordSchema.parse(req.body);
-    const salt = secret();
-    db.prepare('INSERT INTO settings VALUES (?,?)').run(
-      'password',
-      `${salt}:${scryptSync(password, salt, 64).toString('hex')}`,
-    );
-    login(res);
-    res.json({ ok: true });
-  });
-  app.post('/api/login', rateLimit, (req, res) => {
-    const { password } = passwordSchema.parse(req.body);
-    const saved = setting('password');
-    if (!saved) throw fail(409, 'Create an administrator first');
-    const [salt, expected] = saved.split(':');
-    if (
-      !timingSafeEqual(
-        Buffer.from(expected, 'hex'),
-        scryptSync(password, salt, 64),
-      )
-    )
-      throw fail(401, 'Incorrect password');
-    login(res);
-    res.json({ ok: true });
-  });
-  app.post('/api/logout', admin, (req, res) => {
-    const token = req.headers.cookie
-      .split(';')
-      .map((s) => s.trim())
-      .find((s) => s.startsWith('openframe_session='))
-      ?.slice(18);
-    if (token)
-      db.prepare('DELETE FROM sessions WHERE token=?').run(hash(token));
-    res.clearCookie('openframe_session', { path: '/' });
-    res.json({ ok: true });
-  });
+  accounts.mount(app, rateLimit);
   const vault = mountScreenSetup(app, {
-    admin,
+    admin: superadmin,
     db,
     root,
     list,
@@ -214,7 +183,7 @@ export function createApp({
     vault,
   });
   const managedVpn = mountManagedVpn(app, {
-    admin,
+    admin: superadmin,
     player,
     list,
     get,
@@ -230,6 +199,119 @@ export function createApp({
     folderId: null,
     createdAt: null,
     ...a,
+  });
+  const grants = (kind, id) =>
+    db
+      .prepare(
+        'SELECT userId,groupId FROM resource_grants WHERE kind=? AND id=?',
+      )
+      .all(kind, id);
+  function canShare(user, kind, id) {
+    return (
+      user.role === 'superadmin' ||
+      db
+        .prepare(
+          'SELECT 1 FROM resource_access WHERE kind=? AND id=? AND ownerId=?',
+        )
+        .get(kind, id, user.id)
+    );
+  }
+  function dependencies(kind, item) {
+    if (kind === 'folder')
+      return allRecords('asset')
+        .filter((a) => a.folderId === item.id)
+        .map((a) => ['asset', a.id]);
+    if (kind === 'slide')
+      return item.layers
+        .filter((l) => l.type === 'image')
+        .map((l) => ['asset', l.assetId]);
+    if (kind === 'playlist')
+      return [
+        ...item.items.map((i) => ['slide', i.slideId]),
+        ...(item.published?.assets || []).map((a) => ['asset', a.id]),
+      ];
+    if (kind === 'device' && item.playlistId)
+      return [['playlist', item.playlistId]];
+    return [];
+  }
+  function grantTree(user, kind, id, target, visited = new Set()) {
+    const key = `${kind}:${id}`;
+    if (visited.has(key)) return;
+    visited.add(key);
+    const item = requireRecord(kind, id);
+    const exists = grants(kind, id).some(
+      (g) => g.userId === target.userId && g.groupId === target.groupId,
+    );
+    if (!exists && !canShare(user, kind, id))
+      throw fail(
+        403,
+        'Only the owner or super-admin can share this item and its contents',
+      );
+    if (!exists)
+      db.prepare('INSERT INTO resource_grants VALUES (?,?,?,?)').run(
+        kind,
+        id,
+        target.userId,
+        target.groupId,
+      );
+    for (const [childKind, childId] of dependencies(kind, item))
+      grantTree(user, childKind, childId, target, visited);
+  }
+  app.get('/api/access/:kind/:id', admin, (req, res) => {
+    const { kind, id } = req.params;
+    if (!['slide', 'asset', 'playlist', 'folder', 'device'].includes(kind))
+      throw fail(400, 'Invalid resource');
+    requireRecord(kind, id);
+    res.json({
+      canShare: !!canShare(req.user, kind, id),
+      grants: grants(kind, id),
+    });
+  });
+  app.post('/api/access/:kind/:id', admin, (req, res) => {
+    const { kind, id } = req.params;
+    if (!['slide', 'asset', 'playlist', 'folder', 'device'].includes(kind))
+      throw fail(400, 'Invalid resource');
+    const target = z
+      .object({
+        userId: z.string().default(''),
+        groupId: z.string().default(''),
+        remove: z.boolean().default(false),
+      })
+      .parse(req.body);
+    if (!!target.userId === !!target.groupId)
+      throw fail(400, 'Choose one user or group');
+    requireRecord(kind, id);
+    if (!canShare(req.user, kind, id))
+      throw fail(403, 'Owner or super-admin required');
+    if (
+      target.userId &&
+      (req.user.role !== 'superadmin' ||
+        !db
+          .prepare('SELECT id FROM users WHERE id=? AND (disabled=0 OR ?=1)')
+          .get(target.userId, Number(target.remove)))
+    )
+      throw fail(403, 'Super-admin assigns users');
+    if (
+      target.groupId &&
+      (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
+        (!target.remove &&
+          req.user.role !== 'superadmin' &&
+          !accounts.member(req.user, target.groupId)))
+    )
+      throw fail(403, 'Join the group before sharing');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      if (target.remove)
+        db.prepare(
+          'DELETE FROM resource_grants WHERE kind=? AND id=? AND userId=? AND groupId=?',
+        ).run(kind, id, target.userId, target.groupId);
+      else grantTree(req.user, kind, id, target);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    res.json({ ok: true });
   });
   app.get('/api/library', admin, (req, res) =>
     res.json({
@@ -273,7 +355,7 @@ export function createApp({
   app.delete('/api/slides/:id', admin, (req, res) => {
     requireRecord('slide', req.params.id);
     if (
-      list('playlist').some((p) =>
+      allRecords('playlist').some((p) =>
         p.items.some((i) => i.slideId === req.params.id),
       )
     )
@@ -307,7 +389,7 @@ export function createApp({
   });
   app.delete('/api/playlists/:id', admin, (req, res) => {
     requireRecord('playlist', req.params.id);
-    if (list('device').some((d) => d.playlistId === req.params.id))
+    if (allRecords('device').some((d) => d.playlistId === req.params.id))
       throw fail(409, 'Unassign this playlist from devices first');
     remove('playlist', req.params.id);
     res.json({ ok: true });
@@ -457,7 +539,7 @@ export function createApp({
   });
   app.delete('/api/folders/:id', admin, (req, res) => {
     requireRecord('folder', req.params.id);
-    if (list('asset').some((a) => a.folderId === req.params.id))
+    if (allRecords('asset').some((a) => a.folderId === req.params.id))
       throw fail(409, 'Move the images out of this folder before deleting it');
     remove('folder', req.params.id);
     res.json({ ok: true });
@@ -476,11 +558,11 @@ export function createApp({
     validateFolder(patch.folderId);
     if (patch.action === 'delete') {
       const used = new Set(
-        list('slide').flatMap((s) =>
+        allRecords('slide').flatMap((s) =>
           s.layers.filter((l) => l.type === 'image').map((l) => l.assetId),
         ),
       );
-      for (const p of list('playlist'))
+      for (const p of allRecords('playlist'))
         for (const a of p.published?.assets || []) used.add(a.id);
       const blocked = assets.filter((a) => used.has(a.id));
       if (blocked.length)
@@ -524,7 +606,16 @@ export function createApp({
   app.get(
     '/media/:filename',
     (req, res, next) => {
-      if (session(req)) return next();
+      const user = session(req);
+      if (user) {
+        res.locals.userMedia = true;
+        const asset = list('asset').find(
+          (a) => a.filename === req.params.filename,
+        );
+        if (!asset || !accounts.can(user, 'asset', asset.id))
+          return res.status(404).json({ error: 'Not found' });
+        return next();
+      }
       player(req, res, () => {
         if (!req.device.approved)
           return res.status(403).json({ error: 'Approval required' });
@@ -542,7 +633,12 @@ export function createApp({
         !existsSync(path.join(root, 'media', req.params.filename))
       )
         throw fail(404, 'Not found');
-      res.set('Cache-Control', 'private, max-age=31536000, immutable');
+      res.set(
+        'Cache-Control',
+        res.locals.userMedia
+          ? 'private, no-store'
+          : 'private, max-age=31536000, immutable',
+      );
       res.sendFile(path.join(root, 'media', req.params.filename));
     },
   );
@@ -600,7 +696,7 @@ export function createApp({
     });
     res.status(201).json({ id: device.id, token, code });
   });
-  app.post('/api/devices/:id/approve', admin, (req, res) => {
+  app.post('/api/devices/:id/approve', superadmin, (req, res) => {
     const device = requireRecord('device', req.params.id);
     const { code } = z.object({ code: z.string() }).parse(req.body);
     if (device.code !== code.trim().toUpperCase())
@@ -627,7 +723,7 @@ export function createApp({
     put('device', device);
     res.json({ ok: true });
   });
-  app.delete('/api/devices/:id', admin, async (req, res) => {
+  app.delete('/api/devices/:id', superadmin, async (req, res) => {
     requireRecord('device', req.params.id);
     remove('device', req.params.id);
     recovery.remove(req.params.id);

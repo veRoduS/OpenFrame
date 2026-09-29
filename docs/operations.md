@@ -100,4 +100,4 @@ To roll back, stop the failed deployment and use the previous source tag. Do not
 | Offline first boot is blank | Initial provisioning and first publication download require connectivity |
 | Pi fills its SD card | Cached assets are retained; monitor disk use and plan maintenance |
 
-Pi diagnostics: `sudo systemctl status openframe-agent`, `sudo journalctl -u openframe-agent -n 100`, and `sudo journalctl -u openframe-firstboot -n 100`. WireGuard/Cloudflare-specific checks are in their guides. Do not attach unredacted logs or configuration to public issues. There is no supported administrator password-reset command yet; do not delete your database to reset a password.
+Pi diagnostics: `sudo systemctl status openframe-agent`, `sudo journalctl -u openframe-agent -n 100`, and `sudo journalctl -u openframe-firstboot -n 100`. WireGuard/Cloudflare-specific checks are in their guides. Do not attach unredacted logs or configuration to public issues. For administrator recovery, follow [Users and groups](users-and-groups.md#upgrade-and-recovery); do not delete your database.

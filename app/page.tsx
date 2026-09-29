@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { version } from '../package.json';
+import { Accounts, type Auth } from './accounts';
 import { DeviceRecovery } from './device-recovery';
 import { WeatherOptions } from './weather-options';
 import {
   Monitor,
+  Users,
   FileCog,
   LayoutTemplate,
   ListVideo,
@@ -187,14 +189,15 @@ const viewInfo = {
   playlists: { title: 'Playlists', icon: ListVideo },
   devices: { title: 'Screens', icon: Monitor },
   media: { title: 'Media', icon: Images },
+  accounts: { title: 'Users & Groups', icon: Users },
 };
 type View = keyof typeof viewInfo;
 
 export default function App() {
-  const [auth, setAuth] = useState<{
-    setup: boolean;
-    authenticated: boolean;
-  } | null>(null);
+  const [auth, setAuth] = useState<Auth | null>(null);
+  const [activation, setActivation] = useState(() =>
+    new URLSearchParams(location.hash.slice(1)).get('activate'),
+  );
   const [library, setLibrary] = useState<Library>(emptyLibrary);
   const [view, setView] = useState<View>('slides');
   const [error, setError] = useState('');
@@ -226,7 +229,7 @@ export default function App() {
     })();
   };
   useEffect(() => {
-    api<{ setup: boolean; authenticated: boolean }>('/api/auth')
+    api<Auth>('/api/auth')
       .then(setAuth)
       .catch((e) => setError(e.message));
   }, []);
@@ -308,7 +311,7 @@ export default function App() {
           <p>{error || 'Connecting to your server...'}</p>
           {error && <button onClick={() => location.reload()}>Retry</button>}
         </div>
-      ) : !auth.authenticated ? (
+      ) : !auth.authenticated || activation ? (
         <div className="auth-screen">
           <div className="auth-brand">
             <Monitor />
@@ -318,26 +321,61 @@ export default function App() {
             className="auth-form"
             onSubmit={(e) => {
               e.preventDefault();
-              const password = new FormData(e.currentTarget).get('password');
+              const form = new FormData(e.currentTarget);
+              const password = form.get('password');
               run(async () => {
-                await api(auth.setup ? '/api/setup' : '/api/login', 'POST', {
-                  password,
-                });
-                setAuth({ setup: false, authenticated: true });
+                if (activation && password !== form.get('confirm'))
+                  throw new Error('Passwords do not match');
+                await api(
+                  activation
+                    ? '/api/activate'
+                    : auth.setup
+                      ? '/api/setup'
+                      : '/api/login',
+                  'POST',
+                  {
+                    password,
+                    username: form.get('username'),
+                    token: activation,
+                  },
+                );
+                const signedIn = await api<Auth>('/api/auth');
+                setLibrary(emptyLibrary);
+                setEditing(null);
+                setPlaylist(null);
+                setPreview(null);
+                setActivation(null);
+                history.replaceState(null, '', location.pathname);
+                setAuth(signedIn);
               });
             }}
           >
             <span className="eyebrow">YOUR LOCAL SIGNAGE SERVER</span>
             <h1>
-              {auth.setup
-                ? 'Make room for\na better display.'
-                : 'Welcome back.'}
+              {activation
+                ? 'Set your password.'
+                : auth.setup
+                  ? 'Make room for\na better display.'
+                  : 'Welcome back.'}
             </h1>
             <p>
-              {auth.setup
-                ? 'Create your administrator password.'
-                : 'Sign in to OpenFrame.'}
+              {activation
+                ? 'Choose a password for your account.'
+                : auth.setup
+                  ? 'Create your administrator password.'
+                  : 'Sign in to OpenFrame.'}
             </p>
+            {!activation && (
+              <label>
+                Username
+                <input
+                  name="username"
+                  autoComplete="username"
+                  defaultValue={auth.setup ? 'admin' : ''}
+                  required
+                />
+              </label>
+            )}
             <label>
               Password
               <input
@@ -346,17 +384,36 @@ export default function App() {
                 minLength={12}
                 maxLength={256}
                 required
-                autoComplete={auth.setup ? 'new-password' : 'current-password'}
+                autoComplete={
+                  auth.setup || activation ? 'new-password' : 'current-password'
+                }
                 placeholder="At least 12 characters"
               />
             </label>
+            {activation && (
+              <label>
+                Confirm password
+                <input
+                  name="confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={12}
+                  maxLength={256}
+                />
+              </label>
+            )}
             {error && (
               <div role="alert" className="inline-error">
                 {error}
               </div>
             )}
             <button className="primary" disabled={busy}>
-              {auth.setup ? 'Create administrator' : 'Sign in'}{' '}
+              {activation
+                ? 'Set password & sign in'
+                : auth.setup
+                  ? 'Create administrator'
+                  : 'Sign in'}{' '}
               <ArrowLeft className="rotate-180" size={18} />
             </button>
           </form>
@@ -394,9 +451,11 @@ export default function App() {
                       <item.icon size={18} />
                       <span>{item.title}</span>
                       <span className="nav-count">
-                        {key === 'media'
-                          ? library.assets.length
-                          : library[key].length}
+                        {key === 'accounts'
+                          ? ''
+                          : key === 'media'
+                            ? library.assets.length
+                            : library[key].length}
                       </span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -417,6 +476,7 @@ export default function App() {
                   onClick={() =>
                     run(async () => {
                       await api('/api/logout', 'POST');
+                      setLibrary(emptyLibrary);
                       setAuth({ setup: false, authenticated: false });
                     })
                   }
@@ -451,7 +511,9 @@ export default function App() {
                         ? 'ORDER & PUBLISH'
                         : view === 'devices'
                           ? 'YOUR DISPLAY NETWORK'
-                          : 'IMAGE LIBRARY'}
+                          : view === 'accounts'
+                            ? 'PEOPLE & ACCESS'
+                            : 'IMAGE LIBRARY'}
                   </span>
                   <h1>{viewInfo[view].title}</h1>
                 </div>
@@ -481,7 +543,7 @@ export default function App() {
                       New playlist
                     </button>
                   )}
-                  {view === 'devices' && (
+                  {view === 'devices' && auth.user?.role === 'superadmin' && (
                     <>
                       <button onClick={() => setSetupOpen(true)}>
                         <FileCog size={18} />
@@ -514,6 +576,13 @@ export default function App() {
                     <X size={18} />
                   </button>
                 </div>
+              )}
+              {view === 'accounts' && auth.user && (
+                <Accounts
+                  user={auth.user}
+                  library={library}
+                  refresh={refresh}
+                />
               )}
               {view === 'slides' && (
                 <>
@@ -729,6 +798,7 @@ export default function App() {
                         <DeviceRow
                           key={d.id}
                           device={d}
+                          canManage={auth.user?.role === 'superadmin'}
                           playlists={library.playlists}
                           busy={busy}
                           onSave={(patch) =>
@@ -930,8 +1000,10 @@ function DeviceRow({
   onCommand,
   onDelete,
   busy,
+  canManage,
 }: {
   device: Device;
+  canManage: boolean;
   playlists: Playlist[];
   onSave: (d: Device) => void;
   onApprove: () => void;
@@ -1031,9 +1103,11 @@ function DeviceRow({
               >
                 <Power size={18} />
               </IconButton>
-              <IconButton label="Revoke device" onClick={onDelete}>
-                <Trash2 size={18} />
-              </IconButton>
+              {canManage && (
+                <IconButton label="Revoke device" onClick={onDelete}>
+                  <Trash2 size={18} />
+                </IconButton>
+              )}
             </div>
           </div>
           {device.command && (
@@ -1064,10 +1138,12 @@ function DeviceRow({
         </>
       ) : (
         <div className="device-controls">
-          <button onClick={onApprove}>Enter pairing code</button>
-          <IconButton label="Remove pending screen" onClick={onDelete}>
-            <Trash2 size={18} />
-          </IconButton>
+          {canManage && <button onClick={onApprove}>Enter pairing code</button>}
+          {canManage && (
+            <IconButton label="Remove pending screen" onClick={onDelete}>
+              <Trash2 size={18} />
+            </IconButton>
+          )}
         </div>
       )}
     </article>

@@ -2,6 +2,8 @@
 
 ## Install and operate
 
+- [Users and groups](users-and-groups.md): individual passwords, invitations, screen assignments, and shared libraries.
+
 - [NWS weather widget](weather.md): shared location caching, forecast setup, offline behavior, and player upgrades.
 
 - [Player connection and recovery Wi-Fi](player-recovery.md): QR onboarding, cached playback, heartbeat, and time-boxed hidden recovery hotspots.
