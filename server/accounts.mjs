@@ -187,6 +187,30 @@ export function createAccounts(db) {
     );
     return value;
   }
+  function seedInitialAdmin() {
+    // Serialize the empty-database check so simultaneous starts cannot seed twice.
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      if (db.prepare('SELECT id FROM users LIMIT 1').get()) {
+        db.exec('COMMIT');
+        return null;
+      }
+      const credentials = {
+        username: 'superadmin',
+        password: randomBytes(24).toString('base64url'),
+      };
+      createUser({
+        ...credentials,
+        name: 'Super Administrator',
+        role: 'superadmin',
+      });
+      db.exec('COMMIT');
+      return credentials;
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   function mount(app, rateLimit) {
     app.get('/api/auth', (req, res) => {
       const user = session(req);
@@ -426,6 +450,7 @@ export function createAccounts(db) {
     groupAdmin,
     member,
     createUser,
+    seedInitialAdmin,
     context,
   };
 }

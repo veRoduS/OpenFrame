@@ -13,7 +13,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open http://localhost:3100 and create a development administrator. The server creates `data/` automatically. Use a separate `DATA_DIR` for test installations; never develop against your only production database. Local Node does not load `.env` automatically: set environment variables in your shell. Compose reads `.env` for interpolation.
+Open http://localhost:3100 and sign in as `superadmin` using the unique password printed in the terminal on the first start. The server creates `data/` automatically. Existing accounts are preserved on restart. Use a separate `DATA_DIR` for test installations; never develop against your only production database. Local Node does not load `.env` automatically: set environment variables in your shell. Compose reads `.env` for interpolation.
 
 ## Verification
 

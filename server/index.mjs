@@ -3,7 +3,16 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const project = fileURLToPath(new URL('..', import.meta.url));
-const { app, db, close } = createApp();
+const { app, db, close, seedInitialAdmin } = createApp();
+const initialAdmin = seedInitialAdmin();
+if (initialAdmin) {
+  console.log('OpenFrame: created a unique super-admin for this installation.');
+  console.log(`Username: ${initialAdmin.username}`);
+  console.log(`Initial password: ${initialAdmin.password}`);
+  console.log(
+    'Store this password securely. Change it under Users & Groups > My password. It will not be printed again.',
+  );
+}
 app.use('/player', express.static(path.join(project, 'player/web')));
 if (process.argv.includes('--dev')) {
   const { createServer } = await import('vite');
@@ -20,7 +29,7 @@ if (process.argv.includes('--dev')) {
 }
 const port = Number(process.env.PORT || 3100);
 const server = app.listen(port, process.env.HOST || '0.0.0.0', () =>
-  console.log(`OpenFrame: http://localhost:${port}`),
+  console.log(`OpenFrame: http://localhost:${server.address().port}`),
 );
 function stop() {
   close();

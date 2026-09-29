@@ -813,6 +813,7 @@ export function createApp({
   return {
     app,
     db,
+    seedInitialAdmin: accounts.seedInitialAdmin,
     close: () => {
       weather.close();
       zipLookup.close();

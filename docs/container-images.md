@@ -33,7 +33,7 @@ docker compose pull
 docker compose up -d
 ```
 
-On PowerShell use `Copy-Item .env.example .env`. Open http://localhost:3100 or the server's LAN address. Set the initial administrator password privately before exposing a public hostname. Keep the directory/project name stable so subsequent upgrades reuse the same named data volume.
+On PowerShell use `Copy-Item .env.example .env`. Read the unique initial password with `docker compose logs openframe`. Open http://localhost:3100 or the server's LAN address, sign in as `superadmin`, and change the password under **Users & Groups > My password**. Keep the directory/project name stable so subsequent upgrades reuse the same named data volume and accounts.
 
 From a full repository checkout instead of an artifact, set `OPENFRAME_IMAGE` in `.env` to an existing milestone image such as `ghcr.io/verodus/openframe:0.2.0` (or preferably its published `@sha256:...` manifest digest), then run:
 

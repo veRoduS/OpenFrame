@@ -13,7 +13,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-In PowerShell use `Copy-Item .env.example .env`. Open http://localhost:3100, or the server's LAN address, and immediately create the administrator password. Do this privately before exposing any public hostname. Reserve the server's LAN address or give it stable DNS, then follow [first playlist](../README.md#first-playlist) and [Pi installation](../README.md#raspberry-pi-installation).
+In PowerShell use `Copy-Item .env.example .env`. Read the unique initial password with `docker compose logs openframe`, then open http://localhost:3100 or the server's LAN address and sign in as `superadmin`. Change the password under **Users & Groups > My password**. Protect access to server logs; the password is printed only when an empty installation is initialized. Restarts preserve accounts and do not print passwords again. Reserve the server's LAN address or give it stable DNS, then follow [first playlist](../README.md#first-playlist) and [Pi installation](../README.md#raspberry-pi-installation).
 
 Do not run multiple server containers against one SQLite volume. This is a single-server deployment, not an HA cluster. Production and development data are separate: Docker uses a named volume, local Node uses `./data` by default.
 

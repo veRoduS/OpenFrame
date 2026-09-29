@@ -2,6 +2,12 @@
 
 Open **Users & Groups** in the sidebar. Each person signs in with their own username and password.
 
+## First sign-in
+
+Each fresh installation automatically creates `superadmin` with its own cryptographically random, 32-character password before the server accepts connections. For Docker, read it with `docker compose logs openframe`; for a local server, read the startup terminal output. Sign in and change it under **My password**. No account database or reusable password is bundled with the source or container image.
+
+The password is printed only at creation; only its salted hash is saved to SQLite. Protect startup logs, which may retain that initial password. Restarts and upgrades never regenerate existing credentials or add an extra seeded account. A genuinely empty data volume creates a new independent installation; copying an existing volume copies its accounts. If the initial log is lost, use the local recovery command below with an unused username.
+
 ## Invite a user
 
 1. As a super-admin, select **Users**, enter the person's name and a unique username, then select **Invite user**.

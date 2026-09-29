@@ -406,6 +406,7 @@ void test('legacy administrator migrates without losing content or retaining ano
   assert.equal(user.username, 'admin');
   assert.equal(user.password, saved);
   assert.equal(user.role, 'superadmin');
+  assert.equal(instance.seedInitialAdmin(), null);
   assert.equal(
     instance.db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n,
     0,

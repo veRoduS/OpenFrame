@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.5.7] - 2026-09-29
+
+- Seed a unique random super-admin on each fresh server installation
+
 ## [0.5.6] - 2026-09-29
 
 - Add individual users, password invitations, group sharing, and assigned screen access

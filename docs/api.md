@@ -2,7 +2,7 @@
 
 ## User accounts and access
 
-`GET /api/auth` includes `user:{id,username,name,role,disabled}` when signed in. Setup accepts `{username?,password}` and creates the first super-admin. All library reads, edits, previews, reference validation, and browser media requests are checked against ownership and direct/group grants. Inaccessible resources return 404. Player APIs retain their existing device-token authorization.
+`GET /api/auth` includes `user:{id,username,name,role,disabled}` when signed in. Normal server startup seeds a unique super-admin before listening, so `setup` is false and `/api/setup` returns 409. The legacy setup route remains for isolated application-factory tests; custom entrypoints must call the returned `seedInitialAdmin()` before accepting requests, as `server/index.mjs` does. Initial credentials are never exposed through HTTP. All library reads, edits, previews, reference validation, and browser media requests are checked against ownership and direct/group grants. Inaccessible resources return 404. Player APIs retain their existing device-token authorization.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | --- | --- | --- |
 | GET | `/api/health` | Health and version |
 | GET | `/api/auth` | Initial setup and session status |
-| POST | `/api/setup` | Set first administrator password; `{password}` |
+| POST | `/api/setup` | Legacy initialization; returns 409 on normally started servers |
 | POST | `/api/login` | Sign in; `{username,password}` (omitted username defaults to `admin` for compatibility) |
 | POST | `/api/logout` | Revoke current session |
 | GET | `/api/library` | Slides, playlist summaries, assets, folders, device status |
