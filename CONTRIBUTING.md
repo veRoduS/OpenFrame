@@ -4,6 +4,8 @@ OpenFrame is an independent MIT-licensed project for local-first digital signage
 
 ## Development setup
 
+For the recommended cloud workflow, see [Codex Cloud](docs/codex-cloud.md). Cloud tasks should use isolated task workspaces and follow the same local-patch versus approved-milestone release rules below.
+
 Install Node.js 24 and pnpm 11.19.0 (`npm install --global pnpm@11.19.0`). Python 3.9+ is required for the standard-library player tests; Linux is required for actual Pi image construction. Docker with the Compose plugin is needed for container acceptance tests. No account or API key is required for local development.
 
 From the repository root:

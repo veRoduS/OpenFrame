@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.9.0] - 2026-09-30
+
+- Approved GitHub milestone preserving local revision 0.8.1 and its history.
+- Document provider-neutral HTTPS proxy setup, cookie security, and origin-error recovery for deployments behind different reverse proxies.
+- Add a Codex Cloud guide for connecting this GitHub repository, preparing the toolchain, validating cloud tasks, and preserving patch/milestone release controls.
+- No application runtime or player behavior changes. The milestone workflow publishes server images under `0.9.0` and `latest` only after CI and native AMD64/ARM64 container checks pass. No deployment or physical Pi validation is included.
+
 ## [0.8.1] - 2026-09-30
 
 - Document provider-neutral HTTPS proxy setup and origin-error recovery

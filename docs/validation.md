@@ -1,5 +1,11 @@
 # Validation record
 
+## GitHub milestone 0.9.0
+
+Checked on 2026-09-30: 112 Node tests (including real Python-agent integration), 85 Python tests, typecheck, lint, production build, version consistency, and repository/documentation checks passed. This milestone preserves local revision 0.8.1 and adds Codex Cloud onboarding/deployment documentation; no application runtime or player behavior changes. Browser suites, an isolated clean install, and a dependency audit were not repeated for this documentation-focused milestone.
+
+Docker is unavailable in this development environment. Consult the actual GitHub Actions run for native AMD64/ARM64 container checks and image-publication status. Physical Pi performance and deployment validation are not claimed. No application deployment or player update is included.
+
 ## Pre-publication 0.8.0
 
 Checked on 2026-09-30: 111 Node tests including real Python-agent integration and 85 Python tests passed, along with typecheck, lint, formatting, production build, three Pi shell syntax checks, and version/repository checks. An isolated frozen-lockfile install using the repository's build-script policy passed. The production dependency audit reported no known vulnerabilities. The new access controls and dialog were visually checked against isolated preview data on desktop and phone layouts during revision 0.7.1. The complete browser automation suite was not repeated for this milestone.
