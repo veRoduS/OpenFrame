@@ -1,6 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { version } from '../package.json';
 import { Accounts, type Auth } from './accounts';
+import {
+  ManageAccessButton,
+  ResourceAccessDialog,
+  type SharedResource,
+} from './resource-access';
 import { DeviceRecovery } from './device-recovery';
 import { WeatherOptions } from './weather-options';
 import {
@@ -213,6 +218,9 @@ export default function App() {
   const [pairCode, setPairCode] = useState('');
   const [pairOpen, setPairOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [accessResource, setAccessResource] = useState<SharedResource | null>(
+    null,
+  );
   const refresh = async () => setLibrary(await api<Library>('/api/library'));
   const run = (action: () => Promise<void>, message = '') => {
     void (async () => {
@@ -473,10 +481,6 @@ export default function App() {
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
-              <div className="server-label">
-                <span className="status-dot" />
-                Local server<span>Connected</span>
-              </div>
             </SidebarContent>
             <SidebarFooter>
               <div className="nav-bottom">
@@ -507,10 +511,6 @@ export default function App() {
                 <span>/</span>
                 <strong>{viewInfo[view].title}</strong>
               </div>
-              <span className="local-badge">
-                <Circle size={8} fill="currentColor" />
-                Self-hosted
-              </span>
             </header>
             <div className="page-content">
               <div
@@ -661,6 +661,16 @@ export default function App() {
                               <Trash2 size={16} />
                             </IconButton>
                           </div>
+                          <ManageAccessButton
+                            resourceName={slide.name}
+                            onClick={() =>
+                              setAccessResource({
+                                kind: 'slide',
+                                id: slide.id,
+                                name: slide.name,
+                              })
+                            }
+                          />
                         </article>
                       ))}
                     </div>
@@ -725,6 +735,16 @@ export default function App() {
                               <Play size={18} />
                             </IconButton>
                             <button onClick={() => setPlaylist(p)}>Edit</button>
+                            <ManageAccessButton
+                              resourceName={p.name}
+                              onClick={() =>
+                                setAccessResource({
+                                  kind: 'playlist',
+                                  id: p.id,
+                                  name: p.name,
+                                })
+                              }
+                            />
                             <IconButton
                               label={`Delete ${p.name}`}
                               onClick={() =>
@@ -824,6 +844,13 @@ export default function App() {
                             setPairCode('');
                             setPairOpen(true);
                           }}
+                          onManageAccess={() =>
+                            setAccessResource({
+                              kind: 'device',
+                              id: d.id,
+                              name: d.name,
+                            })
+                          }
                           onCommand={(type) => {
                             const action = async () => {
                               await api(
@@ -870,6 +897,13 @@ export default function App() {
                   folders={library.folders}
                   onRefresh={refresh}
                   onUpload={upload}
+                  onManageAccess={(asset) =>
+                    setAccessResource({
+                      kind: 'asset',
+                      id: asset.id,
+                      name: asset.name,
+                    })
+                  }
                 />
               )}
             </div>
@@ -914,6 +948,14 @@ export default function App() {
             />
           )}
           {setupOpen && <ScreenSetup onClose={() => setSetupOpen(false)} />}
+          {auth.user && (
+            <ResourceAccessDialog
+              resource={accessResource}
+              user={auth.user}
+              onClose={() => setAccessResource(null)}
+              refresh={refresh}
+            />
+          )}
           <Modal
             title="Pair a screen"
             description="Enter the eight-character code shown on the player display."
@@ -1012,6 +1054,7 @@ function DeviceRow({
   onApprove,
   onCommand,
   onDelete,
+  onManageAccess,
   busy,
   canManage,
 }: {
@@ -1022,6 +1065,7 @@ function DeviceRow({
   onApprove: () => void;
   onCommand: (type: 'refresh' | 'reboot') => void;
   onDelete: () => void;
+  onManageAccess: () => void;
   busy: boolean;
 }) {
   const [name, setName] = useState(device.name);
@@ -1102,6 +1146,10 @@ function DeviceRow({
               />
             </label>
             <div className="row-actions">
+              <ManageAccessButton
+                resourceName={device.name}
+                onClick={onManageAccess}
+              />
               <IconButton
                 label="Refresh content"
                 disabled={busy}

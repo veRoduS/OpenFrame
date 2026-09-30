@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/tooltip';
 import { api, type Asset, type MediaFolder } from './types';
 import { visibleMedia, parseTags } from './media-utils.mjs';
+import { ManageAccessButton } from './resource-access';
 
 function Tool({
   label,
@@ -75,12 +76,14 @@ export function MediaLibrary({
   onRefresh,
   onUpload,
   onPick,
+  onManageAccess,
 }: {
   assets: Asset[];
   folders: MediaFolder[];
   onRefresh: () => Promise<void>;
   onUpload: (file: File, folderId?: string | null) => Promise<Asset>;
   onPick?: (asset: Asset) => void;
+  onManageAccess?: (asset: Asset) => void;
 }) {
   const [folder, setFolder] = useState('all');
   const [search, setSearch] = useState('');
@@ -470,6 +473,12 @@ export function MediaLibrary({
                       ))}
                     </div>
                   </div>
+                  {!onPick && onManageAccess && (
+                    <ManageAccessButton
+                      resourceName={a.name}
+                      onClick={() => onManageAccess(a)}
+                    />
+                  )}
                 </article>
               ))}
             </div>

@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.7.1] - 2026-09-29
+
+- Improve sharing controls and dialog layout
+
 ## [0.7.0] - 2026-09-29
 
 - Approved GitHub milestone follow-up: fix the seeded-administrator Docker smoke test so the multi-platform image can complete publishing. Preserve the existing `v0.6.0` tag and history.

@@ -34,7 +34,7 @@ Members collaborate as editors on content shared with the group, including editi
 
 ## Screen assignments and sharing
 
-Under **Sharing & assignments**, choose Screens, Slides, Playlists, Media, or Folders, then **Access** beside an item.
+Manage sharing from **Sharing & assignments** or select **Manage access** on a slide, playlist, screen, or media item to open its access settings in place. Slides and media have a labeled access footer; playlists and screens have a button beside their other controls. Choose a group to share with; super-admins can also assign individual users. Folders remain available in the central sharing list.
 
 - Super-admins can assign screens and other resources to individual users or groups.
 - Owners can share their own items with groups they belong to.

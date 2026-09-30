@@ -4,7 +4,6 @@ import {
   KeyRound,
   Plus,
   Share2,
-  Shield,
   UserRound,
   Users,
   X,
@@ -16,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from './components/ui/dialog';
+import { ResourceAccessDialog } from './resource-access';
 
 export type User = {
   id: string;
@@ -31,12 +31,31 @@ type Group = {
   canManage: boolean;
   members: (User & { role: string })[];
 };
-type Grant = { userId: string; groupId: string };
 type Resource = { kind: string; id: string; name: string };
 const fields = (event: SyntheticEvent<HTMLFormElement>) => {
   event.preventDefault();
   return Object.fromEntries(new FormData(event.currentTarget));
 };
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input = document.createElement('textarea');
+  input.value = value;
+  input.setAttribute('readonly', '');
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.append(input);
+  input.select();
+  const copyCommand = Reflect.get(document, 'execCommand') as
+    | ((command: string) => boolean)
+    | undefined;
+  const copied = copyCommand?.call(document, 'copy') ?? false;
+  input.remove();
+  if (!copied)
+    throw new Error('Copy is unavailable. Select and copy the link instead.');
+}
 
 export function Accounts({
   user,
@@ -58,10 +77,6 @@ export function Accounts({
     group: boolean;
   } | null>(null);
   const [selected, setSelected] = useState<Resource | null>(null);
-  const [access, setAccess] = useState<{
-    canShare: boolean;
-    grants: Grant[];
-  } | null>(null);
   const [kind, setKind] = useState('device');
   const [search, setSearch] = useState('');
   const isSuper = user.role === 'superadmin';
@@ -83,15 +98,6 @@ export function Accounts({
     } finally {
       setBusy(false);
     }
-  }
-  async function share(target: Grant, remove = false) {
-    if (!selected) return;
-    await api(`/api/access/${selected.kind}/${selected.id}`, 'POST', {
-      ...target,
-      remove,
-    });
-    setAccess(await api(`/api/access/${selected.kind}/${selected.id}`));
-    await refresh();
   }
   const resources: Record<string, { id: string; name: string }[]> = {
     device: library.devices,
@@ -468,16 +474,7 @@ export function Accounts({
                   <strong>{item.name}</strong>
                   <button
                     disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        const result = await api<{
-                          canShare: boolean;
-                          grants: Grant[];
-                        }>(`/api/access/${kind}/${item.id}`);
-                        setAccess(result);
-                        setSelected({ kind, ...item });
-                      })
-                    }
+                    onClick={() => setSelected({ kind, ...item })}
                   >
                     <Share2 size={16} />
                     Access
@@ -521,7 +518,7 @@ export function Accounts({
             onClick={() =>
               void run(async () => {
                 if (invitation) {
-                  await navigator.clipboard.writeText(
+                  await copyText(
                     invitation.group
                       ? invitation.value
                       : `${location.origin}/login#activate=${invitation.value}`,
@@ -536,95 +533,12 @@ export function Accounts({
           </button>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={!!selected}
-        onOpenChange={(v) => {
-          if (!v) setSelected(null);
-        }}
-      >
-        <DialogContent className="of-modal">
-          <DialogTitle>Access: {selected?.name}</DialogTitle>
-          <DialogDescription>
-            Shared members can edit this item. Sharing includes its current
-            slides and images. Removing access here does not remove separately
-            shared content.
-          </DialogDescription>
-          {error && (
-            <p role="alert" className="inline-error">
-              {error}
-            </p>
-          )}
-          {access?.grants.map((grant) => (
-            <div className="account-row" key={grant.userId || grant.groupId}>
-              <span>
-                {grant.userId
-                  ? users.find((u) => u.id === grant.userId)?.name ||
-                    'Assigned user'
-                  : groups.find((g) => g.id === grant.groupId)?.name ||
-                    'Shared group'}
-              </span>
-              {access.canShare && (
-                <button
-                  aria-label="Remove access"
-                  title="Remove access"
-                  disabled={busy}
-                  onClick={() => void run(() => share(grant, true))}
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-          ))}
-          {access?.canShare ? (
-            <form
-              className="account-form"
-              onSubmit={(e) => {
-                const data = fields(e);
-                const [type, id] = (data.target as string).split(':');
-                void run(() =>
-                  share({
-                    userId: type === 'user' ? id : '',
-                    groupId: type === 'group' ? id : '',
-                  }),
-                );
-              }}
-            >
-              <label>
-                Share with
-                <select
-                  aria-label="Share with"
-                  name="target"
-                  required
-                  defaultValue=""
-                >
-                  <option value="" disabled>
-                    Select a group{isSuper ? ' or user' : ''}
-                  </option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={`group:${g.id}`}>
-                      {g.name} (group)
-                    </option>
-                  ))}
-                  {isSuper &&
-                    users
-                      .filter((u) => !u.disabled)
-                      .map((u) => (
-                        <option key={u.id} value={`user:${u.id}`}>
-                          {u.name} ({u.username})
-                        </option>
-                      ))}
-                </select>
-              </label>
-              <button className="primary" disabled={busy}>
-                <Shield size={16} />
-                Grant access
-              </button>
-            </form>
-          ) : (
-            <p>Only the owner or super-admin can change sharing.</p>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ResourceAccessDialog
+        resource={selected}
+        user={user}
+        onClose={() => setSelected(null)}
+        refresh={refresh}
+      />
     </div>
   );
 }
