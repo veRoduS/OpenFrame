@@ -108,13 +108,18 @@ export function MediaLibrary({
     tag,
     sort,
   }) as Asset[];
-  const selection = assets.filter((a) => selected.has(a.id)).map((a) => a.id);
+  const selection = assets
+    .filter((a) => selected.has(a.id) && !a.readOnly)
+    .map((a) => a.id);
   const currentFolder = folders.find((f) => f.id === folder);
   const allTags = [...new Set(assets.flatMap((a) => a.tags || []))].sort();
   const sortedFolders = [...folders].sort((a, b) =>
     a.name.localeCompare(b.name),
   );
-  const selectedVisible = filtered.filter((a) => selected.has(a.id)).length;
+  const selectableVisible = filtered.filter((a) => !a.readOnly);
+  const selectedVisible = selectableVisible.filter((a) =>
+    selected.has(a.id),
+  ).length;
   function chooseFolder(value: string) {
     setFolder(value);
     setSelected(new Set());
@@ -197,6 +202,7 @@ export function MediaLibrary({
     move: 'Move selected images',
     tags: 'Tag selected images',
   };
+  const readOnlyAsset = mode === 'asset' && !!activeAsset?.readOnly;
   return (
     <div className={`media-library ${onPick ? 'picker-library' : ''}`}>
       <div className="media-toolbar">
@@ -359,16 +365,18 @@ export function MediaLibrary({
                 <Checkbox
                   id="select-visible-media"
                   checked={
-                    filtered.length > 0 && selectedVisible === filtered.length
+                    selectableVisible.length > 0 &&
+                    selectedVisible === selectableVisible.length
                   }
                   indeterminate={
-                    selectedVisible > 0 && selectedVisible < filtered.length
+                    selectedVisible > 0 &&
+                    selectedVisible < selectableVisible.length
                   }
-                  disabled={!filtered.length || busy}
+                  disabled={!selectableVisible.length || busy}
                   onCheckedChange={(checked) =>
                     setSelected((previous) => {
                       const next = new Set(previous);
-                      filtered.forEach((a) =>
+                      selectableVisible.forEach((a) =>
                         checked ? next.add(a.id) : next.delete(a.id),
                       );
                       return next;
@@ -433,13 +441,19 @@ export function MediaLibrary({
                       aria-label={`Select ${a.name}`}
                       className="media-checkbox"
                       checked={selected.has(a.id)}
-                      disabled={busy}
+                      disabled={busy || a.readOnly}
                       onCheckedChange={(checked) => toggle(a.id, checked)}
                     />
                   )}
                   <button
                     className="media-image-button"
-                    aria-label={onPick ? `Add ${a.name}` : `Edit ${a.name}`}
+                    aria-label={
+                      onPick
+                        ? `Add ${a.name}`
+                        : a.readOnly
+                          ? `View ${a.name}`
+                          : `Edit ${a.name}`
+                    }
                     onClick={() => (onPick ? onPick(a) : open('asset', a))}
                   >
                     <img loading="lazy" src={a.url} alt={a.name} />
@@ -447,6 +461,7 @@ export function MediaLibrary({
                   <div className="media-entry-info">
                     <button
                       className="media-name"
+                      disabled={a.readOnly && !!onPick}
                       onClick={() => (onPick ? onPick(a) : open('asset', a))}
                     >
                       {a.name}
@@ -458,6 +473,9 @@ export function MediaLibrary({
                       {folders.find((f) => f.id === a.folderId)?.name ||
                         'Unfiled'}
                     </span>
+                    {a.readOnly && (
+                      <span className="badge">Shared / read-only</span>
+                    )}
                     <div className="media-tags">
                       {(a.tags || []).map((t) => (
                         <button
@@ -473,7 +491,7 @@ export function MediaLibrary({
                       ))}
                     </div>
                   </div>
-                  {!onPick && onManageAccess && (
+                  {!onPick && onManageAccess && !a.readOnly && (
                     <ManageAccessButton
                       resourceName={a.name}
                       onClick={() => onManageAccess(a)}
@@ -510,13 +528,15 @@ export function MediaLibrary({
         <DialogContent className="of-modal">
           <DialogTitle>{mode ? titles[mode] : 'Media'}</DialogTitle>
           <DialogDescription>
-            {mode === 'tags'
-              ? `${selection.length} images selected`
-              : mode === 'asset'
-                ? 'Name, folder, and tags'
-                : mode === 'move'
-                  ? `${selection.length} images selected`
-                  : 'Media folder'}
+            {readOnlyAsset
+              ? 'This image is shared through content and is read-only.'
+              : mode === 'tags'
+                ? `${selection.length} images selected`
+                : mode === 'asset'
+                  ? 'Name, folder, and tags'
+                  : mode === 'move'
+                    ? `${selection.length} images selected`
+                    : 'Media folder'}
           </DialogDescription>
           <form
             onSubmit={(e) => {
@@ -532,6 +552,7 @@ export function MediaLibrary({
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  disabled={readOnlyAsset}
                   required
                   maxLength={mode === 'asset' ? 200 : 80}
                 />
@@ -542,6 +563,7 @@ export function MediaLibrary({
                 Folder
                 <select
                   value={destination}
+                  disabled={readOnlyAsset}
                   onChange={(e) => setDestination(e.target.value)}
                 >
                   <option value="">Unfiled</option>
@@ -570,6 +592,7 @@ export function MediaLibrary({
                 Tags, separated by commas
                 <input
                   value={tags}
+                  disabled={readOnlyAsset}
                   onChange={(e) => setTags(e.target.value)}
                   placeholder="lobby, summer, events"
                   maxLength={1230}
@@ -590,10 +613,12 @@ export function MediaLibrary({
               >
                 Cancel
               </button>
-              <button className="primary" disabled={busy}>
-                <Check size={16} />
-                Save
-              </button>
+              {!readOnlyAsset && (
+                <button className="primary" disabled={busy}>
+                  <Check size={16} />
+                  Save
+                </button>
+              )}
             </div>
           </form>
         </DialogContent>

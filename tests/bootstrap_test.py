@@ -98,8 +98,21 @@ class BootstrapTests(unittest.TestCase):
                 commands.append(args)
                 return '[{"dev":"wg-openframe"}]' if args[0] == 'ip' else ''
             fake_pwd = types.SimpleNamespace(getpwnam=lambda _: types.SimpleNamespace(pw_uid=1000, pw_gid=1000))
-            with patch.dict(sys.modules, {'pwd': fake_pwd}), patch.object(bootstrap, 'CONFIG', config), patch.object(bootstrap, 'CACHE', cache), patch.object(bootstrap, 'GUARD', root / 'guard.json'), patch.object(bootstrap, 'guard'), patch.object(bootstrap, 'command', side_effect=command), patch.object(bootstrap.wireguard, 'install'), patch.object(bootstrap.wireguard, 'atomic_write'), patch.object(bootstrap.os, 'chown', create=True), patch.object(bootstrap, 'request', return_value=dict(approved=True, wireguard=SETTINGS)):
+            target = root / 'dummy-target.json'
+            target.write_text('untouched fixture')
+            (cache / 'identity.tmp').symlink_to(target)
+            (cache / 'identity.json').symlink_to(target)
+            (cache / 'provisioned').symlink_to(target)
+            with patch.dict(sys.modules, {'pwd': fake_pwd}), patch.object(bootstrap, 'CONFIG', config), patch.object(bootstrap, 'CACHE', cache), patch.object(bootstrap, 'GUARD', root / 'guard.json'), patch.object(bootstrap, 'guard'), patch.object(bootstrap, 'command', side_effect=command), patch.object(bootstrap.wireguard, 'install'), patch.object(bootstrap.wireguard, 'atomic_write'), patch.object(bootstrap.os, 'fchown', create=True) as chown, patch.object(bootstrap.os, 'chown', create=True) as path_chown, patch.object(bootstrap, 'request', return_value=dict(approved=True, wireguard=SETTINGS)):
                 bootstrap.install_private_connection(SETTINGS, PRIVATE, identity, 'Lobby')
+            self.assertEqual(target.read_text(), 'untouched fixture')
+            self.assertFalse((cache / 'identity.json').is_symlink())
+            self.assertFalse((cache / 'provisioned').is_symlink())
+            path_chown.assert_not_called()
+            self.assertEqual([call.args[1:] for call in chown.call_args_list], [(1000, 1000), (0, 1000), (1000, 1000)])
+            self.assertTrue(all(isinstance(call.args[0], int) for call in chown.call_args_list))
+            self.assertEqual(config.stat().st_mode & 0o777, 0o640)
+            self.assertEqual((cache / 'identity.json').stat().st_mode & 0o777, 0o600)
             self.assertEqual(json.loads(config.read_text()), dict(name='Lobby', server=SETTINGS['server']))
             stored = json.loads((cache / 'identity.json').read_text())
             self.assertEqual(stored['token'], identity['token'])

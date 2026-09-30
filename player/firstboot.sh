@@ -5,12 +5,18 @@ config=/boot/firmware/openframe.json
 # Optional Wi-Fi settings allow provisioning without interactive network setup.
 python3 - "$config" <<'PY'
 import json, subprocess, sys
-config = json.load(open(sys.argv[1]))
+with open(sys.argv[1], encoding='utf-8') as stream:
+    config = json.load(stream)
 if config.get('wifi_ssid'):
-    if config.get('wifi_country'):
-        subprocess.run(['raspi-config', 'nonint', 'do_wifi_country', config['wifi_country']], check=True)
-    subprocess.run(['nmcli', 'radio', 'wifi', 'on'], check=True)
-    subprocess.run(['nmcli', '--wait', '60', 'device', 'wifi', 'connect', config['wifi_ssid'], 'password', config.get('wifi_password', '')], check=True, stdout=subprocess.DEVNULL)
+    try:
+        if config.get('wifi_country'):
+            subprocess.run(['raspi-config', 'nonint', 'do_wifi_country', config['wifi_country']], check=True, capture_output=True)
+        subprocess.run(['nmcli', 'radio', 'wifi', 'on'], check=True, capture_output=True)
+        subprocess.run(['nmcli', '--wait', '60', 'device', 'wifi', 'connect', config['wifi_ssid'], 'password', config.get('wifi_password', '')], check=True, capture_output=True)
+    except (subprocess.CalledProcessError, OSError):
+        # Command arguments and nmcli diagnostics can contain the Wi-Fi password.
+        print('Wi-Fi connection failed. Check the configured network and try again.', file=sys.stderr)
+        raise SystemExit(1) from None
 PY
 bash /opt/openframe/install.sh "$config"
 python3 /opt/openframe/wireguard.py clean-boot "$config"

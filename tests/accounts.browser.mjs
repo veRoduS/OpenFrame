@@ -25,6 +25,9 @@ try {
   );
   browser = await chromium.launch({
     headless: true,
+    ...(process.env.OPENFRAME_BROWSER_EXECUTABLE
+      ? { executablePath: process.env.OPENFRAME_BROWSER_EXECUTABLE }
+      : {}),
     ...(process.env.OPENFRAME_BROWSER_CHANNEL
       ? { channel: process.env.OPENFRAME_BROWSER_CHANNEL }
       : {}),
@@ -35,9 +38,7 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${base}/login`);
-  await page
-    .getByLabel('Password', { exact: true })
-    .fill('browser-password-long-enough');
+  await page.getByLabel('Password', { exact: true }).fill('browser8');
   await page.getByRole('button', { name: 'Create administrator' }).click();
   await page.getByRole('button', { name: 'Users & Groups' }).click();
   await page.getByLabel('New group', { exact: true }).fill('Campus displays');
@@ -102,12 +103,8 @@ try {
     viewport: { width: 1280, height: 900 },
   });
   await member.goto(invitation);
-  await member
-    .getByLabel('Password', { exact: true })
-    .fill('member-password-long-enough');
-  await member
-    .getByLabel('Confirm password')
-    .fill('member-password-long-enough');
+  await member.getByLabel('Password', { exact: true }).fill('member12');
+  await member.getByLabel('Confirm password').fill('member12');
   await member.getByRole('button', { name: 'Set password & sign in' }).click();
   await member.getByRole('button', { name: 'Users & Groups' }).click();
   assert.equal(
@@ -124,15 +121,9 @@ try {
     0,
   );
   await member.getByRole('tab', { name: 'My password' }).click();
-  await member
-    .getByLabel('Current password', { exact: true })
-    .fill('member-password-long-enough');
-  await member
-    .getByLabel('New password', { exact: true })
-    .fill('changed-password-long-enough');
-  await member
-    .getByLabel('Confirm new password')
-    .fill('changed-password-long-enough');
+  await member.getByLabel('Current password', { exact: true }).fill('member12');
+  await member.getByLabel('New password', { exact: true }).fill('changed8');
+  await member.getByLabel('Confirm new password').fill('changed8');
   await member
     .getByRole('button', { name: 'Change password', exact: true })
     .click();

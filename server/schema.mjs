@@ -19,6 +19,7 @@ export const layerSchema = z
     verticalAlign: z.enum(['top', 'middle', 'bottom']).default('top'),
     autoSize: z.boolean().default(false),
     lockAspect: z.boolean().default(true),
+    lockMode: z.enum(['full', 'movement']).optional(),
     fit: z.enum(['contain', 'cover']).default('cover'),
     cropX: z.number().min(0).max(100).default(50),
     cropY: z.number().min(0).max(100).default(50),
@@ -62,6 +63,10 @@ export const layerSchema = z
     'Layer must fit inside the slide',
   )
   .refine((l) => l.type !== 'image' || !!l.assetId, 'Choose an image')
+  .refine(
+    (l) => l.type === 'image' || l.assetId === undefined,
+    'Only image layers can reference media',
+  )
   .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter')
   .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather');
 export const slideSchema = z.object({

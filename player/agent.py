@@ -11,13 +11,14 @@ import re
 import socket
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.9.0'
+VERSION = '0.9.2'
 
 
 def normalize_server(value):
@@ -84,13 +85,30 @@ def device_revoked(error):
         return False
 
 
-def atomic_json(path, value):
-    temporary = path.with_suffix('.tmp')
-    with temporary.open('w', encoding='utf-8') as stream:
-        json.dump(value, stream)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
+def atomic_json(path, value, mode=0o600, owner=None):
+    """Replace the destination without following its link or a predictable temp link.
+
+    Privileged callers set ownership and permissions on the open file, never on
+    a pathname in the player-owned cache. The cache's parent is root-owned.
+    """
+    fd, temporary = tempfile.mkstemp(prefix='.openframe-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(value, stream)
+            stream.flush()
+            if owner is not None:
+                os.fchown(stream.fileno(), *owner)
+            if hasattr(os, 'fchmod'):
+                os.fchmod(stream.fileno(), mode)
+            else:
+                os.chmod(temporary, mode)
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
 
 
 def read_json(path, default):
@@ -157,7 +175,6 @@ class Agent:
             self.credentials = self.request('/api/player/enroll', {'name': self.config.get('name', socket.gethostname())})
             self.credentials['server'] = self.server
             atomic_json(self.cache / 'identity.json', self.credentials)
-            os.chmod(self.cache / 'identity.json', 0o600)
         revision = self.state.get('manifest', {}).get('revision')
         with self.lock:
             playback = self.playback.copy() if self.playback else None
@@ -231,7 +248,6 @@ class Agent:
             if not re.fullmatch(r'[a-f0-9-]{36}', player_id) or value.get('playerId') != player_id or value.get('ssid') != player_id.replace('-', '') or not re.fullmatch(r'[A-Za-z0-9_-]{24}', value.get('password', '')) or value.get('hidden') is not True:
                 raise ValueError('Invalid recovery settings')
             atomic_json(path, {**value, 'server': self.server})
-            os.chmod(path, 0o600)
         except Exception:
             logging.warning('Recovery Wi-Fi settings unavailable; playback is unchanged')
 

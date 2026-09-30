@@ -7,13 +7,20 @@ import {
 } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { z } from 'zod';
+import {
+  minimumPasswordLength,
+  maximumPasswordLength,
+} from './password-policy.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const digest = (value) => createHash('sha256').update(value).digest('hex');
 const token = () => randomBytes(32).toString('hex');
 const sessionLifetime = 30 * 24 * 60 * 60 * 1000;
 const sessionRenewalInterval = 24 * 60 * 60 * 1000;
-const password = z.string().min(12).max(256);
+const password = z
+  .string()
+  .min(minimumPasswordLength)
+  .max(maximumPasswordLength);
 const username = z
   .string()
   .trim()
@@ -81,6 +88,39 @@ export function createAccounts(db) {
           `SELECT 1 FROM resource_access a WHERE a.kind=? AND a.id=? AND (a.ownerId=? OR EXISTS (SELECT 1 FROM resource_grants g WHERE g.kind=a.kind AND g.id=a.id AND (g.userId=? OR g.groupId IN (SELECT groupId FROM memberships WHERE userId=?))))`,
         )
         .get(kind, id, user.id, user.id, user.id));
+  const canViewAsset = (user, id) =>
+    can(user, 'asset', id) ||
+    !!db
+      .prepare(
+        `WITH visible AS (
+          SELECT r.kind, r.body FROM records r
+          JOIN resource_access a ON a.kind=r.kind AND a.id=r.id
+          WHERE r.kind IN ('slide','playlist','device') AND (
+            a.ownerId=@userId OR EXISTS (
+              SELECT 1 FROM resource_grants g WHERE g.kind=a.kind AND g.id=a.id
+              AND (g.userId=@userId OR g.groupId IN (
+                SELECT groupId FROM memberships WHERE userId=@userId
+              ))
+            )
+          )
+        ), playlists AS (
+          SELECT body FROM visible WHERE kind='playlist'
+          UNION
+          SELECT p.body FROM visible d JOIN records p
+            ON p.kind='playlist' AND p.id=json_extract(d.body, '$.playlistId')
+          WHERE d.kind='device'
+        )
+        SELECT 1 FROM visible s, json_each(s.body, '$.layers') layer
+          WHERE s.kind='slide' AND json_extract(layer.value, '$.type')='image'
+          AND json_extract(layer.value, '$.assetId')=@assetId
+        UNION ALL
+        SELECT 1 FROM playlists p, json_each(p.body, '$.published.items') item,
+          json_each(item.value, '$.slide.layers') layer
+          WHERE json_extract(layer.value, '$.type')='image'
+          AND json_extract(layer.value, '$.assetId')=@assetId
+        LIMIT 1`,
+      )
+      .get({ assetId: id, userId: user?.id || '' });
   const scopedKinds = new Set([
     'slide',
     'playlist',
@@ -465,6 +505,7 @@ export function createAccounts(db) {
   }
   return {
     allowed,
+    canViewAsset,
     created,
     session,
     admin,

@@ -237,8 +237,7 @@ def firewall(enable):
 
 
 def report(value, phase):
-    atomic_json(STATUS, {'playerId': value['playerId'], 'phase': phase})
-    os.chmod(STATUS, 0o644)
+    atomic_json(STATUS, {'playerId': value['playerId'], 'phase': phase}, mode=0o644)
 
 
 def window(value):

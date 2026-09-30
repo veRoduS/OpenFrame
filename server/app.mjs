@@ -74,9 +74,14 @@ export function createApp({
           'SELECT userId,groupId FROM resource_grants WHERE kind=? AND id=?',
         )
         .all(kind, item.id);
+      const ownerId = db
+        .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
+        .get(kind, item.id)?.ownerId;
+      if (ownerId) audiences.push({ userId: ownerId, groupId: '' });
       if (!exists && state.groupId)
         audiences.push({ userId: '', groupId: state.groupId });
       for (const [childKind, childId] of dependencies(kind, item)) {
+        if (childKind === 'asset') continue;
         if (!accounts.allowed(childKind, childId))
           throw fail(404, 'Referenced item not found');
         for (const audience of audiences) {
@@ -96,7 +101,7 @@ export function createApp({
           if (!granted)
             throw fail(
               409,
-              'Share the referenced slides, images, folders or playlist with the same recipients first',
+              'Share the referenced content with the owner and all recipients first',
             );
         }
       }
@@ -141,7 +146,11 @@ export function createApp({
     const now = Date.now();
     for (const [key, value] of limits)
       if (value.until < now) limits.delete(key);
-    const key = `${req.ip}:${req.path}`;
+    const route =
+      typeof req.route?.path === 'string'
+        ? req.route.path
+        : req.path.toLowerCase().replace(/\/+$/, '');
+    const key = `${req.ip}:${route}`;
     const bucket = limits.get(key) || { count: 0, until: now + 60000 };
     limits.set(key, bucket);
     if (++bucket.count > 15)
@@ -254,8 +263,11 @@ export function createApp({
         target.userId,
         target.groupId,
       );
-    for (const [childKind, childId] of dependencies(kind, item))
+    for (const [childKind, childId] of dependencies(kind, item)) {
+      // Embedded media stays owned and editable only by its media audience.
+      if (childKind === 'asset' && kind !== 'folder') continue;
       grantTree(user, childKind, childId, target, visited);
+    }
   }
   app.get('/api/access/:kind/:id', admin, (req, res) => {
     const { kind, id } = req.params;
@@ -320,18 +332,29 @@ export function createApp({
         ...p,
         publishedAt: published?.publishedAt || null,
       })),
-      assets: list('asset').map(publicAsset),
+      assets: allRecords('asset')
+        .filter((asset) => accounts.canViewAsset(req.user, asset.id))
+        .map((asset) => ({
+          ...publicAsset(asset),
+          readOnly: !accounts.can(req.user, 'asset', asset.id),
+        })),
       folders: list('folder'),
       devices: list('device').map(publicDevice),
     }),
   );
-  function checkImages(slide) {
-    for (const layer of slide.layers)
-      if (layer.type === 'image') requireRecord('asset', layer.assetId);
+  function checkImages(slide, user) {
+    for (const layer of slide.layers) {
+      if (layer.type !== 'image') continue;
+      const asset = allRecords('asset').find(
+        (item) => item.id === layer.assetId,
+      );
+      if (!asset || !accounts.canViewAsset(user, asset.id))
+        throw fail(404, 'Referenced item not found');
+    }
   }
   app.post('/api/slides', admin, (req, res) => {
     const slide = slideSchema.parse(req.body);
-    checkImages(slide);
+    checkImages(slide, req.user);
     res.status(201).json(
       put('slide', {
         ...slide,
@@ -343,7 +366,7 @@ export function createApp({
   app.put('/api/slides/:id', admin, (req, res) => {
     requireRecord('slide', req.params.id);
     const slide = slideSchema.parse(req.body);
-    checkImages(slide);
+    checkImages(slide, req.user);
     res.json(
       put('slide', {
         ...slide,
@@ -419,7 +442,11 @@ export function createApp({
       publishedAt: new Date().toISOString(),
       transition: p.transition || { type: 'cut', durationMs: 500 },
       items,
-      assets: ids.map((id) => requireRecord('asset', id)),
+      assets: ids.map((id) => {
+        const asset = allRecords('asset').find((item) => item.id === id);
+        if (!asset) throw fail(404, 'Referenced item not found');
+        return asset;
+      }),
     };
   }
   app.post('/api/playlists/:id/publish', admin, (req, res) => {
@@ -609,10 +636,10 @@ export function createApp({
       const user = session(req, res);
       if (user) {
         res.locals.userMedia = true;
-        const asset = list('asset').find(
+        const asset = allRecords('asset').find(
           (a) => a.filename === req.params.filename,
         );
-        if (!asset || !accounts.can(user, 'asset', asset.id))
+        if (!asset || !accounts.canViewAsset(user, asset.id))
           return res.status(404).json({ error: 'Not found' });
         return next();
       }

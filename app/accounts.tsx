@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
 import {
+  minimumPasswordLength,
+  maximumPasswordLength,
+} from '../server/password-policy.mjs';
+import {
   Copy,
   KeyRound,
   Plus,
@@ -179,8 +183,8 @@ export function Accounts({
                 name="password"
                 type="password"
                 autoComplete="new-password"
-                minLength={12}
-                maxLength={256}
+                minLength={minimumPasswordLength}
+                maxLength={maximumPasswordLength}
                 required
               />
             </label>
@@ -190,8 +194,8 @@ export function Accounts({
                 name="confirm"
                 type="password"
                 autoComplete="new-password"
-                minLength={12}
-                maxLength={256}
+                minLength={minimumPasswordLength}
+                maxLength={maximumPasswordLength}
                 required
               />
             </label>

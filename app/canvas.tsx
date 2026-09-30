@@ -148,7 +148,7 @@ export function SlideCanvas({
     if (!interactive || e.button !== 0) return;
     e.stopPropagation();
     onSelect?.(layer.id);
-    onDragStart?.();
+    if (layer.lockMode === 'full') return;
     const rect = root.current!.getBoundingClientRect();
     const startX = e.clientX,
       startY = e.clientY;
@@ -160,6 +160,8 @@ export function SlideCanvas({
       layer.type === 'image' &&
       layer.fit === 'cover' &&
       asset;
+    if (layer.lockMode === 'movement' && !cropping) return;
+    onDragStart?.();
     el.setPointerCapture(e.pointerId);
     const move = (event: globalThis.PointerEvent) => {
       if (cropping) {
@@ -177,6 +179,7 @@ export function SlideCanvas({
         );
         return;
       }
+      if (layer.lockMode === 'movement') return;
       const x = Math.max(
         0,
         Math.min(
@@ -207,7 +210,12 @@ export function SlideCanvas({
     layer: Layer,
     corner: string,
   ) {
-    if (e.button !== 0) return;
+    if (
+      e.button !== 0 ||
+      layer.lockMode === 'full' ||
+      (layer.lockMode === 'movement' && corner !== 'se')
+    )
+      return;
     e.preventDefault();
     e.stopPropagation();
     onDragStart?.();
@@ -313,10 +321,14 @@ export function SlideCanvas({
           .filter(
             (l) =>
               l.id === selected &&
+              l.lockMode !== 'full' &&
               ['image', 'clock', 'counter', 'weather'].includes(l.type),
           )
           .map((layer) =>
-            (['nw', 'ne', 'sw', 'se'] as const).map((corner) => (
+            (layer.lockMode === 'movement'
+              ? (['se'] as const)
+              : (['nw', 'ne', 'sw', 'se'] as const)
+            ).map((corner) => (
               <button
                 key={corner}
                 type="button"

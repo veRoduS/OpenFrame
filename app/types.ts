@@ -16,6 +16,7 @@ export type Layer = {
   verticalAlign?: 'top' | 'middle' | 'bottom';
   autoSize?: boolean;
   lockAspect?: boolean;
+  lockMode?: 'full' | 'movement';
   fit: 'cover' | 'contain';
   cropX?: number;
   cropY?: number;
@@ -90,6 +91,7 @@ export type Asset = {
   tags: string[];
   folderId: string | null;
   createdAt: string | null;
+  readOnly?: boolean;
 };
 export type MediaFolder = { id: string; name: string };
 export type Device = {

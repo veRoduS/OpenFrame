@@ -59,6 +59,8 @@ The managed path is VPN-only after setup, not merely a priority hint: it does no
 
 If setup fails, the hotspot returns with a non-secret error on the display. Pending enrollment state survives a reboot. Updated players support [time-boxed hidden Wi-Fi recovery](player-recovery.md) after sustained Wi-Fi loss; VPN/server-only outages do not activate it. There is no key-rotation/reset UI or automatic player/OS update service. If the public WireGuard endpoint's DNS address changes after connection, restarting the client's WireGuard service may be necessary to resolve it again.
 
+Provisioning writes player identity and configuration through exclusive temporary files, setting ownership and permissions on their open file descriptors before replacement. Update `agent.py`, `bootstrap.py`, and `recovery.py` together when updating existing player code; a server update alone does not update these files.
+
 ## Security and revocation
 
 The helper accepts validated peer lists, not shell commands. Its intended firewall policy allows clients to reach only the private OpenFrame TCP port and blocks forwarding to the home LAN, Internet, or other peers. OpenFrame authentication remains required. Validate these rules on the actual Docker host before trusting network isolation.

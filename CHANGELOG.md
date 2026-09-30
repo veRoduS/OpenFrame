@@ -2,6 +2,19 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.9.2] - 2026-09-30
+
+- Resolve security audit findings in sharing, authentication, player provisioning, and layer editing; update vulnerable development dependencies
+- Restrict derived media access to image attachments, include published media from shared playlists/screens, preserve read-only metadata controls, and validate referenced content for its owner as well as recipients.
+- Apply the eight-character password policy to setup, activation, and password-change forms; accept valid shorter passwords at browser login and share throttling budgets across route aliases.
+- Secure player JSON replacement and ownership changes against symlinks, and redact first-boot Wi-Fi failure diagnostics. Existing players require updated Python files; customized images require the updated first-boot script.
+- Keep image insertion separate from replacement and preserve movement-locked coordinates when editing dimensions. Add isolated API, browser, and player regressions for the reviewed cases.
+- Update brace-expansion to 5.0.12, fast-uri to 3.1.8, and ip-address to 10.7.2; the full dependency audit reports no advisories.
+
+## [0.9.1] - 2026-09-30
+
+- Compact the slide properties sidebar into organized sections, paired fields, and expandable crop controls
+
 ## [0.9.0] - 2026-09-30
 
 - Approved GitHub milestone preserving local revision 0.8.1 and its history.

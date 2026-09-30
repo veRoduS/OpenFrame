@@ -91,9 +91,9 @@ export function ResourceAccessDialog({
       <DialogContent className="of-modal resource-access-modal">
         <DialogTitle>Access: {resource?.name}</DialogTitle>
         <DialogDescription>
-          Shared members can edit this item. Sharing includes its current slides
-          and images. Removing access here does not remove separately shared
-          content.
+          Shared members can edit this item. Images attached to shared slides
+          remain visible and read-only. Removing access here does not remove
+          separately shared content.
         </DialogDescription>
         {error && (
           <p role="alert" className="inline-error">

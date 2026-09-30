@@ -20,7 +20,7 @@ The password is printed only at creation; only its salted hash is saved to SQLit
 
 1. As a super-admin, select **Users**, enter the person's name and a unique username, then select **Invite user**.
 2. Send the displayed password link privately. It expires after 24 hours and works once.
-3. The recipient opens the link and sets a password of 12-256 characters. No email service is required.
+3. The recipient opens the link and sets a password of 8-256 characters. No email service is required.
 
 Use **Password invitation** to issue a replacement or reset link. Issuing it replaces earlier invitations; accepting it changes the password and signs out existing sessions. **Disable** immediately blocks a user's sessions and invitations. A group's last active admin must be replaced before being disabled.
 
@@ -39,9 +39,11 @@ Manage sharing from **Sharing & assignments** or select **Manage access** on a s
 - Super-admins can assign screens and other resources to individual users or groups.
 - Owners can share their own items with groups they belong to.
 - New content is private to its creator until shared. Legacy content and newly enrolled screens are initially visible only to super-admins.
-- Sharing a screen also shares its current playlist, slides, and images. Sharing a playlist or slide includes its current contents. Sharing a folder includes its current images; sharing an individual image does not share its siblings.
-- Sharing is an explicit grant, not a live folder rule. Share newly added content with the same recipients before adding it to a shared slide, playlist, or screen. The server rejects references whose recipients cannot access them.
+- Sharing a screen also shares its current playlist and slides. Images attached to accessible slides or published playlists/screens appear as **Read-only** unless the recipient also has direct media access. Published images remain visible even after they are removed from the live draft. Recipients can view and pick those images, but cannot rename, retag, move, delete, or manage access to them. Sharing a folder includes direct access to its current images; sharing an individual image does not share its siblings.
+- Sharing is an explicit grant, not a live folder rule. Share newly referenced slides or playlists with the resource owner and the same recipients before adding them to a shared playlist or screen. The server rejects references whose owner or recipients cannot access them. Attached images receive derived read-only access without a separate grant.
 - Removing a grant from a screen or playlist does not revoke grants on its contents. Remove those separately when appropriate. Access can also come from ownership, another group, or a direct assignment.
+
+Read-only media can be reused in a slide you can edit. That new slide supplies its own media-view reference, which remains until removed; revoking the original share does not remove copies or other accessible references.
 
 Only super-admins can pair/revoke screens, manage the VPN inventory, or export setup bundles. Assigned users can edit their screens, select accessible playlists, queue refresh/reboot commands, and reveal those screens' recovery Wi-Fi credentials. Player bearer-token authentication and offline playback are unchanged.
 

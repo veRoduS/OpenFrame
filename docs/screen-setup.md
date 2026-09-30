@@ -39,6 +39,8 @@ The Pi displays its normal pairing code. Approve it using **Screens > Pair scree
 
 Boot-file edits after provisioning are not automatically imported. Existing WireGuard-capable players use the same JSON/drop-in format; no player-code update is needed solely for this builder. OS flashing, live VPN connectivity, and Pi hardware behavior still require physical testing.
 
+First-boot Wi-Fi failures print a generic connection error rather than command arguments or NetworkManager diagnostics containing credentials. Keep the customized image's `firstboot.sh` updated to receive this protection. Configured boot files and NetworkManager profiles still contain secrets and need restricted access.
+
 ## Secrets and backups
 
 Use HTTPS or a trusted encrypted management connection to upload configs and download bundles. Imported VPN keys, Wi-Fi passwords, and Cloudflare credentials are encrypted in SQLite using AES-256-GCM with a random per-record nonce and record-bound authentication. The server lazily creates the 32-byte `DATA_DIR/provisioning.key` with restrictive permissions. Names, server URLs, VPN addresses/endpoints, and allocation metadata remain readable in the database and administrator inventory. Ordinary library/player responses do not contain the saved secrets; ZIP retrieval requires an administrator session and an explicit download request.

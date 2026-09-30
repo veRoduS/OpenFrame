@@ -20,9 +20,19 @@ Counters automatically count down to future targets and count up from past targe
 
 Images are decoded, resized to at most 1920 pixels per dimension, and stored as WebP. Upload limit: 15 MB and 25 megapixels. Text is rendered as text, never as executable HTML.
 
+## Slide properties
+
+Select a layer to edit it in the right sidebar. Controls are grouped into Content, Source image, or Widget settings; Position & size; Typography or Image display; and Arrange. Related numeric fields sit side by side. Expand **Crop adjustments** under Image display to reveal image zoom, focal position, and crop reset controls.
+
+The **Layer lock** selector stays at the top. **Full Lock** disables movement and editing; choose Unlocked to edit again. **Lock movement** keeps X and Y fixed while allowing text, image, and widget settings to change. Use **Replace image** to choose a different image while keeping the layer's frame and position; replacement resets its crop.
+
+Changing dimensions while movement is locked limits the layer to the space available at its fixed position. **Add image** always creates a new layer, including when an existing image is selected or fully locked.
+
 ## Organize media
 
 Media supports named folders, image tags, filename/tag search, tag filtering, and grid/list views. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls.
+
+Images attached to shared slides, playlists, or screens appear as **Read-only** when you lack direct media access. This includes images retained in a published snapshot after the draft changes. You can view or choose them in the image picker; changing their names, tags, folders, sharing, or deleting them requires direct media access.
 
 Select individual images or all visible results to move, add/remove tags, or delete them together. Click an image to rename it or edit its folder and full tag list. Select a folder, then choose Rename folder in the Media toolbar to change its name without moving its images. Tags are normalized to lowercase and deduplicated, with a limit of 30 per image. Uploading multiple files puts them in the current folder. Folders are single-level and must be empty before deletion.
 

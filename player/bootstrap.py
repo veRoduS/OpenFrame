@@ -128,16 +128,14 @@ After=openframe-managed-network.service
     # Pairing survives the change from the public bootstrap origin to the private one.
     import pwd
     user = pwd.getpwnam('openframe')
-    atomic_json(CACHE / 'identity.json', {**identity, 'server': settings['server']})
-    os.chmod(CACHE / 'identity.json', 0o600)
-    os.chown(CACHE / 'identity.json', user.pw_uid, user.pw_gid)
-    atomic_json(CONFIG, {'name': name, 'server': settings['server']})
-    os.chown(CONFIG, 0, user.pw_gid)
-    os.chmod(CONFIG, 0o640)
+    atomic_json(CACHE / 'identity.json', {**identity, 'server': settings['server']},
+                owner=(user.pw_uid, user.pw_gid))
+    atomic_json(CONFIG, {'name': name, 'server': settings['server']},
+                mode=0o640, owner=(0, user.pw_gid))
     command('systemctl', 'daemon-reload')
     command('systemctl', 'enable', '--now', 'openframe-managed-network.service')
     command('systemctl', 'restart', 'openframe-agent.service')
-    (CACHE / 'provisioned').touch(mode=0o600)
+    atomic_json(CACHE / 'provisioned', {}, owner=(user.pw_uid, user.pw_gid))
 
 
 class Setup:

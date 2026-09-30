@@ -1,5 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { version } from '../package.json';
+import {
+  minimumPasswordLength,
+  maximumPasswordLength,
+} from '../server/password-policy.mjs';
 import { Accounts, type Auth } from './accounts';
 import {
   ManageAccessButton,
@@ -401,13 +405,19 @@ export default function App() {
               <input
                 name="password"
                 type="password"
-                minLength={12}
-                maxLength={256}
+                minLength={
+                  auth.setup || activation ? minimumPasswordLength : undefined
+                }
+                maxLength={maximumPasswordLength}
                 required
                 autoComplete={
                   auth.setup || activation ? 'new-password' : 'current-password'
                 }
-                placeholder="At least 12 characters"
+                placeholder={
+                  auth.setup || activation
+                    ? `At least ${minimumPasswordLength} characters`
+                    : undefined
+                }
               />
             </label>
             {activation && (
@@ -418,8 +428,8 @@ export default function App() {
                   type="password"
                   autoComplete="new-password"
                   required
-                  minLength={12}
-                  maxLength={256}
+                  minLength={minimumPasswordLength}
+                  maxLength={maximumPasswordLength}
                 />
               </label>
             )}
@@ -1211,6 +1221,21 @@ function DeviceRow({
   );
 }
 
+function PropertySection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="property-section" aria-label={title}>
+      <h3>{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 function Editor({
   initial,
   assets,
@@ -1235,12 +1260,13 @@ function Editor({
   );
   const [past, setPast] = useState<Slide[]>([]);
   const [future, setFuture] = useState<Slide[]>([]);
-  const [media, setMedia] = useState(false);
+  const [media, setMedia] = useState<'add' | { replace: string } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const dirty = JSON.stringify(slide) !== saved;
   const current = slide.layers.find((l) => l.id === selected);
+  const currentAsset = assets.find((asset) => asset.id === current?.assetId);
   const navigation = useUnsavedNavigation(dirty, onClose);
   function change(next: Slide, history = true) {
     if (history) {
@@ -1251,6 +1277,17 @@ function Editor({
   }
   function patchLayer(patch: Partial<Layer>) {
     if (!current) return;
+    if (
+      current.lockMode === 'full' &&
+      (!Object.hasOwn(patch, 'lockMode') ||
+        Object.keys(patch).some((key) => key !== 'lockMode'))
+    )
+      return;
+    if (
+      current.lockMode === 'movement' &&
+      (patch.x !== undefined || patch.y !== undefined)
+    )
+      return;
     const next = { ...current, ...patch };
     if (
       current.type === 'image' &&
@@ -1268,8 +1305,13 @@ function Editor({
         ),
       );
     }
-    next.x = Math.min(next.x, 100 - next.width);
-    next.y = Math.min(next.y, 100 - next.height);
+    if (current.lockMode === 'movement') {
+      next.width = Math.min(next.width, 100 - current.x);
+      next.height = Math.min(next.height, 100 - current.y);
+    } else {
+      next.x = Math.min(next.x, 100 - next.width);
+      next.y = Math.min(next.y, 100 - next.height);
+    }
     change({
       ...slide,
       layers: slide.layers.map((l) => (l.id === selected ? next : l)),
@@ -1300,7 +1342,24 @@ function Editor({
     }
     change({ ...slide, layers: [...slide.layers, layer] });
     setSelected(layer.id);
-    setMedia(false);
+    setMedia(null);
+  }
+  function chooseImage(assetId: string) {
+    if (media === 'add') add('image', assetId);
+    else if (media && typeof media === 'object') {
+      const target = slide.layers.find((layer) => layer.id === media.replace);
+      if (target?.type === 'image' && target.lockMode !== 'full') {
+        change({
+          ...slide,
+          layers: slide.layers.map((layer) =>
+            layer.id === target.id
+              ? { ...layer, assetId, cropX: 50, cropY: 50, cropZoom: 1 }
+              : layer,
+          ),
+        });
+      }
+    }
+    setMedia(null);
   }
   async function save() {
     setBusy(true);
@@ -1399,7 +1458,7 @@ function Editor({
             <IconButton label="Add text" onClick={() => add('text')}>
               <Type size={20} />
             </IconButton>
-            <IconButton label="Add image" onClick={() => setMedia(true)}>
+            <IconButton label="Add image" onClick={() => setMedia('add')}>
               <ImagePlus size={20} />
             </IconButton>
             <IconButton label="Add clock widget" onClick={() => add('clock')}>
@@ -1537,10 +1596,10 @@ function Editor({
             </div>
           )}
         </section>
-        <aside className="properties-panel">
-          <h2>Properties</h2>
-          {current ? (
-            <>
+        <aside className="properties-panel" aria-label="Layer properties">
+          <header className="property-panel-header">
+            <h2>Properties</h2>
+            {current && (
               <div className="property-heading">
                 <strong>
                   {current.type === 'text'
@@ -1555,6 +1614,7 @@ function Editor({
                 </strong>
                 <IconButton
                   label="Delete layer"
+                  disabled={current.lockMode === 'full'}
                   onClick={() => {
                     change({
                       ...slide,
@@ -1566,350 +1626,331 @@ function Editor({
                   <Trash2 size={17} />
                 </IconButton>
               </div>
-              {current.type === 'text' && (
-                <label>
-                  Content
+            )}
+          </header>
+          {current && (
+            <label className="property-lock">
+              Layer lock
+              <select
+                aria-label="Layer lock"
+                title="Full Lock prevents movement and editing. Lock movement allows content edits."
+                value={current.lockMode || 'none'}
+                onChange={(e) =>
+                  patchLayer({
+                    lockMode:
+                      e.target.value === 'none'
+                        ? undefined
+                        : (e.target.value as Layer['lockMode']),
+                  })
+                }
+              >
+                <option value="none">Unlocked</option>
+                <option value="full">Full Lock</option>
+                <option value="movement">Lock movement</option>
+              </select>
+            </label>
+          )}
+          {current ? (
+            <fieldset
+              className="layer-properties"
+              disabled={current.lockMode === 'full'}
+              inert={current.lockMode === 'full'}
+            >
+              <PropertySection
+                title={
+                  current.type === 'image'
+                    ? 'Source image'
+                    : current.type === 'text'
+                      ? 'Content'
+                      : 'Widget settings'
+                }
+              >
+                {current.type === 'text' && (
                   <textarea
                     aria-label="Text content"
-                    rows={5}
+                    rows={4}
                     value={current.text}
                     maxLength={4000}
                     onChange={(e) => patchLayer({ text: e.target.value })}
                   />
-                </label>
-              )}
-              {current.type === 'weather' && current.weather && (
-                <>
-                  <WeatherOptions
-                    key={current.id}
-                    config={current.weather}
-                    onChange={(patch) =>
-                      patchLayer({ weather: { ...current.weather!, ...patch } })
-                    }
-                  />
-                  <label>
-                    Location name
-                    <input
-                      value={current.weather.name}
-                      maxLength={80}
-                      onChange={(e) =>
+                )}
+                {current.type === 'image' && (
+                  <>
+                    <div className="property-image-preview">
+                      {currentAsset && <img src={currentAsset.url} alt="" />}
+                      <span>{currentAsset?.name || 'Image'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="property-action"
+                      onClick={() => setMedia({ replace: current.id })}
+                    >
+                      <ImagePlus size={16} />
+                      Replace image
+                    </button>
+                  </>
+                )}
+                {current.type === 'weather' && current.weather && (
+                  <>
+                    <WeatherOptions
+                      key={current.id}
+                      config={current.weather}
+                      onChange={(patch) =>
                         patchLayer({
-                          weather: {
-                            ...current.weather!,
-                            name: e.target.value,
-                          },
+                          weather: { ...current.weather!, ...patch },
                         })
                       }
                     />
-                  </label>
-                  <div className="number-grid weather-coordinates">
                     <label>
-                      Latitude
+                      Location name
                       <input
-                        type="number"
-                        min={-90}
-                        max={90}
-                        step="0.0001"
-                        value={current.weather.latitude ?? ''}
+                        value={current.weather.name}
+                        maxLength={80}
                         onChange={(e) =>
                           patchLayer({
                             weather: {
                               ...current.weather!,
-                              latitude:
-                                e.target.value === ''
-                                  ? null
-                                  : Number(e.target.value),
+                              name: e.target.value,
                             },
                           })
                         }
                       />
                     </label>
-                    <label>
-                      Longitude
-                      <input
-                        type="number"
-                        min={-180}
-                        max={180}
-                        step="0.0001"
-                        value={current.weather.longitude ?? ''}
-                        onChange={(e) =>
-                          patchLayer({
-                            weather: {
-                              ...current.weather!,
-                              longitude:
-                                e.target.value === ''
-                                  ? null
-                                  : Number(e.target.value),
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                  <label>
-                    Temperature unit
-                    <select
-                      value={current.weather.unit}
-                      onChange={(e) =>
-                        patchLayer({
-                          weather: {
-                            ...current.weather!,
-                            unit: e.target.value as 'F' | 'C',
-                          },
-                        })
-                      }
-                    >
-                      <option value="F">Fahrenheit</option>
-                      <option value="C">Celsius</option>
-                    </select>
-                  </label>
-                </>
-              )}
-              {current.type === 'clock' && (
-                <>
-                  <label>
-                    Clock format
-                    <select
-                      value={current.clock?.showSeconds ? 'seconds' : 'minutes'}
-                      onChange={(e) =>
-                        patchLayer({
-                          clock: {
-                            ...current.clock,
-                            showSeconds: e.target.value === 'seconds',
-                          },
-                        })
-                      }
-                    >
-                      <option value="minutes">HH:MM</option>
-                      <option value="seconds">HH:MM:SS</option>
-                    </select>
-                  </label>
-                  <label className="property-switch" htmlFor="clock-24-hour">
-                    24-hour time
-                    <Switch
-                      id="clock-24-hour"
-                      checked={current.clock?.hour12 === false}
-                      onCheckedChange={(enabled) =>
-                        patchLayer({
-                          clock: {
-                            ...current.clock,
-                            hour12: !enabled,
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                </>
-              )}
-              {current.type === 'counter' && current.counter && (
-                <>
-                  <label>
-                    Target date and time
-                    <input
-                      type="datetime-local"
-                      step="1"
-                      value={localDateTime(current.counter.targetAt)}
-                      onChange={(e) => {
-                        if (
-                          e.target.value &&
-                          Number.isFinite(new Date(e.target.value).getTime())
-                        )
-                          patchLayer({
-                            counter: {
-                              ...current.counter!,
-                              targetAt: new Date(e.target.value).toISOString(),
-                            },
-                          });
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Granularity
-                    <select
-                      value={current.counter.unit}
-                      onChange={(e) =>
-                        patchLayer({
-                          counter: {
-                            ...current.counter!,
-                            unit: e.target.value as NonNullable<
-                              Layer['counter']
-                            >['unit'],
-                          },
-                        })
-                      }
-                    >
-                      {['seconds', 'minutes', 'hours', 'days'].map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit[0].toUpperCase() + unit.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {(['prefix', 'suffix'] as const).map((field) => (
-                    <label key={field}>
-                      {field === 'prefix' ? 'Prefix' : 'Suffix'}
-                      <input
-                        type="text"
-                        maxLength={500}
-                        value={current.counter![field] ?? ''}
-                        onChange={(e) =>
-                          patchLayer({
-                            counter: {
-                              ...current.counter!,
-                              [field]: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                  ))}
-                  <label>
-                    Goal message (optional)
-                    <textarea
-                      rows={3}
-                      maxLength={500}
-                      value={current.counter.goalMessage ?? ''}
-                      onChange={(e) =>
-                        patchLayer({
-                          counter: {
-                            ...current.counter!,
-                            goalMessage: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="property-switch" htmlFor="counter-unit">
-                    Show unit
-                    <Switch
-                      id="counter-unit"
-                      checked={current.counter.showUnit}
-                      onCheckedChange={(showUnit) =>
-                        patchLayer({
-                          counter: { ...current.counter!, showUnit },
-                        })
-                      }
-                    />
-                  </label>
-                </>
-              )}
-              <h3>Position & size</h3>
-              <div className="number-grid">
-                {(['x', 'y', 'width', 'height'] as const).map((key) => (
-                  <label key={key}>
-                    {key === 'x' || key === 'y' ? key.toUpperCase() : key}
-                    <div className="number-unit">
-                      <input
-                        type="number"
-                        aria-label={`Layer ${key}`}
-                        value={Math.round(current[key] * 100) / 100}
-                        min={key === 'width' || key === 'height' ? 1 : 0}
-                        max={100}
-                        step={0.5}
-                        onChange={(e) => {
-                          if (e.target.value !== '')
+                    <div className="number-grid weather-coordinates">
+                      <label>
+                        Latitude
+                        <input
+                          type="number"
+                          min={-90}
+                          max={90}
+                          step="0.0001"
+                          value={current.weather.latitude ?? ''}
+                          onChange={(e) =>
                             patchLayer({
-                              [key]: Math.max(
-                                key === 'width' || key === 'height' ? 1 : 0,
-                                Math.min(100, Number(e.target.value)),
-                              ),
+                              weather: {
+                                ...current.weather!,
+                                latitude:
+                                  e.target.value === ''
+                                    ? null
+                                    : Number(e.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Longitude
+                        <input
+                          type="number"
+                          min={-180}
+                          max={180}
+                          step="0.0001"
+                          value={current.weather.longitude ?? ''}
+                          onChange={(e) =>
+                            patchLayer({
+                              weather: {
+                                ...current.weather!,
+                                longitude:
+                                  e.target.value === ''
+                                    ? null
+                                    : Number(e.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      Temperature unit
+                      <select
+                        value={current.weather.unit}
+                        onChange={(e) =>
+                          patchLayer({
+                            weather: {
+                              ...current.weather!,
+                              unit: e.target.value as 'F' | 'C',
+                            },
+                          })
+                        }
+                      >
+                        <option value="F">Fahrenheit</option>
+                        <option value="C">Celsius</option>
+                      </select>
+                    </label>
+                  </>
+                )}
+                {current.type === 'clock' && (
+                  <>
+                    <label>
+                      Clock format
+                      <select
+                        value={
+                          current.clock?.showSeconds ? 'seconds' : 'minutes'
+                        }
+                        onChange={(e) =>
+                          patchLayer({
+                            clock: {
+                              ...current.clock,
+                              showSeconds: e.target.value === 'seconds',
+                            },
+                          })
+                        }
+                      >
+                        <option value="minutes">HH:MM</option>
+                        <option value="seconds">HH:MM:SS</option>
+                      </select>
+                    </label>
+                    <label className="property-switch" htmlFor="clock-24-hour">
+                      24-hour time
+                      <Switch
+                        id="clock-24-hour"
+                        checked={current.clock?.hour12 === false}
+                        onCheckedChange={(enabled) =>
+                          patchLayer({
+                            clock: {
+                              ...current.clock,
+                              hour12: !enabled,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+                {current.type === 'counter' && current.counter && (
+                  <>
+                    <label>
+                      Target date and time
+                      <input
+                        type="datetime-local"
+                        step="1"
+                        value={localDateTime(current.counter.targetAt)}
+                        onChange={(e) => {
+                          if (
+                            e.target.value &&
+                            Number.isFinite(new Date(e.target.value).getTime())
+                          )
+                            patchLayer({
+                              counter: {
+                                ...current.counter!,
+                                targetAt: new Date(
+                                  e.target.value,
+                                ).toISOString(),
+                              },
                             });
                         }}
                       />
-                      <span>%</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-              {current.type !== 'image' ? (
-                <>
-                  <h3>Typography</h3>
-                  <label className="property-switch" htmlFor="auto-size-text">
-                    Auto-size to box
-                    <Switch
-                      id="auto-size-text"
-                      checked={current.autoSize || false}
-                      onCheckedChange={(autoSize) => patchLayer({ autoSize })}
-                    />
-                  </label>
-                  <label>
-                    Font size
-                    <input
-                      type="number"
-                      value={current.fontSize}
-                      disabled={current.autoSize}
-                      min={12}
-                      max={400}
-                      onChange={(e) => {
-                        if (e.target.value !== '')
+                    </label>
+                    <label>
+                      Granularity
+                      <select
+                        value={current.counter.unit}
+                        onChange={(e) =>
                           patchLayer({
-                            fontSize: Math.max(
-                              12,
-                              Math.min(400, Number(e.target.value)),
-                            ),
-                          });
-                      }}
-                    />
-                  </label>
-                  <label className="color-label">
-                    Text color
-                    <input
-                      type="color"
-                      value={current.color}
-                      onChange={(e) => patchLayer({ color: e.target.value })}
-                    />
-                  </label>
-                  <div className="format-tools">
-                    <IconButton
-                      label="Bold"
-                      active={current.bold}
-                      onClick={() => patchLayer({ bold: !current.bold })}
-                    >
-                      <Bold size={18} />
-                    </IconButton>
-                    {(['left', 'center', 'right'] as const).map((align, i) => (
-                      <IconButton
-                        key={align}
-                        label={`Align ${align}`}
-                        active={current.align === align}
-                        onClick={() => patchLayer({ align })}
+                            counter: {
+                              ...current.counter!,
+                              unit: e.target.value as NonNullable<
+                                Layer['counter']
+                              >['unit'],
+                            },
+                          })
+                        }
                       >
-                        {i === 0 ? (
-                          <AlignLeft size={18} />
-                        ) : i === 1 ? (
-                          <AlignCenter size={18} />
-                        ) : (
-                          <AlignRight size={18} />
-                        )}
-                      </IconButton>
-                    ))}
-                  </div>
-                  <h3>Vertical alignment</h3>
-                  <div className="format-tools">
-                    {(['top', 'middle', 'bottom'] as const).map(
-                      (verticalAlign, i) => (
-                        <IconButton
-                          key={verticalAlign}
-                          label={`Align ${verticalAlign}`}
-                          active={
-                            (current.verticalAlign || 'top') === verticalAlign
+                        {['seconds', 'minutes', 'hours', 'days'].map((unit) => (
+                          <option key={unit} value={unit}>
+                            {unit[0].toUpperCase() + unit.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="property-field-grid">
+                      {(['prefix', 'suffix'] as const).map((field) => (
+                        <label key={field}>
+                          {field === 'prefix' ? 'Prefix' : 'Suffix'}
+                          <input
+                            type="text"
+                            maxLength={500}
+                            value={current.counter![field] ?? ''}
+                            onChange={(e) =>
+                              patchLayer({
+                                counter: {
+                                  ...current.counter!,
+                                  [field]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <label>
+                      Goal message (optional)
+                      <textarea
+                        rows={3}
+                        maxLength={500}
+                        value={current.counter.goalMessage ?? ''}
+                        onChange={(e) =>
+                          patchLayer({
+                            counter: {
+                              ...current.counter!,
+                              goalMessage: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="property-switch" htmlFor="counter-unit">
+                      Show unit
+                      <Switch
+                        id="counter-unit"
+                        checked={current.counter.showUnit}
+                        onCheckedChange={(showUnit) =>
+                          patchLayer({
+                            counter: { ...current.counter!, showUnit },
+                          })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+              </PropertySection>
+              <PropertySection title="Position & size">
+                <div className="number-grid">
+                  {(['x', 'y', 'width', 'height'] as const).map((key) => (
+                    <label key={key}>
+                      {key === 'x' || key === 'y'
+                        ? key.toUpperCase()
+                        : key === 'width'
+                          ? 'Width'
+                          : 'Height'}
+                      <div className="number-unit">
+                        <input
+                          type="number"
+                          aria-label={`Layer ${key}`}
+                          value={Math.round(current[key] * 100) / 100}
+                          disabled={
+                            current.lockMode === 'movement' &&
+                            (key === 'x' || key === 'y')
                           }
-                          onClick={() => patchLayer({ verticalAlign })}
-                        >
-                          {i === 0 ? (
-                            <AlignVerticalJustifyStart size={18} />
-                          ) : i === 1 ? (
-                            <AlignVerticalJustifyCenter size={18} />
-                          ) : (
-                            <AlignVerticalJustifyEnd size={18} />
-                          )}
-                        </IconButton>
-                      ),
-                    )}
-                  </div>
-                </>
-              ) : (
-                <>
+                          min={key === 'width' || key === 'height' ? 1 : 0}
+                          max={100}
+                          step={0.5}
+                          onChange={(e) => {
+                            if (e.target.value !== '')
+                              patchLayer({
+                                [key]: Math.max(
+                                  key === 'width' || key === 'height' ? 1 : 0,
+                                  Math.min(100, Number(e.target.value)),
+                                ),
+                              });
+                          }}
+                        />
+                        <span>%</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {current.type === 'image' && (
                   <label
                     className="property-switch"
                     htmlFor="lock-image-aspect"
@@ -1923,113 +1964,248 @@ function Editor({
                       }
                     />
                   </label>
-                  <label>
-                    Image fit
-                    <select
-                      value={current.fit}
-                      onChange={(e) =>
-                        patchLayer({ fit: e.target.value as Layer['fit'] })
-                      }
-                    >
-                      <option value="cover">Fill frame</option>
-                      <option value="contain">Fit image</option>
-                    </select>
-                  </label>
-                  {current.fit === 'cover' && (
-                    <div className="crop-controls">
-                      <button
-                        type="button"
-                        className={cropMode ? 'primary' : ''}
-                        aria-pressed={cropMode}
-                        onClick={() => setCropMode(!cropMode)}
+                )}
+              </PropertySection>
+              <PropertySection
+                title={
+                  current.type === 'image' ? 'Image display' : 'Typography'
+                }
+              >
+                {current.type !== 'image' ? (
+                  <>
+                    <label className="property-switch" htmlFor="auto-size-text">
+                      Auto-size to box
+                      <Switch
+                        id="auto-size-text"
+                        checked={current.autoSize || false}
+                        onCheckedChange={(autoSize) => patchLayer({ autoSize })}
+                      />
+                    </label>
+                    <div className="property-field-grid">
+                      <label>
+                        Font size
+                        <input
+                          type="number"
+                          value={current.fontSize}
+                          disabled={current.autoSize}
+                          min={12}
+                          max={400}
+                          onChange={(e) => {
+                            if (e.target.value !== '')
+                              patchLayer({
+                                fontSize: Math.max(
+                                  12,
+                                  Math.min(400, Number(e.target.value)),
+                                ),
+                              });
+                          }}
+                        />
+                      </label>
+                      <label className="property-color-field">
+                        Text color
+                        <input
+                          type="color"
+                          value={current.color}
+                          onChange={(e) =>
+                            patchLayer({ color: e.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="property-control-row">
+                      <span>Style</span>
+                      <fieldset
+                        className="format-tools"
+                        aria-label="Text style"
                       >
-                        <Crop size={17} />
-                        {cropMode ? 'Done cropping' : 'Adjust crop'}
-                      </button>
-                      <div className="slider-field">
-                        <span>Zoom</span>
-                        <Slider
-                          aria-label="Crop zoom"
-                          value={[current.cropZoom ?? 1]}
-                          min={1}
-                          max={4}
-                          step={0.05}
-                          onValueChange={(v) =>
-                            patchLayer({
-                              cropZoom: Array.isArray(v) ? v[0] : v,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="slider-field">
-                        <span>Horizontal position</span>
-                        <Slider
-                          aria-label="Crop horizontal position"
-                          value={[current.cropX ?? 50]}
-                          min={0}
-                          max={100}
-                          step={1}
-                          onValueChange={(v) =>
-                            patchLayer({ cropX: Array.isArray(v) ? v[0] : v })
-                          }
-                        />
-                      </div>
-                      <div className="slider-field">
-                        <span>Vertical position</span>
-                        <Slider
-                          aria-label="Crop vertical position"
-                          value={[current.cropY ?? 50]}
-                          min={0}
-                          max={100}
-                          step={1}
-                          onValueChange={(v) =>
-                            patchLayer({ cropY: Array.isArray(v) ? v[0] : v })
-                          }
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          patchLayer({ cropX: 50, cropY: 50, cropZoom: 1 })
+                        <IconButton
+                          label="Bold"
+                          active={current.bold}
+                          onClick={() => patchLayer({ bold: !current.bold })}
+                        >
+                          <Bold size={18} />
+                        </IconButton>
+                        {(['left', 'center', 'right'] as const).map(
+                          (align, i) => (
+                            <IconButton
+                              key={align}
+                              label={`Align ${align}`}
+                              active={current.align === align}
+                              onClick={() => patchLayer({ align })}
+                            >
+                              {i === 0 ? (
+                                <AlignLeft size={18} />
+                              ) : i === 1 ? (
+                                <AlignCenter size={18} />
+                              ) : (
+                                <AlignRight size={18} />
+                              )}
+                            </IconButton>
+                          ),
+                        )}
+                      </fieldset>
+                    </div>
+                    <div className="property-control-row">
+                      <span>Vertical</span>
+                      <fieldset
+                        className="format-tools"
+                        aria-label="Vertical alignment"
+                      >
+                        {(['top', 'middle', 'bottom'] as const).map(
+                          (verticalAlign, i) => (
+                            <IconButton
+                              key={verticalAlign}
+                              label={`Align ${verticalAlign}`}
+                              active={
+                                (current.verticalAlign || 'top') ===
+                                verticalAlign
+                              }
+                              onClick={() => patchLayer({ verticalAlign })}
+                            >
+                              {i === 0 ? (
+                                <AlignVerticalJustifyStart size={18} />
+                              ) : i === 1 ? (
+                                <AlignVerticalJustifyCenter size={18} />
+                              ) : (
+                                <AlignVerticalJustifyEnd size={18} />
+                              )}
+                            </IconButton>
+                          ),
+                        )}
+                      </fieldset>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      Image fit
+                      <select
+                        value={current.fit}
+                        onChange={(e) =>
+                          patchLayer({ fit: e.target.value as Layer['fit'] })
                         }
                       >
-                        <Undo2 size={16} />
-                        Reset crop
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              <h3>Arrange</h3>
-              <div className="format-tools">
-                <IconButton label="Bring forward" onClick={() => reorder(1)}>
-                  <ArrowUp size={18} />
-                </IconButton>
-                <IconButton label="Send backward" onClick={() => reorder(-1)}>
-                  <ArrowDown size={18} />
-                </IconButton>
-                <IconButton
-                  label="Duplicate layer"
-                  onClick={() => {
-                    const layer = { ...current, id: uuid() };
-                    change({ ...slide, layers: [...slide.layers, layer] });
-                    setSelected(layer.id);
-                  }}
-                >
-                  <Copy size={18} />
-                </IconButton>
-              </div>
-            </>
+                        <option value="cover">Fill frame</option>
+                        <option value="contain">Fit image</option>
+                      </select>
+                    </label>
+                    {current.fit === 'cover' && (
+                      <details className="property-details" key={current.id}>
+                        <summary>Crop adjustments</summary>
+                        <div className="crop-controls">
+                          <button
+                            type="button"
+                            className={cropMode ? 'primary' : ''}
+                            aria-pressed={cropMode}
+                            onClick={() => setCropMode(!cropMode)}
+                          >
+                            <Crop size={17} />
+                            {cropMode ? 'Done cropping' : 'Adjust crop'}
+                          </button>
+                          <div className="slider-field">
+                            <span>Zoom</span>
+                            <Slider
+                              aria-label="Crop zoom"
+                              value={[current.cropZoom ?? 1]}
+                              min={1}
+                              max={4}
+                              step={0.05}
+                              onValueChange={(v) =>
+                                patchLayer({
+                                  cropZoom: Array.isArray(v) ? v[0] : v,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="slider-field">
+                            <span>Horizontal position</span>
+                            <Slider
+                              aria-label="Crop horizontal position"
+                              value={[current.cropX ?? 50]}
+                              min={0}
+                              max={100}
+                              step={1}
+                              onValueChange={(v) =>
+                                patchLayer({
+                                  cropX: Array.isArray(v) ? v[0] : v,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="slider-field">
+                            <span>Vertical position</span>
+                            <Slider
+                              aria-label="Crop vertical position"
+                              value={[current.cropY ?? 50]}
+                              min={0}
+                              max={100}
+                              step={1}
+                              onValueChange={(v) =>
+                                patchLayer({
+                                  cropY: Array.isArray(v) ? v[0] : v,
+                                })
+                              }
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              patchLayer({ cropX: 50, cropY: 50, cropZoom: 1 })
+                            }
+                          >
+                            <Undo2 size={16} />
+                            Reset crop
+                          </button>
+                        </div>
+                      </details>
+                    )}
+                  </>
+                )}
+              </PropertySection>
+              <PropertySection title="Arrange">
+                <div className="format-tools">
+                  <IconButton
+                    label="Bring forward"
+                    disabled={current.lockMode === 'full'}
+                    onClick={() => reorder(1)}
+                  >
+                    <ArrowUp size={18} />
+                  </IconButton>
+                  <IconButton
+                    label="Send backward"
+                    disabled={current.lockMode === 'full'}
+                    onClick={() => reorder(-1)}
+                  >
+                    <ArrowDown size={18} />
+                  </IconButton>
+                  <IconButton
+                    label="Duplicate layer"
+                    disabled={current.lockMode === 'full'}
+                    onClick={() => {
+                      const layer = { ...current, id: uuid() };
+                      change({ ...slide, layers: [...slide.layers, layer] });
+                      setSelected(layer.id);
+                    }}
+                  >
+                    <Copy size={18} />
+                  </IconButton>
+                </div>
+              </PropertySection>
+            </fieldset>
           ) : (
-            <p className="muted">No layer selected</p>
+            <p className="property-empty">
+              Select a layer to edit its properties.
+            </p>
           )}
         </aside>
       </div>
       <Modal
-        title="Add an image"
-        description="Choose from your media library."
-        open={media}
-        onClose={() => setMedia(false)}
+        title={
+          media && typeof media === 'object' ? 'Replace image' : 'Add an image'
+        }
+        description="Choose an image from your media library."
+        open={media !== null}
+        onClose={() => setMedia(null)}
         wide
       >
         <MediaLibrary
@@ -2037,7 +2213,7 @@ function Editor({
           folders={folders}
           onRefresh={onRefresh}
           onUpload={onUpload}
-          onPick={(asset) => add('image', asset.id)}
+          onPick={(asset) => chooseImage(asset.id)}
         />
       </Modal>
       <Modal

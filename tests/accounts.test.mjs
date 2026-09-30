@@ -79,6 +79,296 @@ async function fixture(t) {
   return { ...instance, client, admin, user };
 }
 
+async function uploadImage(call) {
+  const form = new FormData();
+  form.append(
+    'file',
+    new Blob([
+      await sharp({
+        create: { width: 2, height: 2, channels: 3, background: 'red' },
+      })
+        .png()
+        .toBuffer(),
+    ]),
+    'private.png',
+  );
+  const result = await call('/api/assets', 'POST', form);
+  assert.equal(result.status, 201);
+  return result.data;
+}
+
+void test('non-image references cannot authorize private media, including legacy records', async (t) => {
+  const { admin, user, db } = await fixture(t);
+  const outsider = await user('outsider');
+  const asset = await uploadImage(admin);
+  const layer = {
+    id: randomUUID(),
+    type: 'text',
+    assetId: asset.id,
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+  };
+  for (const type of ['text', 'clock']) {
+    assert.equal(
+      (
+        await outsider.call('/api/slides', 'POST', {
+          ...slide,
+          layers: [{ ...layer, type }],
+        })
+      ).status,
+      400,
+    );
+  }
+  assert.equal(
+    (
+      await outsider.call('/api/slides', 'POST', {
+        ...slide,
+        layers: [{ ...layer, type: 'image' }],
+      })
+    ).status,
+    404,
+  );
+  const owned = (await outsider.call('/api/slides', 'POST', slide)).data;
+  db.prepare("UPDATE records SET body=? WHERE kind='slide' AND id=?").run(
+    JSON.stringify({ ...owned, layers: [layer] }),
+    owned.id,
+  );
+  assert.equal((await outsider.call(asset.url)).status, 404);
+  assert.equal((await outsider.call('/api/library')).data.assets.length, 0);
+});
+
+void test('published media is read-only for shared playlists and screens until their access is removed', async (t) => {
+  const { admin, user, client } = await fixture(t);
+  const recipient = await user('recipient');
+  const outsider = await user('outsider');
+  const asset = await uploadImage(admin);
+  const item = (
+    await admin('/api/slides', 'POST', {
+      ...slide,
+      layers: [
+        {
+          id: randomUUID(),
+          type: 'image',
+          assetId: asset.id,
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+        },
+      ],
+    })
+  ).data;
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Published',
+      items: [{ slideId: item.id, duration: 10 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.equal(
+    (await admin(`/api/slides/${item.id}`, 'PUT', slide)).status,
+    200,
+  );
+  const group = (
+    await recipient.call('/api/groups', 'POST', { name: 'Viewers' })
+  ).data;
+  for (const target of [{ userId: recipient.user.id }, { groupId: group.id }]) {
+    assert.equal(
+      (await admin(`/api/access/playlist/${playlist.id}`, 'POST', target))
+        .status,
+      200,
+    );
+    const visible = (await recipient.call('/api/library')).data.assets.find(
+      (a) => a.id === asset.id,
+    );
+    assert.equal(visible.readOnly, true);
+    assert.equal((await recipient.call(asset.url)).status, 200);
+    assert.equal((await outsider.call(asset.url)).status, 404);
+    assert.equal(
+      (
+        await recipient.call(`/api/assets/${asset.id}`, 'PATCH', {
+          name: 'Changed',
+        })
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await recipient.call('/api/assets/batch', 'POST', {
+          ids: [asset.id],
+          addTags: ['changed'],
+        })
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+          ...target,
+          remove: true,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await recipient.call(asset.url)).status, 404);
+  }
+  const device = (
+    await client()('/api/player/enroll', 'POST', { name: 'Screen' })
+  ).data;
+  await admin(`/api/devices/${device.id}/approve`, 'POST', {
+    code: device.code,
+  });
+  await admin(`/api/devices/${device.id}`, 'PUT', {
+    name: 'Screen',
+    playlistId: playlist.id,
+    rotation: 0,
+    blank: false,
+  });
+  assert.equal(
+    (
+      await admin(`/api/access/device/${device.id}`, 'POST', {
+        userId: recipient.user.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await recipient.call(asset.url)).status, 200);
+  await admin(`/api/access/device/${device.id}`, 'POST', {
+    userId: recipient.user.id,
+    remove: true,
+  });
+  // Sharing a screen also grants its playlist; that independent grant remains.
+  assert.equal((await recipient.call(asset.url)).status, 200);
+  await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+    userId: recipient.user.id,
+    remove: true,
+  });
+  assert.equal((await recipient.call(asset.url)).status, 404);
+  await admin(`/api/access/device/${device.id}`, 'POST', {
+    userId: recipient.user.id,
+  });
+  await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+    userId: recipient.user.id,
+    remove: true,
+  });
+  assert.equal((await recipient.call(asset.url)).status, 200);
+  await admin(`/api/access/device/${device.id}`, 'POST', {
+    userId: recipient.user.id,
+    remove: true,
+  });
+  assert.equal((await recipient.call(asset.url)).status, 404);
+});
+
+void test('password changes enforce eight characters and shorter valid credentials can log in', async (t) => {
+  const { admin } = await fixture(t);
+  assert.equal(
+    (
+      await admin('/api/account/password', 'POST', {
+        currentPassword: password,
+        password: 'short77',
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await admin('/api/account/password', 'POST', {
+        currentPassword: password,
+        password: 'valid888',
+      })
+    ).status,
+    200,
+  );
+  await admin('/api/logout', 'POST');
+  assert.equal(
+    (
+      await admin('/api/login', 'POST', {
+        username: 'admin',
+        password: 'valid888',
+      })
+    ).status,
+    200,
+  );
+});
+
+void test('collaborators cannot add dependencies the resource owner cannot access', async (t) => {
+  const { admin, user } = await fixture(t);
+  const owner = await user('owner');
+  const collaborator = await user('collaborator');
+  const original = (await owner.call('/api/slides', 'POST', slide)).data;
+  const privateSlide = (await collaborator.call('/api/slides', 'POST', slide))
+    .data;
+  const playlist = (
+    await owner.call('/api/playlists', 'POST', {
+      name: 'Owned',
+      items: [{ slideId: original.id, duration: 10 }],
+    })
+  ).data;
+  await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+    userId: collaborator.user.id,
+  });
+  assert.equal(
+    (
+      await collaborator.call(`/api/playlists/${playlist.id}`, 'PUT', {
+        name: 'Changed',
+        items: [{ slideId: privateSlide.id, duration: 10 }],
+      })
+    ).status,
+    409,
+  );
+  assert.equal((await owner.call(`/api/preview/${playlist.id}`)).status, 200);
+  assert.equal(
+    (await owner.call(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.equal(
+    (
+      await admin(`/api/access/slide/${privateSlide.id}`, 'POST', {
+        userId: owner.user.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await collaborator.call(`/api/playlists/${playlist.id}`, 'PUT', {
+        name: 'Shared',
+        items: [{ slideId: privateSlide.id, duration: 10 }],
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await owner.call(`/api/preview/${playlist.id}`)).status, 200);
+});
+
+void test('login aliases share the same attempt budget', async (t) => {
+  const { client } = await fixture(t);
+  const call = client();
+  const routes = ['/api/login', '/API/LOGIN', '/api/login/', '/Api/Login'];
+  for (let i = 0; i < 15; i++) {
+    assert.equal(
+      (
+        await call(routes[i % routes.length], 'POST', {
+          username: 'admin',
+          password: 'incorrect-password',
+        })
+      ).status,
+      401,
+    );
+  }
+  for (const route of routes) {
+    assert.equal(
+      (await call(route, 'POST', { username: 'admin', password })).status,
+      429,
+    );
+  }
+});
+
 void test('sessions persist for 30 days and renew at most daily, including existing shorter sessions', async (t) => {
   const { admin, db } = await fixture(t);
   const login = await admin('/api/login', 'POST', { password });
