@@ -2,6 +2,20 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.10.0] - 2026-09-30
+
+- Publish the reviewed account, media-sharing, editor, and security fixes
+- Owner-approved GitHub milestone containing local revisions 0.9.1 and 0.9.2, preserving the local fix commit and earlier milestone history.
+- Apply the eight-character password minimum consistently across account setup, activation, password changes, and login. Share login attempt budgets across equivalent route spellings.
+- Show attached media as read-only through shared slides, playlists, and screens, including published snapshots. Reject forged non-image media references and preserve owner access when collaborators update referenced content.
+- Add Full Lock and movement locks for text, images, and widgets; keep locked coordinates fixed during dimension edits. Separate Add image from Replace image and organize the slide sidebar into compact property sections.
+- Secure player JSON replacement and file ownership against symlinks; redact first-boot Wi-Fi failures. Update the affected development dependencies; the full dependency audit reports zero advisories.
+- Upgrade the server while preserving the complete existing data directory. Update installed `agent.py`, `bootstrap.py`, and `recovery.py` together; customized player images also need the updated `firstboot.sh`. Server upgrades do not update player files automatically. Playback manifests and database schemas require no destructive migration.
+- To roll back to 0.9.0, first change any new 8-11 character passwords to at least 12 characters, since the old server rejects shorter login credentials. Restore the prior server/player code with the preserved data; older editors do not enforce layer locks or provide derived read-only media access.
+- Physical Pi/radio behavior and real privileged provisioning remain unverified and experimental. Desktop, browser, and mocked player checks do not establish hardware performance or isolation.
+- Local checks pass with 117 Node tests, 89 Python tests, both account/editor browser suites, build, typecheck, lint, and zero dependency advisories. Local Docker acceptance is blocked by the cloud environment's Docker Hub policy; the GitHub workflow performs native container verification before publishing.
+- The milestone tag triggers CI and native AMD64/ARM64 container checks before publishing images under `0.10.0` and `latest`. This does not deploy a running installation or create a GitHub Release automatically.
+
 ## [0.9.2] - 2026-09-30
 
 - Resolve security audit findings in sharing, authentication, player provisioning, and layer editing; update vulnerable development dependencies
