@@ -25,7 +25,7 @@ export function bundleEnvironment(image, digest) {
     !/^sha256:[a-f0-9]{64}$/.test(digest)
   )
     throw new Error('A valid registry image and immutable digest are required');
-  return `OPENFRAME_IMAGE=${image}@${digest}\nOPENFRAME_PORT=3100\nOPENFRAME_BIND_ADDRESS=0.0.0.0\nPUBLIC_URL=\nCOOKIE_SECURE=false\n`;
+  return `OPENFRAME_IMAGE=${image}@${digest}\nOPENFRAME_PORT=3100\nOPENFRAME_BIND_ADDRESS=0.0.0.0\n# For any HTTPS proxy or tunnel, use the browser-facing origin (no path):\n# PUBLIC_URL=https://signage.example.com and COOKIE_SECURE=true.\n# Recreate/redeploy the container after changes; restart alone is insufficient.\n# See README.md: HTTPS proxies and public hostnames.\nPUBLIC_URL=\nCOOKIE_SECURE=false\n`;
 }
 
 if (

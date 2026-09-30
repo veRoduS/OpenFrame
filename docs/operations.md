@@ -31,6 +31,21 @@ Do not run multiple server containers against one SQLite volume. This is a singl
 
 Compose reads `.env`. Direct Node startup requires shell environment variables. The [Cloudflare deployment](remote-players.md) uses its own `.env.cloudflare` and `OPENFRAME_PUBLIC_URL` instead. Use its full `--env-file .env.cloudflare -f compose.cloudflare.yaml` arguments wherever this page shows `docker compose`; do not merge the two Compose files. Keep the same Compose project name/directory when replacing or upgrading a deployment so the volume name stays consistent.
 
+## Public URL and reverse proxies
+
+For any HTTPS reverse proxy, tunnel, ingress, or load balancer (for example Nginx, Caddy, Traefik, or Cloudflare), configure these variables on the **OpenFrame container**, not just the proxy:
+
+```dotenv
+PUBLIC_URL=https://signage.example.com
+COOKIE_SECURE=true
+```
+
+Replace the example with the exact browser-facing origin: scheme, hostname, and port if non-default. Do not use the internal container/LAN address or include a path. HTTPS at the proxy still requires these settings even when its connection to OpenFrame uses HTTP. Use the configured HTTPS address for administrator access afterward. OpenFrame currently accepts one configured browser origin; writes from an alternate LAN IP or hostname are intentionally rejected. Direct trusted LAN HTTP installations without a proxy can leave `PUBLIC_URL` unset and `COOKIE_SECURE=false`.
+
+After editing the environment, **recreate/redeploy**, rather than merely restarting, the container. For Compose, use `docker compose up -d --force-recreate openframe` with the same `-f`, `--env-file`, and project arguments used for the existing deployment. For Portainer, edit the stack's environment and redeploy it. Preserve the project name and data volume; never use `down -v` for this change. Do not expose the backend port publicly just to fix login.
+
+If login reports **Origin not allowed**, the request was rejected before password verification. Check the running OpenFrame container's `PUBLIC_URL` against the address in the browser, including HTTP versus HTTPS and any non-default port. Confirm the changed environment was applied by recreating the container, then retry through the configured address. Do not disable the origin check or broadly trust forwarded headers to work around the error. `COOKIE_SECURE=true` also requires the browser to use HTTPS.
+
 ## Backup
 
 Back up before every upgrade. A consistent backup includes the **entire** data directory, not just a live `.sqlite` file. Stop writes before copying. The commands below deliberately stop the service; connected players can keep playing cached content.

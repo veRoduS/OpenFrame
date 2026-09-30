@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.8.1] - 2026-09-30
+
+- Document provider-neutral HTTPS proxy setup and origin-error recovery
+
 ## [0.8.0] - 2026-09-30
 
 - Approved GitHub milestone containing local revision 0.7.1, preserving its commit history.

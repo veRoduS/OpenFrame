@@ -47,7 +47,22 @@ The registry stack has no `build:` section and refuses to start without an expli
 
 The image is published to GitHub Container Registry (GHCR). A new GHCR package may initially be private even when its repository is public. The owner must make the package public in its Package settings for anonymous pulls, or authenticate Docker to GHCR with a credential permitted to read that package. Never put a registry credential in the Compose file or commit it. Public source does not imply the image already exists: check the workflow result first.
 
-## Cloudflare and players
+## HTTPS proxies and public hostnames
+
+For any reverse proxy, tunnel, ingress, or load balancer, set these values in the OpenFrame stack's `.env` (or directly in the OpenFrame container environment):
+
+```dotenv
+PUBLIC_URL=https://signage.example.com
+COOKIE_SECURE=true
+```
+
+Use your exact browser-facing origin, including HTTPS and a non-default port if applicable, without a path. Do not use the proxy's internal upstream address. This applies to Nginx, Caddy, Traefik, Cloudflare, and other providers, including when the proxy connects to OpenFrame over HTTP.
+
+Recreate the container with `docker compose up -d --force-recreate openframe`, retaining the existing Compose file, environment-file, and project arguments (for example `-f compose.registry.yaml` for the repository's registry stack). In Portainer, edit the stack and redeploy. A restart alone does not apply environment changes. Keep the same project and data volume; never use `down -v`.
+
+**Origin not allowed** at login means the browser origin does not match the server's expected origin, before password verification. Check `PUBLIC_URL` in the running container, then sign in through that exact HTTPS address. Alternate LAN/IP browser addresses are intentionally rejected once a public origin is configured. Keep the origin check enabled. Direct trusted LAN HTTP installations can leave `PUBLIC_URL` unset and `COOKIE_SECURE=false`.
+
+## Tunnels and players
 
 For an existing home tunnel, point cloudflared at the running server's reachable address and set `PUBLIC_URL`/`COOKIE_SECURE` appropriately. The separate source-build `compose.cloudflare.yaml` remains available. This downloadable stack does not carry your Cloudflare token, player identity, Wi-Fi password, or WireGuard keys.
 

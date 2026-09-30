@@ -17,7 +17,9 @@ sudo reboot
 
 6. Enter the code shown on the screen in **Screens > Pair screen**, then assign the published playlist.
 
-For screens outside your home, use [Cloudflare HTTPS](remote-players.md) or an [existing WireGuard client](wireguard-players.md). The manual installer expects working networking; Wi-Fi fields in the ZIP are used by the image builder's first-boot flow.
+Before accessing the dashboard through any HTTPS proxy or tunnel, set `PUBLIC_URL` to its browser-facing HTTPS origin and `COOKIE_SECURE=true` on OpenFrame, then recreate/redeploy the container. This prevents the **Origin not allowed** login error; a restart alone does not apply environment changes. See [provider-neutral proxy setup](operations.md#public-url-and-reverse-proxies).
+
+For screens outside your home, use [public HTTPS](operations.md#public-url-and-reverse-proxies), the [Cloudflare example](remote-players.md), or an [existing WireGuard client](wireguard-players.md). The manual installer expects working networking; Wi-Fi fields in the ZIP are used by the image builder's first-boot flow.
 
 ## Automated hotspot and managed WireGuard
 

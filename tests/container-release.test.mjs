@@ -27,3 +27,18 @@ void test('Compose bundles pin the manifest digest and reject environment inject
     bundleEnvironment('ghcr.io/name/repo\nTOKEN=secret', digest),
   );
 });
+
+void test('Compose bundle documents proxy setup without changing LAN defaults', () => {
+  const env = bundleEnvironment(
+    'ghcr.io/verodus/openframe',
+    `sha256:${'a'.repeat(64)}`,
+  );
+  assert.match(env, /For any HTTPS proxy or tunnel/);
+  assert.match(
+    env,
+    /PUBLIC_URL=https:\/\/signage\.example\.com and COOKIE_SECURE=true/,
+  );
+  assert.match(env, /Recreate\/redeploy the container/);
+  assert.match(env, /^PUBLIC_URL=$/m);
+  assert.match(env, /^COOKIE_SECURE=false$/m);
+});
