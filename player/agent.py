@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.7.1'
+VERSION = '0.8.0'
 
 
 def normalize_server(value):

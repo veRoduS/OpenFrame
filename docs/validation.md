@@ -1,5 +1,11 @@
 # Validation record
 
+## Pre-publication 0.8.0
+
+Checked on 2026-09-30: 111 Node tests including real Python-agent integration and 85 Python tests passed, along with typecheck, lint, formatting, production build, three Pi shell syntax checks, and version/repository checks. An isolated frozen-lockfile install using the repository's build-script policy passed. The production dependency audit reported no known vulnerabilities. The new access controls and dialog were visually checked against isolated preview data on desktop and phone layouts during revision 0.7.1. The complete browser automation suite was not repeated for this milestone.
+
+Docker is not installed on this machine, so local container and volume-backup/restore acceptance checks remain unavailable. The tagged workflow must pass its native AMD64 and ARM64 container checks before publishing 0.8.0 and latest. Physical Pi and live managed-VPN testing remain outstanding; this milestone does not claim hardware validation or enable managed WireGuard on existing deployments. No screenshots, private preview data, or credentials are included in the publication.
+
 ## Pre-publication 0.6.0
 
 Checked on 2026-09-29: 111 Node tests (including Python-agent integration), 85 Python tests, typecheck, lint, formatting, production build, shell syntax, and version/repository checks passed. The landing, account, playlist-picker, transition, weather, screen-setup, player-connectivity/recovery, and first-boot browser suites passed against isolated data; external APIs and player networking were mocked. The production dependency audit identified [GHSA-3pph-fpjx-jg34](https://github.com/advisories/GHSA-3pph-fpjx-jg34); Multer was upgraded to 2.4.0, the first patched version, and the repeated audit found no known vulnerabilities. The publish workflow now assigns both the fixed milestone version and `latest` to the same successful multi-platform image build.

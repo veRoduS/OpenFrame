@@ -2,6 +2,15 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.8.0] - 2026-09-30
+
+- Approved GitHub milestone containing local revision 0.7.1, preserving its commit history.
+- Add labeled Manage access controls on Slides, Playlists, Screens, and Media, with dedicated slide/media card footers and responsive layouts.
+- Reuse the access dialog across resource pages and account management; constrain dialogs and wrap long names to prevent clipping.
+- Add an invitation-copy fallback when the browser Clipboard API is unavailable, and remove the Self-hosted and Local server Connected dashboard labels.
+- No database schema, pairing, VPN, or player behavior changes. Upgrade the server while preserving its existing data volume; installed players do not need updating for these UI changes. Roll back to the prior server image with the preserved data volume if needed.
+- The milestone workflow publishes 0.8.0 and latest only after its checks pass. Docker and physical Pi validation remain incomplete; managed networking and hardware performance remain experimental.
+
 ## [0.7.1] - 2026-09-29
 
 - Improve sharing controls and dialog layout
