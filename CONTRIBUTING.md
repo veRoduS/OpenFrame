@@ -67,6 +67,8 @@ The API lives in `server/`. The independently installed Pi agent and browser ass
 
 The Android TV app is in `player/android/` and packages `player/web/` directly. See [Android TV builds](docs/android-tv.md#build-the-usb-package) for SDK/signing requirements, tests, and the dependency-free SDK fallback. Android changes additionally require the native agent tests, APK signing/alignment checks, and device acceptance before claiming hardware support. Preserve the release key for in-place updates; never commit it.
 
+Run `node tests/player-startup.browser.mjs` with the Playwright settings above when changing player startup or timers. This serves the actual player entrypoint and checks pairing, empty playlists, playback, telemetry, and blank/resume using both a simulated Android bridge and the Pi HTTP reporting path. It uses real browser timers; injected clocks in unit tests alone cannot establish browser compatibility. Set `OPENFRAME_BROWSER_EXECUTABLE` to select an installed Chromium executable.
+
 Only server runtime packages belong in `dependencies`. Frontend libraries, CSS tooling, and development tools belong in `devDependencies`: the Docker build stage compiles them into `dist/` before the runtime stage installs production dependencies. Use a full install for `pnpm dev` or `pnpm build`; a production-only install runs the already-built server and assets.
 
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.

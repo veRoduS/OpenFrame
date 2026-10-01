@@ -1,5 +1,11 @@
 # Validation record
 
+## Local revision 0.10.2: player startup timer binding
+
+Reproduced the reported **Waiting for connection / Illegal invocation** screen in Chromium with the actual player entrypoint before changing the code. The playback controller stored native browser timer functions as instance methods, passing the controller as their receiver; browsers reject that invocation. Wrapped the default timer calls through `globalThis`, preserving injected clocks used by other tests.
+
+The new browser regression covers pairing, empty playlists, actual playback with browser timers, telemetry, and blank/resume for both the simulated Android bridge and Pi HTTP paths. Both paths pass after the fix. The Node suite now includes a receiver-enforcing timer regression. Android 0.10.2 is rebuilt with the existing private release key for installation over 0.10.1 without clearing app data. Browser testing does not replace validation on the user's Android TV device.
+
 ## Local revision 0.10.1: Android TV USB player
 
 Checked on 2026-10-01: 117 Node tests (including Python-agent integration), 89 Python tests, typecheck, lint, and the production web build passed. Eight native Java agent tests passed using JUnit 4.13.2 and Android's JSON implementation: pairing persistence, credential isolation, checksum/atomic publication behavior, offline restart, explicit revocation versus proxy failures, command acknowledgement, telemetry, input limits, and cached weather preservation.

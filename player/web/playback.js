@@ -14,8 +14,11 @@ export class Playback {
     report = () => {},
     now = () => performance.now(),
     wallNow = () => Date.now(),
-    schedule = setTimeout,
-    cancel = clearTimeout,
+    // Browser timers require the Window receiver; storing a native function
+    // directly would call it with this Playback instance as its receiver.
+    schedule = (callback, delay) =>
+      globalThis.setTimeout(() => callback(), delay),
+    cancel = (timer) => globalThis.clearTimeout(timer),
   }) {
     Object.assign(this, {
       prepare,

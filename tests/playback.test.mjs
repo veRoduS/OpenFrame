@@ -17,6 +17,26 @@ const manifest = (revision = 'one', ids = ['a', 'b']) => ({
   assets: [],
   items: ids.map((id) => ({ slide: { id }, duration: 2 })),
 });
+
+void test('default timers retain their browser-global receiver', (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'setTimeout', function (callback, delay) {
+    assert.equal(this, globalThis);
+    calls.push({ callback, delay });
+    return 42;
+  });
+  t.mock.method(globalThis, 'clearTimeout', function () {
+    assert.equal(this, globalThis);
+  });
+  const player = new Playback({ prepare() {}, commit() {}, wallNow: () => 0 });
+  const scheduled = manifest();
+  for (const item of scheduled.items)
+    item.startsAt = new Date(2000).toISOString();
+  player.update(scheduled);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].delay, 1000);
+  player.stop();
+});
 function fixture(t, effect = () => undefined) {
   let time = 0,
     id = 0;
