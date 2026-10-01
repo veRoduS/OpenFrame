@@ -1,5 +1,9 @@
 # HTTP API
 
+## Public Android downloads
+
+`GET /downloads/android/latest.json` returns `{available:true,packageName,versionName,versionCode,minSdk,size,sha256,apkUrl}` for the current validated APK. Both the versioned `apkUrl` and `/downloads/android/openframe-player.apk` return an APK attachment with `Cache-Control: no-store`. These public GET/HEAD endpoints require no OpenFrame authentication. Missing releases return 404 JSON, invalid/incomplete releases return 503 JSON, both with `available:false`; they never fall through to the HTML app. Only the advertised release is served. `ANDROID_RELEASE_DIR` selects the directory containing its APK and `latest.json`. See [Android updates](android-tv.md).
+
 ## User accounts and access
 
 `GET /api/auth` includes `user:{id,username,name,role,disabled}` when signed in. Normal server startup seeds a unique super-admin before listening, so `setup` is false and `/api/setup` returns 409. The legacy setup route remains for isolated application-factory tests; custom entrypoints must call the returned `seedInitialAdmin()` before accepting requests, as `server/index.mjs` does. Initial credentials are never exposed through HTTP. All library reads, edits, previews, reference validation, and browser media requests are checked against ownership and direct/group grants. Inaccessible resources return 404. Player APIs retain their existing device-token authorization.

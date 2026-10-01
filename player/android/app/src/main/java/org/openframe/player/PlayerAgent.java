@@ -312,7 +312,7 @@ final class PlayerAgent {
 
     static String sha256(byte[] data) throws Exception { return hex(MessageDigest.getInstance("SHA-256").digest(data)); }
 
-    private static String hashFile(File file) throws Exception {
+    static String hashFile(File file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = new FileInputStream(file)) {
             byte[] buffer = new byte[16384];

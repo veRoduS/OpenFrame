@@ -9,4 +9,4 @@
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) and [the release checklist](docs/releases.md). Run version/repository checks, Node and Python tests, lint, typecheck, and build before calling a milestone ready.
 - Never commit real media, databases, credentials, provisioning JSON, configured disk images, caches, or generated build output. Use example configurations containing placeholders only.
 - Keep player resource use bounded: one visible/one prepared frame, timers only while visible, disposal on cancellation. Do not claim Pi performance from desktop tests.
-- Update user/deployment/API documentation when behavior changes. Preserve existing user data and worktree edits. No automatic player-code/OS update service exists.
+- Update user/deployment/API documentation when behavior changes. Preserve existing user data and worktree edits. Android supports update checks and user-confirmed APK installation; no unattended player-code/OS update service exists.

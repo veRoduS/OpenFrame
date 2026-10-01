@@ -37,10 +37,9 @@ export function buildWithSdk(root, version) {
     );
   }
   const versionCode = parts[0] * 1000000 + parts[1] * 1000 + parts[2];
-  const manifest = readFileSync(
-    join(source, 'AndroidManifest.xml'),
-    'utf8',
-  ).replace('<manifest ', '<manifest package="org.openframe.player" ');
+  const manifest = readFileSync(join(source, 'AndroidManifest.xml'), 'utf8')
+    .replace('<manifest ', '<manifest package="org.openframe.player" ')
+    .replaceAll('${applicationId}', 'org.openframe.player');
   writeFileSync(join(work, 'AndroidManifest.xml'), manifest);
   writeFileSync(
     join(work, 'generated/BuildConfig.java'),

@@ -69,6 +69,8 @@ The Android TV app is in `player/android/` and packages `player/web/` directly. 
 
 Run `node tests/player-startup.browser.mjs` with the Playwright settings above when changing player startup or timers. This serves the actual player entrypoint and checks pairing, empty playlists, playback, telemetry, and blank/resume using both a simulated Android bridge and the Pi HTTP reporting path. It uses real browser timers; injected clocks in unit tests alone cannot establish browser compatibility. Set `OPENFRAME_BROWSER_EXECUTABLE` to select an installed Chromium executable.
 
+Run `node tests/android-download.browser.mjs` after building to verify the public APK availability states, real download attachments, and desktop/mobile layout against an isolated server. `tests/android-releases.test.mjs` covers metadata/path/checksum validation in the standard Node suite; `UpdateSourceTest` covers native update discovery and downloads. Real Android package parsing, installation permission/settings return, installer confirmation/cancellation, and signing-key rejection still require device acceptance.
+
 Only server runtime packages belong in `dependencies`. Frontend libraries, CSS tooling, and development tools belong in `devDependencies`: the Docker build stage compiles them into `dist/` before the runtime stage installs production dependencies. Use a full install for `pnpm dev` or `pnpm build`; a production-only install runs the already-built server and assets.
 
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.

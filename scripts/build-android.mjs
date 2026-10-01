@@ -1,5 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
+import {
+  readFileSync,
+  mkdirSync,
+  copyFileSync,
+  writeFileSync,
+  renameSync,
+  chmodSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -38,20 +45,45 @@ if (!sdkOnly)
   );
 const output = resolve(root, 'outputs/android');
 mkdirSync(output, { recursive: true });
+chmodSync(output, 0o755);
 const name = `openframe-player-${version}.apk`;
 const apk = resolve(output, name);
+const temporaryApk = `${apk}.part`;
 copyFileSync(
   sdkOnly
     ? buildWithSdk(root, version)
     : resolve(android, 'app/build/outputs/apk/release/app-release.apk'),
-  apk,
+  temporaryApk,
 );
+chmodSync(temporaryApk, 0o644);
+renameSync(temporaryApk, apk);
 const bytes = readFileSync(apk);
 const checksum = `${createHash('sha256').update(bytes).digest('hex')}  ${name}\n`;
 writeFileSync(resolve(output, `${name}.sha256`), checksum);
-const instructions = `OpenFrame Player ${version} — Android TV USB installation
+chmodSync(resolve(output, `${name}.sha256`), 0o644);
+const [major, minor, patch] = version.split('.').map(Number);
+const release = {
+  packageName: 'org.openframe.player',
+  versionName: version,
+  versionCode: major * 1000000 + minor * 1000 + patch,
+  minSdk: 28,
+  size: bytes.length,
+  sha256: checksum.split(' ')[0],
+  apkUrl: `/downloads/android/${name}`,
+};
+writeFileSync(
+  resolve(output, 'latest.json.part'),
+  `${JSON.stringify(release, null, 2)}\n`,
+);
+chmodSync(resolve(output, 'latest.json.part'), 0o644);
+renameSync(resolve(output, 'latest.json.part'), resolve(output, 'latest.json'));
+const instructions = `OpenFrame Player ${version} — Android TV installation
 
 Requires Android 9 or newer and Android System WebView 100 or newer.
+Without USB, download from your OpenFrame homepage or transfer the APK over Wi-Fi.
+The stable server address is /downloads/android/openframe-player.apk.
+
+USB installation:
 1. Copy ${name} to a USB flash drive readable by your box (usually FAT32).
 2. Insert the drive into the Android TV box and open a USB-capable file manager.
 3. Select the APK. If prompted, allow that file manager to install unknown apps.
@@ -63,17 +95,26 @@ Installation works offline. Initial pairing and content download require the ser
 After a successful sync, downloaded content plays offline while the app stays open.
 Back or Menu opens settings. Reopen the app after restarting the box.
 For updates, install a newer APK signed with the same key without uninstalling.
+This player also checks its configured server for updates every six hours while open.
+Use Back/Menu > Check for updates to download and open Android's installer.
+Android requires installation approval; updates are not silent.
+
+Server release files: deploy ${name} first, then latest.json into ANDROID_RELEASE_DIR.
+For Docker, see the included guide and compose.android.yaml in the source repository.
 This is an experimental build; physical Android TV acceptance is still required.
 See the included android-tv.md for supported features and build/key backup details.
 `;
 writeFileSync(resolve(output, 'INSTALL.txt'), instructions);
+chmodSync(resolve(output, 'INSTALL.txt'), 0o644);
 writeFileSync(
   resolve(output, `openframe-player-${version}-usb.zip`),
   zipSync({
     [name]: bytes,
     [`${name}.sha256`]: strToU8(checksum),
+    'latest.json': strToU8(`${JSON.stringify(release, null, 2)}\n`),
     'INSTALL.txt': strToU8(instructions),
     'android-tv.md': readFileSync(resolve(root, 'docs/android-tv.md')),
   }),
 );
-console.log(`USB installer ready: ${apk}`);
+chmodSync(resolve(output, `openframe-player-${version}-usb.zip`), 0o644);
+console.log(`Android installer and server update metadata ready: ${apk}`);

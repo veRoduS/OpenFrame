@@ -6,6 +6,8 @@ Sessions use persistent 30-day cookies and renew during authenticated activity, 
 
 The landing page makes no account or library API requests. Its images are public product illustrations, not live content from the installation. The management application loads separately when needed. No analytics, externally hosted fonts, or third-party image requests are added. Documentation and source links point to the project on GitHub. The installation command block can be copied; FAQ entries and mobile navigation work without an account.
 
+The **Android player** section checks the public `/downloads/android/latest.json` endpoint and offers the versioned APK as an attachment when available. Unpublished/unavailable releases show a clear status. TV downloader apps can use `/downloads/android/openframe-player.apk` as a stable address. See [Android release hosting and updates](android-tv.md#make-the-download-available-on-your-server).
+
 Password invitations now use `/login#activate=...`. Previously issued `/#activate=...` links still open account activation directly. Tokens stay in the URL fragment until activation completes.
 
 ## Assets

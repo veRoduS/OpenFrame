@@ -15,7 +15,7 @@ LABEL org.opencontainers.image.title="OpenFrame" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version=$VERSION \
       org.opencontainers.image.revision=$VCS_REF
-ENV NODE_ENV=production PORT=3100 DATA_DIR=/data
+ENV NODE_ENV=production PORT=3100 DATA_DIR=/data ANDROID_RELEASE_DIR=/data/android-releases
 WORKDIR /app
 RUN npm install -g pnpm@11.19.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

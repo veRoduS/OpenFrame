@@ -1,5 +1,15 @@
 # Validation record
 
+## Local revision 0.10.3: Android downloads and update checks
+
+Checked on 2026-10-01: 121 Node tests, 89 Python tests, and 13 native Java agent/updater tests passed. Typecheck, lint, and the production web build passed. The public-download browser test verified unavailable/available states, APK attachment bytes, and desktop/mobile layout. The full landing-page browser suite passed at five viewport widths.
+
+Native update tests cover newer/equal/older versions, incompatible SDK/package, metadata path/size validation, rejected redirects, missing releases, checksum failures, preservation of an existing download after a failed replacement, and cancellation. All Android sources compile against API 35. The 0.10.3 APK is built through the SDK fallback with the existing private release key; signing/alignment and package/provider metadata are checked. Builds now generate a matching `latest.json` for the public download endpoints. No live server deployment or GitHub publication is included.
+
+An end-to-end host smoke check ran the native updater's discovery/download code against the real OpenFrame server routes with the signed 0.10.3 release, then independently verified the downloaded APK signature. The release certificate matches 0.10.2, and archive metadata/checksums match the APK.
+
+The real Android permission/settings-return flow, package-manager signing checks, installer approval/cancellation, and successful in-place replacement still require device testing. Checks on the host do not establish unattended TV reliability. Android requires user approval for installation; 0.10.1/0.10.2 need a manual update once to gain this feature. See [Android acceptance and hosting](android-tv.md).
+
 ## Local revision 0.10.2: player startup timer binding
 
 Reproduced the reported **Waiting for connection / Illegal invocation** screen in Chromium with the actual player entrypoint before changing the code. The playback controller stored native browser timer functions as instance methods, passing the controller as their receiver; browsers reject that invocation. Wrapped the default timer calls through `globalThis`, preserving injected clocks used by other tests.

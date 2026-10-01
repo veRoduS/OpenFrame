@@ -33,6 +33,8 @@ Prefer a prebuilt image? See [AMD64/ARM64 images and Compose setup](docs/contain
 
 Build a signed APK with `pnpm build:android`, copy it to a USB flash drive, and install it on the box using its file manager. Open **OpenFrame Player**, enter your server address, and approve its pairing code under **Screens**. See the [Android TV guide](docs/android-tv.md) for build/signing instructions, device requirements, updates, and limitations.
 
+Sticks without USB can use **Download Android APK** on the server homepage or enter `/downloads/android/openframe-player.apk` in a TV downloader app. Android players from 0.10.3 check this server for newer releases and open Android's installer after you choose to update. See the guide for publishing APK files with Docker and the required Android installation approval.
+
 ## Raspberry Pi installation
 
 Follow the [simple server and screen setup](docs/quick-start.md) to prepare a dedicated Pi, download its configuration, and pair it with the server. Detailed installation and image-building instructions are in the [Pi guide](docs/player-installation.md).

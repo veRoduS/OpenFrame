@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowDown,
   ArrowRight,
@@ -6,6 +6,7 @@ import {
   CheckCheck,
   ChevronDown,
   Copy,
+  Download,
   GitFork,
   Layers,
   Menu,
@@ -49,6 +50,41 @@ export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState('');
+  const [androidRelease, setAndroidRelease] = useState<{
+    versionName: string;
+    apkUrl: string;
+  } | null>(null);
+  const [androidLoading, setAndroidLoading] = useState(true);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    fetch('/downloads/android/latest.json', {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const release = await response.json();
+        if (
+          release.available &&
+          /^\d+\.\d+\.\d+$/.test(release.versionName) &&
+          release.apkUrl ===
+            `/downloads/android/openframe-player-${release.versionName}.apk`
+        )
+          setAndroidRelease(release);
+      })
+      .catch(() => {
+        /* The page remains usable before an APK is published. */
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        setAndroidLoading(false);
+      });
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, []);
   async function copyInstall() {
     try {
       await navigator.clipboard.writeText(install);
@@ -79,6 +115,9 @@ export default function Landing() {
           </a>
           <a href="#your-server" onClick={() => setMenuOpen(false)}>
             Your setup
+          </a>
+          <a href="#android-player" onClick={() => setMenuOpen(false)}>
+            Android player
           </a>
           <a href={`${repository}/tree/main/docs`}>
             Documentation <ArrowRight size={13} />
@@ -241,8 +280,8 @@ export default function Landing() {
                 your network.
               </h2>
               <p>
-                A Docker server behind the scenes. A Raspberry Pi behind the
-                screen. Your content, right where it belongs.
+                A Docker server behind the scenes. A Raspberry Pi or Android TV
+                behind the screen. Your content, right where it belongs.
               </p>
               <a
                 href={`${repository}/blob/main/docs/player-installation.md`}
@@ -376,6 +415,41 @@ export default function Landing() {
               </details>
             ))}
           </div>
+        </section>
+        <section
+          id="android-player"
+          className="landing-android"
+          aria-labelledby="android-player-title"
+        >
+          <span className="landing-eyebrow">OPENFRAME ON ANDROID TV</span>
+          <h2 id="android-player-title">Put your TV to work.</h2>
+          <p>
+            Download the player directly on your TV with a downloader app, or
+            transfer it over Wi-Fi or USB. Open it, enter this server’s address,
+            and pair your screen.
+          </p>
+          {androidRelease ? (
+            <a className="landing-button" href={androidRelease.apkUrl} download>
+              <Download size={19} /> Download Android APK ·{' '}
+              {androidRelease.versionName}
+            </a>
+          ) : (
+            <output>
+              {androidLoading
+                ? 'Checking for the Android download…'
+                : 'The Android download is not available on this server yet.'}
+            </output>
+          )}
+          <p className="landing-android-details">
+            Android 9+ and WebView 100+. Experimental player. Updates are
+            checked in the app; Android asks you to approve installation.
+          </p>
+          <a
+            className="landing-text-link"
+            href={`${repository}/blob/main/docs/android-tv.md`}
+          >
+            Installation guide <ArrowRight size={17} />
+          </a>
         </section>
         <section className="landing-closing">
           <span className="landing-eyebrow">MAKE SOMETHING WORTH SHARING</span>

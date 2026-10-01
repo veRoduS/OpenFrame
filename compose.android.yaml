@@ -1,0 +1,8 @@
+# Optional APK distribution, from locally built/signed releases (no signing files).
+# docker compose -f compose.yaml -f compose.android.yaml up -d --build
+services:
+  openframe:
+    environment:
+      ANDROID_RELEASE_DIR: /android-releases
+    volumes:
+      - ./outputs/android:/android-releases:ro
