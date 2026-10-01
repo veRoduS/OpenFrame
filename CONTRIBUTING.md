@@ -65,6 +65,8 @@ Management UI code lives under `app/`, including shared components in `app/compo
 
 The API lives in `server/`. The independently installed Pi agent and browser assets live in `player/`; do not move these into the management UI. See the [source map](docs/architecture.md#source-map) for the remaining boundaries.
 
+The Android TV app is in `player/android/` and packages `player/web/` directly. See [Android TV builds](docs/android-tv.md#build-the-usb-package) for SDK/signing requirements, tests, and the dependency-free SDK fallback. Android changes additionally require the native agent tests, APK signing/alignment checks, and device acceptance before claiming hardware support. Preserve the release key for in-place updates; never commit it.
+
 Only server runtime packages belong in `dependencies`. Frontend libraries, CSS tooling, and development tools belong in `devDependencies`: the Docker build stage compiles them into `dist/` before the runtime stage installs production dependencies. Use a full install for `pnpm dev` or `pnpm build`; a production-only install runs the already-built server and assets.
 
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.

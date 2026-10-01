@@ -66,3 +66,12 @@ wifi.json
 *.tar.gz
 /backups/
 /.openai/
+
+# Android builds and private signing material
+**/.gradle/
+/player/android/**/build/
+/player/android/local.properties
+*.apk
+*.aab
+*.jks
+*.keystore

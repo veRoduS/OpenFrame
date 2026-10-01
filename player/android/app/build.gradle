@@ -1,0 +1,63 @@
+plugins { id 'com.android.application' }
+
+def pkg = new groovy.json.JsonSlurper().parse(file('../../../package.json'))
+def parts = pkg.version.tokenize('.').collect { it.toInteger() }
+if (parts.size() != 3 || parts[1] >= 1000 || parts[2] >= 1000) {
+    throw new GradleException('Android version requires major.minor.patch with minor/patch < 1000')
+}
+def signingPath = System.getenv('OPENFRAME_ANDROID_KEYSTORE')
+def signingPassword = System.getenv('OPENFRAME_ANDROID_STORE_PASSWORD')
+def signingAlias = System.getenv('OPENFRAME_ANDROID_KEY_ALIAS')
+def signingKeyPassword = System.getenv('OPENFRAME_ANDROID_KEY_PASSWORD')
+
+android {
+    namespace 'org.openframe.player'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'org.openframe.player'
+        minSdk 28
+        targetSdk 35
+        versionCode parts[0] * 1000000 + parts[1] * 1000 + parts[2]
+        versionName pkg.version
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            if (signingPath) {
+                storeFile file(signingPath)
+                storePassword signingPassword
+                keyAlias signingAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+        debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' }
+    }
+    // Package the shared renderer directly; no separately maintained web copy.
+    sourceSets.main.assets.srcDirs = ['../../web']
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+tasks.register('validateReleaseSigning') {
+    doLast {
+        if (!signingPath || !signingPassword || !signingAlias || !signingKeyPassword) {
+            throw new GradleException('Set all four OPENFRAME_ANDROID signing variables; see docs/android-tv.md')
+        }
+    }
+}
+tasks.configureEach {
+    if (name == 'preReleaseBuild') dependsOn 'validateReleaseSigning'
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20250107'
+}

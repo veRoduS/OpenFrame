@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.10.1] - 2026-10-01
+
+- Add an Android TV player with signed APK builds and USB installation
+
 ## [0.10.0] - 2026-09-30
 
 - Publish the reviewed account, media-sharing, editor, and security fixes

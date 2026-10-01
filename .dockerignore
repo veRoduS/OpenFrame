@@ -33,3 +33,8 @@ wifi.json
 *.db
 *.tar.gz
 backups
+player/android
+*.apk
+*.aab
+*.jks
+*.keystore

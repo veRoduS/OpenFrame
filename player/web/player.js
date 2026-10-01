@@ -61,7 +61,9 @@ function applyState(state) {
       state.code
         ? 'Approve this code in OpenFrame > Screens.'
         : state.error ||
-            'Set the server address in openframe.json on the SD card.',
+            (globalThis.OpenFrameAndroid
+              ? 'Press Back or Menu to check the server connection settings.'
+              : 'Set the server address in openframe.json on the SD card.'),
     );
     return;
   }
@@ -118,6 +120,10 @@ async function poll() {
 }
 async function reportPlayback() {
   if (preview || !lastStatus) return;
+  if (globalThis.OpenFrameAndroid) {
+    globalThis.OpenFrameAndroid.reportPlayback(JSON.stringify(lastStatus));
+    return;
+  }
   const abort = new AbortController();
   const timeout = setTimeout(() => abort.abort(), 4000);
   try {

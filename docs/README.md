@@ -15,6 +15,7 @@
 - [Server operations](operations.md): configuration, backup/restore, upgrades, rollback, and troubleshooting.
 - [Container images](container-images.md): milestone GHCR publishing, prebuilt Compose stack, and ARM64 Pi requirements.
 - [Raspberry Pi installation](player-installation.md): dedicated Pi setup, first boot, image customization, pairing, and local playback.
+- [Android TV USB installation](android-tv.md): signed APK builds, remote setup, offline content, updates, and device acceptance checks.
 - [Cloudflare Tunnel and Access](remote-players.md): off-site HTTPS connectivity and separate machine credentials.
 - [WireGuard players](wireguard-players.md): importing an existing per-player VPN configuration.
 - [Screen setup builder](screen-setup.md): VPN inventory, allocation, private ZIP exports, and provisioning-key backups.

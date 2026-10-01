@@ -1,5 +1,13 @@
 # Validation record
 
+## Local revision 0.10.1: Android TV USB player
+
+Checked on 2026-10-01: 117 Node tests (including Python-agent integration), 89 Python tests, typecheck, lint, and the production web build passed. Eight native Java agent tests passed using JUnit 4.13.2 and Android's JSON implementation: pairing persistence, credential isolation, checksum/atomic publication behavior, offline restart, explicit revocation versus proxy failures, command acknowledgement, telemetry, input limits, and cached weather preservation.
+
+The release APK was compiled against Android API 35, dexed for API 28+, packaged with the shared renderer, aligned, and signed using official Android SDK build-tools 35.0.0. APK signature verification and alignment checks passed. A private local signing key is retained outside version control for future compatible updates. The USB bundle contains the APK, checksum, and installation instructions, with no signing credentials.
+
+Maven Central returned HTTP 429 during Gradle dependency resolution. The checked-in SDK-only fallback produced the APK; Gradle release lint and the complete Gradle build remain unverified in this environment. No emulator or physical Android TV test was performed. USB installation, remote navigation, WebView playback, upgrades, device power/sleep behavior, and long-run performance still require the [Android TV acceptance checklist](android-tv.md#physical-acceptance-checklist). No GitHub publication or deployment was performed.
+
 ## GitHub milestone 0.9.0
 
 Checked on 2026-09-30: 112 Node tests (including real Python-agent integration), 85 Python tests, typecheck, lint, production build, version consistency, and repository/documentation checks passed. This milestone preserves local revision 0.8.1 and adds Codex Cloud onboarding/deployment documentation; no application runtime or player behavior changes. Browser suites, an isolated clean install, and a dependency audit were not repeated for this documentation-focused milestone.

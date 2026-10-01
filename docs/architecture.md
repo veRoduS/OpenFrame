@@ -1,5 +1,7 @@
 # Architecture
 
+The experimental [Android TV player](android-tv.md) lives in `player/android/`. Its native Java agent implements enrollment/sync and private, checksum-verified media caching. A restricted WebView serves the shared `player/web/` assets from an intercepted app-only HTTPS origin; a bounded telemetry bridge reports playback without exposing device credentials. Android packaging is independent of the Pi Python agent and the server image.
+
 ```text
 Administrator browser -> Express API -> SQLite + processed images
                               ^

@@ -2,7 +2,7 @@
 
 Open-source, self-hosted digital signage. Create slides, schedule playlists, and manage screens from your own server.
 
-The server runs in Docker. Raspberry Pi players download content and keep the latest synced playlist playing when the connection drops.
+The server runs in Docker. Raspberry Pi players and the experimental Android TV app download content and keep the latest synced playlist playing when the connection drops.
 
 ## Features
 
@@ -28,6 +28,10 @@ Run `docker compose logs openframe` to find the unique first-start password. Ope
 Content is stored in a persistent Docker volume. Back it up before upgrades; `docker compose down -v` deletes it.
 
 Prefer a prebuilt image? See [AMD64/ARM64 images and Compose setup](docs/container-images.md).
+
+## Android TV installation
+
+Build a signed APK with `pnpm build:android`, copy it to a USB flash drive, and install it on the box using its file manager. Open **OpenFrame Player**, enter your server address, and approve its pairing code under **Screens**. See the [Android TV guide](docs/android-tv.md) for build/signing instructions, device requirements, updates, and limitations.
 
 ## Raspberry Pi installation
 
