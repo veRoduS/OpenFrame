@@ -2,7 +2,7 @@
 
 ## Public Android downloads
 
-`GET /downloads/android/latest.json` returns `{available:true,packageName,versionName,versionCode,minSdk,size,sha256,apkUrl}` for the current validated APK. Both the versioned `apkUrl` and `/downloads/android/openframe-player.apk` return an APK attachment with `Cache-Control: no-store`. These public GET/HEAD endpoints require no OpenFrame authentication. Missing releases return 404 JSON, invalid/incomplete releases return 503 JSON, both with `available:false`; they never fall through to the HTML app. Only the advertised release is served. `ANDROID_RELEASE_DIR` selects the directory containing its APK and `latest.json`. See [Android updates](android-tv.md).
+`GET /downloads/android/latest.json` returns `{available:true,packageName,versionName,versionCode,minSdk,size,sha256,apkUrl}` for the current validated APK. Both the versioned `apkUrl` and `/downloads/android/openframe-player.apk` return an APK attachment with `Cache-Control: no-store`. These public GET/HEAD endpoints require no OpenFrame authentication. Missing releases return 404 JSON, invalid/incomplete releases return 503 JSON, both with `available:false`; they never fall through to the HTML app. Only the advertised release is served. By default the server verifies and mirrors the latest release from `veRoduS/OpenFrame`, branch `android-releases`, folder `apks/`, caching one verified APK for five minutes. `ANDROID_RELEASE_SOURCE=local` selects local files; `ANDROID_RELEASE_DIR` supplies the directory containing the APK and `latest.json` (and selects local mode unless source is explicit). See [Android updates](android-tv.md).
 
 ## User accounts and access
 
@@ -44,7 +44,7 @@ The array order also governs background promotion from an active backup network.
 
 `GET /api/weather/zip?zip=02108` is administrator-only and returns `{zip,places:[{name,latitude,longitude}]}` from the fixed US Zippopotam.us endpoint. Keep ZIP codes as strings, including leading zeros. Multiple places require a selection in the editor. Errors use the normal JSON error shape: 400 invalid input, 404 unknown ZIP, 429 local lookup throttle, or 502 upstream failure. Lookups are cached/deduplicated; this endpoint does not save a slide or change a player location.
 
-This contract follows the application source; it is not a separate versioned URL namespace. Software versions, publication revisions, and manifest schemaVersion are independent. See [release compatibility](releases.md).
+This contract follows the application source; it is not a separate versioned URL namespace. Software versions, publication revisions, and manifest schemaVersion are independent. Server and player software versions advance separately. See [player/server compatibility reviews](player-compatibility.md).
 
 All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an appropriate HTTP status. Administrator requests require the persistent `openframe_session` HttpOnly, SameSite=Strict cookie, issued by setup/login/activation and valid for 30 days. Authenticated activity renews the cookie and stored session back to 30 days at most once every 24 hours; logout and password changes clear or replace the session instead. Expired, revoked, or disabled-account sessions are never renewed. `COOKIE_SECURE=true` requires HTTPS for this cookie. Browser writes must use the server's origin (or configured `PUBLIC_URL`). Devices use `Authorization: Bearer <token>`; their authentication is unchanged.
 

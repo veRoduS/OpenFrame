@@ -33,6 +33,7 @@ jobs:
       - run: npm install --global pnpm@11.19.0
       - run: pnpm install --frozen-lockfile
       - run: pnpm version:check
+      - run: pnpm compatibility:check
       - run: pnpm repository:check
       - run: pnpm typecheck
       - run: pnpm lint

@@ -1,5 +1,13 @@
 # Validation record
 
+## Server 0.10.4 / player 0.10.3: GitHub APK distribution and independent versions
+
+Checked on 2026-10-02: 152 Node tests (including real Python-agent integration), 89 Python tests, and 13 native Java agent/updater tests passed. Typecheck, lint, production build, repository checks, and Pi shell syntax passed. Landing browser checks passed at five viewport widths; the Android download browser check verifies the direct GitHub link and downloaded bytes on desktop/mobile without a local APK or render-time metadata request.
+
+Tests cover separate server/player version bumps, compatibility review invalidation on source/protocol changes, immutable APK archives, monotonic latest updates, idempotent publication to a temporary bare Git repository, symlink rejection, pinned signing identity, actual APK package/version/SDK checks, and the bounded GitHub mirror's cache, redirects, size and checksum enforcement. The existing signed player APK passes SDK signature/package/alignment verification against the public certificate pin. The player runtime and sync/playlist/update wire contracts remain unchanged; the review records server 0.10.4 with player 0.10.3.
+
+APK publication is authorized for the dedicated `android-releases` branch. Source changes, the landing-page deployment, and hosted workflow activation are separate; the workflow needs the existing signing key in Actions secrets after its source reaches GitHub. Gradle lint and a full Gradle build remain unavailable here due to the previously recorded Maven dependency-access failure; the SDK fallback is available. Physical Android TV installation and upgrade acceptance, Docker deployment, and long-run playback have not been validated by these host checks.
+
 ## Local revision 0.10.3: Android downloads and update checks
 
 Checked on 2026-10-01: 121 Node tests, 89 Python tests, and 13 native Java agent/updater tests passed. Typecheck, lint, and the production web build passed. The public-download browser test verified unavailable/available states, APK attachment bytes, and desktop/mobile layout. The full landing-page browser suite passed at five viewport widths.

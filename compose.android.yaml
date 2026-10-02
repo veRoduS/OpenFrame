@@ -3,6 +3,7 @@
 services:
   openframe:
     environment:
+      ANDROID_RELEASE_SOURCE: local
       ANDROID_RELEASE_DIR: /android-releases
     volumes:
       - ./outputs/android:/android-releases:ro

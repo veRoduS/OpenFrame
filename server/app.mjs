@@ -34,8 +34,11 @@ export function createApp({
   managedVpnTransport,
   weatherFetch,
   zipFetch,
-  androidReleaseDir = process.env.ANDROID_RELEASE_DIR ||
-    fileURLToPath(new URL('../outputs/android/', import.meta.url)),
+  androidReleaseDir,
+  androidReleaseSource = process.env.ANDROID_RELEASE_SOURCE ||
+    (androidReleaseDir || process.env.ANDROID_RELEASE_DIR ? 'local' : 'github'),
+  androidReleaseFetch,
+  androidReleaseNow,
 } = {}) {
   const root = path.resolve(dataDir);
   mkdirSync(path.join(root, 'media'), { recursive: true });
@@ -145,7 +148,16 @@ export function createApp({
     next();
   });
   app.use(express.json({ limit: '1mb' }));
-  mountAndroidReleases(app, path.resolve(androidReleaseDir));
+  mountAndroidReleases(app, {
+    source: androidReleaseSource,
+    directory: path.resolve(
+      androidReleaseDir ||
+        process.env.ANDROID_RELEASE_DIR ||
+        fileURLToPath(new URL('../outputs/android/', import.meta.url)),
+    ),
+    fetcher: androidReleaseFetch,
+    now: androidReleaseNow,
+  });
   const limits = new Map();
   function rateLimit(req, res, next) {
     const now = Date.now();

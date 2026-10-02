@@ -31,15 +31,17 @@ Prefer a prebuilt image? See [AMD64/ARM64 images and Compose setup](docs/contain
 
 ## Android TV installation
 
-Build a signed APK with `pnpm build:android`, copy it to a USB flash drive, and install it on the box using its file manager. Open **OpenFrame Player**, enter your server address, and approve its pairing code under **Screens**. See the [Android TV guide](docs/android-tv.md) for build/signing instructions, device requirements, updates, and limitations.
+[Download the latest signed Android APK](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk), transfer it over Wi-Fi or copy it to a USB flash drive, and open it with a TV downloader/file manager. Open **OpenFrame Player**, enter your server address, and approve its pairing code under **Screens**. See the [Android TV guide](docs/android-tv.md) for installation permission, device requirements, updates, and limitations.
 
-Sticks without USB can use **Download Android APK** on the server homepage or enter `/downloads/android/openframe-player.apk` in a TV downloader app. Android players from 0.10.3 check this server for newer releases and open Android's installer after you choose to update. See the guide for publishing APK files with Docker and the required Android installation approval.
+The landing page's **Download Android APK** button links directly to the latest APK on GitHub. [Previous APKs](https://github.com/veRoduS/OpenFrame/tree/android-releases/apks) remain available by player version. Android players from 0.10.3 check their configured server for updates; the server obtains GitHub release metadata and serves the verified APK through its existing update paths. Android requires you to approve installation.
+
+Maintainers can run `pnpm build:android` to build, verify, and publish a signed APK to the dedicated GitHub APK branch. Use `--local` to keep a build local or `pnpm publish:android` to retry an upload. See [Android publication](docs/releases.md#android-apk-publication) for clean-source, signing, and automation requirements.
 
 ## Raspberry Pi installation
 
 Follow the [simple server and screen setup](docs/quick-start.md) to prepare a dedicated Pi, download its configuration, and pair it with the server. Detailed installation and image-building instructions are in the [Pi guide](docs/player-installation.md).
 
-Updating the server does not update player software automatically.
+Updating the server does not update player software automatically. Server and player versions advance independently; [compatibility reviews](docs/player-compatibility.md) track changes that require the other component to be reviewed or upgraded.
 
 ## First playlist
 
@@ -55,7 +57,8 @@ Publish again when you want saved edits to reach your screens. See the [user gui
 - [Backups, upgrades, and troubleshooting](docs/operations.md)
 - [Remote screens](docs/remote-players.md) and [WireGuard](docs/wireguard-players.md)
 - [Contributing and local development](CONTRIBUTING.md)
-- [Security](SECURITY.md), [roadmap](docs/roadmap.md), and [changelog](CHANGELOG.md)
+- [Server/player compatibility](docs/player-compatibility.md)
+- [Security](SECURITY.md), [roadmap](docs/roadmap.md), and [server](CHANGELOG.md)/[player](player/CHANGELOG.md) changelogs
 
 ## Status and license
 

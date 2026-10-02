@@ -24,6 +24,7 @@ On Linux/macOS:
 ```sh
 export OPENFRAME_PYTHON="$(command -v python3)"
 pnpm version:check
+pnpm compatibility:check
 pnpm repository:check
 pnpm typecheck
 pnpm lint
@@ -65,7 +66,7 @@ Management UI code lives under `app/`, including shared components in `app/compo
 
 The API lives in `server/`. The independently installed Pi agent and browser assets live in `player/`; do not move these into the management UI. See the [source map](docs/architecture.md#source-map) for the remaining boundaries.
 
-The Android TV app is in `player/android/` and packages `player/web/` directly. See [Android TV builds](docs/android-tv.md#build-the-usb-package) for SDK/signing requirements, tests, and the dependency-free SDK fallback. Android changes additionally require the native agent tests, APK signing/alignment checks, and device acceptance before claiming hardware support. Preserve the release key for in-place updates; never commit it.
+The Android TV app is in `player/android/` and packages `player/web/` directly. See [Android TV builds](docs/android-tv.md#build-the-usb-package) for SDK/signing requirements, tests, and the dependency-free SDK fallback. Android changes additionally require the native agent tests, APK signing/alignment checks, and device acceptance before claiming hardware support. Preserve the release key for in-place updates; never commit it. `pnpm build:android` publishes the signed APK to the dedicated `android-releases` branch by default; use `pnpm build:android --local` for development builds. Publication requires clean, committed source and a current compatibility review; `pnpm publish:android` retries an upload without rebuilding. This uploads APKs and public metadata only and does not push the source branch.
 
 Run `node tests/player-startup.browser.mjs` with the Playwright settings above when changing player startup or timers. This serves the actual player entrypoint and checks pairing, empty playlists, playback, telemetry, and blank/resume using both a simulated Android bridge and the Pi HTTP reporting path. It uses real browser timers; injected clocks in unit tests alone cannot establish browser compatibility. Set `OPENFRAME_BROWSER_EXECUTABLE` to select an installed Chromium executable.
 
@@ -76,9 +77,10 @@ Only server runtime packages belong in `dependencies`. Frontend libraries, CSS t
 - Keep changes focused; add tests for behavior and regressions, including editor/player agreement when a layer changes.
 - Validate inputs in `server/schema.mjs`, mirror them in `app/types.ts`, and bound player memory/network/timer work.
 - Update the relevant [documentation](docs/README.md) and describe user-visible behavior, compatibility, and migration needs.
-- At completion, record one local patch version using `pnpm version:patch "Summary"`. Maintainers reconcile concurrent branch versions at integration time; do not overwrite another contributor's changelog entries.
+- At completion, record one patch for each changed component: `pnpm version:patch "Summary"` updates the server/web version and root changelog; `pnpm version:player:patch "Summary"` updates the shared Pi/Android version and player changelog. Leave an unchanged component's version alone. Maintainers reconcile concurrent branch versions at integration time; do not overwrite another contributor's changelog entries.
+- Review server/player contract changes in both directions, run affected checks, and record the outcome with `pnpm compatibility:review --impact compatible|breaking "Summary"`. Then run `pnpm compatibility:check`. The check flags changed contract sources; matching release numbers do not establish compatibility. See [compatibility reviews](docs/player-compatibility.md) for support declarations, source scope, and upgrade requirements.
 - Run the checks above and review `git diff`/the staged files. See [SECURITY.md](SECURITY.md) before attaching logs or data.
 
-Local commits may be as frequent as useful. Publishing to GitHub is a separate, explicitly approved milestone, not an automatic consequence of completing a task. Contributor pull requests should represent an agreed milestone; maintainers allocate the integration version. See [releases](docs/releases.md) for the complete policy.
+Local commits may be as frequent as useful. Publishing source to GitHub remains a separate, explicitly approved milestone. The owner separately authorized Android APK publication: completed signed builds are archived under `apks/` on the `android-releases` branch, with a stable latest download. After an approved source push changes `player/version.json` on `main`, the Android workflow builds and publishes using the existing release key configured in repository secrets. This does not grant permission to push source history or to create a replacement signing key. Contributor pull requests should represent an agreed milestone; maintainers allocate the integration version. See [releases](docs/releases.md) for the complete policy and signing-secret setup.
 
 By contributing, you agree that your contribution is available under the project's MIT license. Include attribution/licenses for third-party code or assets; never submit media you do not have permission to redistribute.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ArrowDown,
   ArrowRight,
@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import './landing.css';
+import { ANDROID_GITHUB_APK } from '../server/android-release-config.mjs';
 
 const repository = 'https://github.com/veRoduS/OpenFrame';
 const install =
@@ -50,41 +51,6 @@ export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState('');
-  const [androidRelease, setAndroidRelease] = useState<{
-    versionName: string;
-    apkUrl: string;
-  } | null>(null);
-  const [androidLoading, setAndroidLoading] = useState(true);
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    fetch('/downloads/android/latest.json', {
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-      .then(async (response) => {
-        if (!response.ok) return;
-        const release = await response.json();
-        if (
-          release.available &&
-          /^\d+\.\d+\.\d+$/.test(release.versionName) &&
-          release.apkUrl ===
-            `/downloads/android/openframe-player-${release.versionName}.apk`
-        )
-          setAndroidRelease(release);
-      })
-      .catch(() => {
-        /* The page remains usable before an APK is published. */
-      })
-      .finally(() => {
-        clearTimeout(timeout);
-        setAndroidLoading(false);
-      });
-    return () => {
-      clearTimeout(timeout);
-      controller.abort();
-    };
-  }, []);
   async function copyInstall() {
     try {
       await navigator.clipboard.writeText(install);
@@ -428,18 +394,9 @@ export default function Landing() {
             transfer it over Wi-Fi or USB. Open it, enter this server’s address,
             and pair your screen.
           </p>
-          {androidRelease ? (
-            <a className="landing-button" href={androidRelease.apkUrl} download>
-              <Download size={19} /> Download Android APK ·{' '}
-              {androidRelease.versionName}
-            </a>
-          ) : (
-            <output>
-              {androidLoading
-                ? 'Checking for the Android download…'
-                : 'The Android download is not available on this server yet.'}
-            </output>
-          )}
+          <a className="landing-button" href={ANDROID_GITHUB_APK}>
+            <Download size={19} /> Download latest Android APK
+          </a>
           <p className="landing-android-details">
             Android 9+ and WebView 100+. Experimental player. Updates are
             checked in the app; Android asks you to approve installation.

@@ -12,11 +12,22 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { zipSync, strToU8 } from 'fflate';
 import { buildWithSdk } from './android-sdk-build.mjs';
+import { verifyAndroidApk } from './verify-android-apk.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const { version } = JSON.parse(
-  readFileSync(resolve(root, 'package.json'), 'utf8'),
+  readFileSync(resolve(root, 'player/version.json'), 'utf8'),
 );
+if (process.argv.slice(2).some((arg) => !['--sdk', '--local'].includes(arg)))
+  throw new Error('Usage: pnpm build:android [--sdk] [--local]');
+execFileSync('node', ['scripts/version.mjs', 'check'], {
+  cwd: root,
+  stdio: 'inherit',
+});
+execFileSync('node', ['scripts/compatibility.mjs', 'check'], {
+  cwd: root,
+  stdio: 'inherit',
+});
 for (const key of [
   'OPENFRAME_ANDROID_KEYSTORE',
   'OPENFRAME_ANDROID_STORE_PASSWORD',
@@ -25,6 +36,14 @@ for (const key of [
 ]) {
   if (!process.env[key]) throw new Error(`Set ${key}; see docs/android-tv.md`);
 }
+const cleanSource = !execFileSync('git', ['status', '--porcelain'], {
+  cwd: root,
+  encoding: 'utf8',
+}).trim();
+if (!process.argv.includes('--local') && !cleanSource)
+  throw new Error(
+    'Commit reviewed source changes before building for publication, or use --local.',
+  );
 const android = resolve(root, 'player/android');
 const windows = process.platform === 'win32';
 const sdkOnly = process.argv.includes('--sdk');
@@ -55,6 +74,7 @@ copyFileSync(
     : resolve(android, 'app/build/outputs/apk/release/app-release.apk'),
   temporaryApk,
 );
+const verified = verifyAndroidApk(temporaryApk, { root, version });
 chmodSync(temporaryApk, 0o644);
 renameSync(temporaryApk, apk);
 const bytes = readFileSync(apk);
@@ -63,13 +83,22 @@ writeFileSync(resolve(output, `${name}.sha256`), checksum);
 chmodSync(resolve(output, `${name}.sha256`), 0o644);
 const [major, minor, patch] = version.split('.').map(Number);
 const release = {
-  packageName: 'org.openframe.player',
+  packageName: verified.packageName,
+  signerSha256: verified.signerSha256,
   versionName: version,
   versionCode: major * 1000000 + minor * 1000 + patch,
   minSdk: 28,
   size: bytes.length,
   sha256: checksum.split(' ')[0],
   apkUrl: `/downloads/android/${name}`,
+  ...(cleanSource
+    ? {
+        sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: root,
+          encoding: 'utf8',
+        }).trim(),
+      }
+    : {}),
 };
 writeFileSync(
   resolve(output, 'latest.json.part'),
@@ -99,8 +128,9 @@ This player also checks its configured server for updates every six hours while 
 Use Back/Menu > Check for updates to download and open Android's installer.
 Android requires installation approval; updates are not silent.
 
-Server release files: deploy ${name} first, then latest.json into ANDROID_RELEASE_DIR.
-For Docker, see the included guide and compose.android.yaml in the source repository.
+The server mirrors the GitHub APK folder by default. For local distribution, set
+ANDROID_RELEASE_SOURCE=local and deploy ${name} before latest.json into ANDROID_RELEASE_DIR.
+For Docker and automated GitHub publishing, see the included guide.
 This is an experimental build; physical Android TV acceptance is still required.
 See the included android-tv.md for supported features and build/key backup details.
 `;
@@ -118,3 +148,9 @@ writeFileSync(
 );
 chmodSync(resolve(output, `openframe-player-${version}-usb.zip`), 0o644);
 console.log(`Android installer and server update metadata ready: ${apk}`);
+if (!process.argv.includes('--local')) {
+  execFileSync('node', ['scripts/publish-android.mjs'], {
+    cwd: root,
+    stdio: 'inherit',
+  });
+}

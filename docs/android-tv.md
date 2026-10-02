@@ -13,7 +13,7 @@ The APK contains no native CPU libraries, so the same package targets ARM32, ARM
 
 ## Install and pair
 
-On a stick without USB, use **Download Android APK** in the server's public homepage, or enter `https://YOUR-SERVER/downloads/android/openframe-player.apk` in a TV downloader app. Substitute your actual server address (including its port for a local HTTP server). Allow that downloader/file manager to install unknown apps when Android prompts. You can also transfer the downloaded APK from a phone over Wi-Fi. Then continue at step 4 below.
+On a stick without USB, use **Download Android APK** on the OpenFrame homepage. It links directly to the [latest signed APK on GitHub](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk). You can enter that link in a TV downloader app, or use `https://YOUR-SERVER/downloads/android/openframe-player.apk` with your actual server address (including its port for a local HTTP server). Allow that downloader/file manager to install unknown apps when Android prompts. You can also transfer the downloaded APK from a phone over Wi-Fi. Then continue at step 4 below.
 
 1. Obtain the signed `openframe-player-VERSION.apk` from the local `outputs/android/` build folder, or extract the matching `-usb.zip`. Copy the APK to a flash drive in a format your box supports, usually FAT32.
 2. Insert the flash drive into the box. Open its file manager, browse the USB drive, and select the APK.
@@ -29,11 +29,13 @@ Press **Back** or **Menu** during playback to resume, edit connection settings, 
 
 ## Updates and signing keys
 
-Starting with 0.10.3, the player checks its configured OpenFrame server for APK updates at startup and every six hours while open. Checks are remembered across restarts, so reopening within six hours does not repeatedly poll. An available-update notice does not stop playback and is hidden while the screen is blanked. Press **Back/Menu → Check for updates** at any time for an immediate check.
+Starting with player 0.10.3, the player checks its configured OpenFrame server for APK updates at startup and every six hours while open. Checks are remembered across restarts, so reopening within six hours does not repeatedly poll. An available-update notice does not stop playback and is hidden while the screen is blanked. Press **Back/Menu → Check for updates** at any time for an immediate check.
 
 Choose **Download and install**. The player downloads into private app storage, verifies the declared size and SHA-256, checks the actual APK's package/version and signing certificates against the installed app, and opens Android's package installer. The first time, allow **OpenFrame Player** under **Install unknown apps**, then press Back to continue. Approve **Update/Install** in Android. Some firmwares require reopening OpenFrame afterward. Cancelling or failing a download leaves the installed app and cached playlists intact. Returning Home cancels active checks/downloads; retry from the menu. The player rejects redirects, cross-origin paths, mismatched signatures, incompatible Android versions, and downgrades.
 
 Android requires user approval on ordinary unmanaged boxes; this is not a silent/unattended update system. Device policy may prohibit installation. If installer settings are unavailable, install the downloaded APK through a file manager. Versions 0.10.1/0.10.2 must receive 0.10.3 or newer manually once to gain this feature.
+
+The server now obtains release metadata and the APK from the GitHub APK folder by default, so publishing a player build makes it available to installed players through their existing server address. A server needs this GitHub-mirroring revision (server 0.10.4 or newer) or a configured local APK directory.
 
 You can still install a newer signed APK over the existing app by Wi-Fi or USB. Android preserves pairing and content when the application ID and signing key match and the version code increases. Do not uninstall first. Updating the server alone does not replace the installed player or publish an APK.
 
@@ -43,7 +45,7 @@ Keep the release keystore, alias, and passwords backed up privately. Losing the 
 
 Use JDK 17 or 21, the Android SDK with platform 35/build-tools 35.0.0, and the repository's Node/pnpm toolchain. Set `ANDROID_HOME` to your SDK directory; accept its licenses with `sdkmanager --licenses`. The checked-in Gradle wrapper pins Gradle 8.13 and its distribution checksum. Gradle downloads build dependencies on the first build.
 
-Create a release key once, outside source control (the example directory is ignored):
+For this project, restore the existing release keystore from its private backup. The public certificate fingerprint in `player/android/release-signing.json` pins the expected key; builds and uploads reject a different signer. For a new independent distribution only, create a key once outside source control and deliberately configure its own public fingerprint (the example directory is ignored):
 
 ```sh
 mkdir -p .secrets/android
@@ -62,7 +64,9 @@ export OPENFRAME_ANDROID_KEY_PASSWORD="$OPENFRAME_ANDROID_STORE_PASSWORD"
 pnpm build:android
 ```
 
-This runs Android unit tests and release lint, then builds the signed release APK and writes the APK, SHA-256 file, `latest.json` update metadata, `INSTALL.txt`, and USB ZIP under `outputs/android/`. The build replaces the APK before atomically replacing `latest.json`. Missing signing variables fail the release build; there is no silent debug-key fallback. The Android version reads `package.json`; version codes are `major * 1000000 + minor * 1000 + patch`, with minor/patch each below 1000. Use the repository's version scripts for updates.
+This checks component versions and compatibility, runs Android unit tests and release lint, then builds the signed release APK and writes the APK, SHA-256 file, `latest.json` update metadata, `INSTALL.txt`, and USB ZIP under `outputs/android/`. The build replaces the APK before atomically replacing `latest.json`. Missing signing variables fail the release build; there is no silent debug-key fallback. The Android version reads `player/version.json`, independently of the server in `package.json`; version codes are `major * 1000000 + minor * 1000 + patch`, with minor/patch each below 1000. Use `pnpm version:player:patch "Summary"` for a player revision and `pnpm version:patch "Summary"` for a server revision. Record contract reviews as described in [player compatibility](player-compatibility.md). Commit reviewed changes before publishing.
+
+After building, the command publishes the signed APK and public release metadata to the `apks/` folder on the dedicated `android-releases` GitHub branch. It uses your normal Git push credentials and requires a clean, committed source tree. Publication verifies the APK package, version, minimum Android API, alignment, and pinned signing certificate. Its source commit must match the current clean checkout; a dirty `--local` build has no publishable source record. Each version gets an immutable folder; `apks/latest/openframe-player.apk` is the stable download. The source branch is not pushed. Use `pnpm build:android --local` for an unpublished build, or `pnpm publish:android` to retry uploading an existing build. If an upload fails, local build files remain available. Never rebuild and replace a published version: bump the player version first.
 
 If Maven is unavailable but the SDK is already installed, `pnpm build:android --sdk` compiles the same source directly using the official SDK tools and verifies APK signing/alignment. This fallback does **not** run Gradle lint or unit tests; run those separately when dependencies are available. It produces the same package ID/version and can use the same release key. It requires no additional runtime dependencies in the APK.
 
@@ -75,25 +79,36 @@ cd player/android
 
 On Windows use `gradlew.bat`. The debug package has a separate `.debug` application ID and cannot update a release installation. Generated build output and signing material are excluded from Git.
 
-## Make the download available on your server
+## GitHub downloads and server updates
 
-The public homepage displays **Download Android APK** when a valid release is available. Missing or invalid releases display an unavailable message instead of a broken button. No OpenFrame login or device token is required to download the application; no screen credentials are included. The endpoints are:
+The public homepage always links directly to the [latest APK on GitHub](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk). Browse previous builds in the [GitHub APK folder](https://github.com/veRoduS/OpenFrame/tree/android-releases/apks). These files contain no screen credentials. Each version's `release.json` records its checksum, requirements, source commit when available, and compatibility review. Server and player version numbers need not match.
 
-- `/downloads/android/latest.json`: version name/code, package ID, minimum Android API, byte size, SHA-256, and the versioned APK path.
-- `/downloads/android/openframe-player.apk`: stable address for TV downloader apps; serves the latest APK directly without redirecting.
-- `/downloads/android/openframe-player-VERSION.apk`: the version-specific address consumed by the updater.
+By default, the server mirrors the latest GitHub release through the existing updater endpoints:
 
-Source installs (`pnpm start` or `pnpm dev`) read `outputs/android/` by default, so a local signed build is immediately available there. Set `ANDROID_RELEASE_DIR` to use another directory. Release files are read at request time; no restart is needed after replacing a release.
+- `/downloads/android/latest.json`: version name/code, package ID, minimum Android API, byte size, SHA-256, and the same-origin versioned APK path.
+- `/downloads/android/openframe-player.apk`: stable address for TV downloader apps; sends the latest APK directly without redirecting.
+- `/downloads/android/openframe-player-VERSION.apk`: the current release's version-specific address consumed by the updater.
 
-For Docker, APKs and signing keys are excluded from the server image. Build the APK on your build machine, place the generated APK and `latest.json` under `outputs/android/` alongside your Compose files, then use the read-only release mount:
+The server fetches only the fixed project repository, validates metadata, byte size and checksum, rejects redirects, and caches one verified APK in memory for five minutes. Concurrent checks share the download; failures are cached for 30 seconds. A cold fetch has a combined 12-second deadline. Only the current advertised release is served through these endpoints; older archives remain on GitHub. No administrator session or device token is required. Installed players independently verify checksums and signing identity. Keep these paths reachable through any reverse proxy without an interactive login.
+
+For offline/custom distribution, set `ANDROID_RELEASE_SOURCE=local` and `ANDROID_RELEASE_DIR` to the folder containing the generated APK and `latest.json`. Supplying a release directory also selects local mode unless the source is explicitly set. Local mode defaults to `outputs/android/`; transfer the APK before atomically replacing `latest.json`. For Docker, the optional read-only mount selects local mode explicitly:
 
 ```sh
 docker compose -f compose.yaml -f compose.android.yaml up -d --build
 ```
 
-Use `compose.registry.yaml` as the first file if running a prebuilt server image that includes this feature. Alternatively the image defaults to `/data/android-releases` in the persistent volume. Always transfer the APK **before** replacing `latest.json`; use a temporary manifest file followed by a rename. Keep both files readable by the server process. Future APK updates do not require rebuilding the server container. Only put release files in the distribution directory; never signing keys or private configuration. Keep the signing key used for the first installed APK.
+Use `compose.registry.yaml` first when running a prebuilt image containing this feature. The normal Docker configuration uses GitHub and needs no APK volume or signing key. Future player releases require no server rebuild. Use HTTPS off the trusted local network.
 
-The server validates metadata, file size, and checksum before advertising or sending a release. The Android client independently verifies these and checks the installed signing identity. Use HTTPS off the trusted local network. If a reverse proxy requires interactive login for all paths, make these public download endpoints reachable to the device as well; the updater does not send administrator sessions or follow login redirects.
+## Automated GitHub builds
+
+The checked-in `Publish Android player` workflow builds and publishes when `player/version.json` changes on `main`, or when manually dispatched. It skips an already archived version. To enable it after the source workflow reaches GitHub, configure the `android-releases` environment with the **existing** release key and these Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: base64-encoded keystore.
+- `ANDROID_STORE_PASSWORD`: keystore password.
+- `ANDROID_KEY_ALIAS`: signing alias.
+- `ANDROID_KEY_PASSWORD`: key password.
+
+Use the same key as the first distributed APK; a replacement key cannot update installed players. The workflow uses its scoped `GITHUB_TOKEN` to write only the APK branch and removes its temporary keystore. Do not put secrets into the repository, APK folder, workflow file, or USB package. Local builds can publish immediately with configured Git credentials; the hosted workflow additionally needs these secrets and the workflow on GitHub.
 
 ## Supported behavior and limits
 
