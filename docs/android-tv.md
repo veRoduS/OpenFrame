@@ -27,15 +27,27 @@ Installing the APK itself works without Internet access. Pairing and initial pla
 
 Press **Back** or **Menu** during playback to resume, edit connection settings, or exit. A server-address change uses separate pairing/cache storage, preventing one server's credentials from being sent to another. Changing the name in setup affects a future enrollment; rename an already paired screen on the server. Clearing Android app data or uninstalling removes pairing and cache.
 
+### Recovering a missing pairing code
+
+Player 0.10.4 fixes enrollment against the real OpenFrame API: successful registration returns HTTP 201, which older Android players incorrectly treated as an error. They could create a pending screen on the server without saving its credentials or displaying the pairing code, then repeat registration on the next attempt.
+
+Download player 0.10.4 or newer from the [direct GitHub APK link](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk) and install it **over the existing app** once. Do not uninstall or clear app data; the signed update preserves any saved settings, pairing, and cached content. Open the player and approve the code it displays under **Screens**.
+
+If enrollment reports **HTTP 429 / Too many pending devices**, remove only unused pending entries left by the failed attempts under **Screens**, then retry. Preserve active or otherwise needed screens. A general **Too many attempts** response is a short rate limit; wait a minute before retrying. Clearing the player's pairing data does not resolve either server-side limit.
+
 ## Updates and signing keys
 
-Starting with player 0.10.3, the player checks its configured OpenFrame server for APK updates at startup and every six hours while open. Checks are remembered across restarts, so reopening within six hours does not repeatedly poll. An available-update notice does not stop playback and is hidden while the screen is blanked. Press **Back/Menu → Check for updates** at any time for an immediate check.
+Starting with player 0.10.4, the default **GitHub** update source reads release metadata and downloads the APK directly from the fixed OpenFrame GitHub APK folder. It does not depend on your content server's version or download endpoints. Internet access to GitHub is required for this source; pairing and playlists continue to use your configured OpenFrame server.
+
+The player checks at startup and every six hours while open. Checks are remembered across restarts, so reopening within six hours does not repeatedly poll. An available-update notice does not stop playback and is hidden while the screen is blanked. Press **Back/Menu → Check for updates** at any time for an immediate check. Choose **Back/Menu → Update source → This server** for a local/private APK distribution served by your configured OpenFrame server, or select **GitHub** to restore the default.
 
 Choose **Download and install**. The player downloads into private app storage, verifies the declared size and SHA-256, checks the actual APK's package/version and signing certificates against the installed app, and opens Android's package installer. The first time, allow **OpenFrame Player** under **Install unknown apps**, then press Back to continue. Approve **Update/Install** in Android. Some firmwares require reopening OpenFrame afterward. Cancelling or failing a download leaves the installed app and cached playlists intact. Returning Home cancels active checks/downloads; retry from the menu. The player rejects redirects, cross-origin paths, mismatched signatures, incompatible Android versions, and downgrades.
 
-Android requires user approval on ordinary unmanaged boxes; this is not a silent/unattended update system. Device policy may prohibit installation. If installer settings are unavailable, install the downloaded APK through a file manager. Versions 0.10.1/0.10.2 must receive 0.10.3 or newer manually once to gain this feature.
+Android requires user approval on ordinary unmanaged boxes; this is not a silent/unattended update system. Device policy may prohibit installation. If installer settings are unavailable, install the downloaded APK through a file manager.
 
-The server now obtains release metadata and the APK from the GitHub APK folder by default, so publishing a player build makes it available to installed players through their existing server address. A server needs this GitHub-mirroring revision (server 0.10.4 or newer) or a configured local APK directory.
+Player 0.10.3 checks only its configured server. An older server without the Android download endpoints can return the webpage's HTML instead of update JSON, causing a parsing error. Install 0.10.4 or newer manually over 0.10.1–0.10.3 once to gain the enrollment fix and direct GitHub updates; no server upgrade is needed for that default update source. Do not uninstall first.
+
+The optional **This server** source requires a server with Android update endpoints. Server 0.10.4 mirrors the GitHub APK folder by default; a server configured with a local APK directory can instead serve a private/offline-network release. See the distribution settings below.
 
 You can still install a newer signed APK over the existing app by Wi-Fi or USB. Android preserves pairing and content when the application ID and signing key match and the version code increases. Do not uninstall first. Updating the server alone does not replace the installed player or publish an APK.
 
@@ -77,13 +89,13 @@ cd player/android
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-On Windows use `gradlew.bat`. The debug package has a separate `.debug` application ID and cannot update a release installation. Generated build output and signing material are excluded from Git.
+On Windows use `gradlew.bat`. Run `pnpm install --frozen-lockfile` at the repository root first and keep Node available on `PATH`: `PlayerAgentIntegrationTest` starts the real Express API with disposable server data and checks HTTP 201 enrollment, displayed pairing codes, saved-credential reuse after reopening, and approval. It does not connect to your running server or modify its screens. `UpdateSourceTest` covers the direct GitHub and explicit server update sources. The debug package has a separate `.debug` application ID and cannot update a release installation. Generated build output and signing material are excluded from Git.
 
 ## GitHub downloads and server updates
 
 The public homepage always links directly to the [latest APK on GitHub](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk). Browse previous builds in the [GitHub APK folder](https://github.com/veRoduS/OpenFrame/tree/android-releases/apks). These files contain no screen credentials. Each version's `release.json` records its checksum, requirements, source commit when available, and compatibility review. Server and player version numbers need not match.
 
-By default, the server mirrors the latest GitHub release through the existing updater endpoints:
+Player 0.10.4 uses GitHub directly by default, so these server endpoints are optional for that player. They remain available for player 0.10.3 and for 0.10.4's **This server** setting. By default, server 0.10.4 mirrors the latest GitHub release through them:
 
 - `/downloads/android/latest.json`: version name/code, package ID, minimum Android API, byte size, SHA-256, and the same-origin versioned APK path.
 - `/downloads/android/openframe-player.apk`: stable address for TV downloader apps; sends the latest APK directly without redirecting.
@@ -91,7 +103,7 @@ By default, the server mirrors the latest GitHub release through the existing up
 
 The server fetches only the fixed project repository, validates metadata, byte size and checksum, rejects redirects, and caches one verified APK in memory for five minutes. Concurrent checks share the download; failures are cached for 30 seconds. A cold fetch has a combined 12-second deadline. Only the current advertised release is served through these endpoints; older archives remain on GitHub. No administrator session or device token is required. Installed players independently verify checksums and signing identity. Keep these paths reachable through any reverse proxy without an interactive login.
 
-For offline/custom distribution, set `ANDROID_RELEASE_SOURCE=local` and `ANDROID_RELEASE_DIR` to the folder containing the generated APK and `latest.json`. Supplying a release directory also selects local mode unless the source is explicitly set. Local mode defaults to `outputs/android/`; transfer the APK before atomically replacing `latest.json`. For Docker, the optional read-only mount selects local mode explicitly:
+For offline/custom distribution, choose **Update source → This server** in the player, then set `ANDROID_RELEASE_SOURCE=local` and `ANDROID_RELEASE_DIR` on that server to the folder containing the generated APK and `latest.json`. Supplying a release directory also selects local mode unless the source is explicitly set. Local mode defaults to `outputs/android/`; transfer the APK before atomically replacing `latest.json`. For Docker, the optional read-only mount selects local mode explicitly:
 
 ```sh
 docker compose -f compose.yaml -f compose.android.yaml up -d --build
@@ -125,7 +137,7 @@ Before unattended use, record the box model, Android firmware, and WebView versi
 - Network loss during playback and during an incoming publication; the previous complete publication must survive a failed download.
 - Closing and reopening offline, server recovery, blank/unblank, refresh, and device revocation.
 - Installing a newer APK signed with the same key without losing pairing/cache.
-- Downloading from the homepage on a stick without USB; automatic/manual update detection; installer permission grant and return; install/cancel flows; rejecting another signing key or interrupted download; reopening after a successful update.
+- Downloading from the homepage on a stick without USB; automatic/manual update detection from default GitHub and explicit **This server** sources; GitHub updates with an older content server; installer permission grant and return; install/cancel flows; rejecting another signing key or interrupted download; reopening after a successful update.
 - Back/Menu behavior, resuming after Home, screen sleep behavior, power-cycle startup procedure, storage pressure, and a 24-hour playback run.
 
 Host-side unit tests and APK validation do not establish physical TV compatibility or long-run performance. See the [validation record](validation.md).

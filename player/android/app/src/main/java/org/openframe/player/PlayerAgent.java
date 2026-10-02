@@ -97,6 +97,11 @@ final class PlayerAgent {
         } catch (Exception ex) {
             connected = false;
             error = ex instanceof Revoked ? "Screen removed. Pair this player again."
+                    : ex instanceof ConnectionFailure ? ex.getMessage()
+                    : ex instanceof java.net.UnknownHostException ? "Cannot find the server. Check the server address and network."
+                    : ex instanceof javax.net.ssl.SSLException ? "Cannot establish a secure server connection. Check the server certificate and the device date."
+                    : ex instanceof java.net.SocketTimeoutException ? "The server connection timed out. Check the network and try again."
+                    : ex instanceof java.net.ConnectException ? "Cannot connect to the server. Check the server address and network."
                     : "Unable to sync. Check the server address, network, and available storage.";
             if (ex instanceof Revoked) {
                 identity = new JSONObject();
@@ -193,6 +198,10 @@ final class PlayerAgent {
         for (String key : new String[]{"approved", "code", "blank", "rotation", "manifest", "weather", "generation"}) {
             if (state.has(key)) visible.put(key, state.get(key));
         }
+        // Enrollment already supplied a pairing code even if the first sync is
+        // temporarily unavailable. Keep credentials private while showing that code.
+        if (!visible.optBoolean("approved") && !visible.has("code") && identity.has("code"))
+            visible.put("code", identity.getString("code"));
         visible.put("error", error == null ? JSONObject.NULL : error);
         visible.put("connection", new JSONObject().put("connected", connected)
                 .put("lastContactAt", lastContact == 0 ? JSONObject.NULL : lastContact));
@@ -215,7 +224,7 @@ final class PlayerAgent {
         HttpURLConnection connection = open(asset.getString("url"));
         File temporary = new File(media, target.getName() + ".part");
         try {
-            checkStatus(connection);
+            checkStatus(connection, false);
             try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(temporary)) {
                 byte[] buffer = new byte[16384];
                 long total = 0;
@@ -252,19 +261,31 @@ final class PlayerAgent {
         try {
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Accept", "application/json");
             connection.setDoOutput(true);
             byte[] data = body.toString().getBytes(StandardCharsets.UTF_8);
             // Buffer this small JSON request so HttpURLConnection exposes 401 response
             // bodies instead of treating them as an unrepeatable authentication retry.
             try (java.io.OutputStream out = connection.getOutputStream()) { out.write(data); }
-            checkStatus(connection);
+            // Creating a player returns 201; legacy enrollment endpoints may return 200.
+            // Sync and media requests still require 200, not arbitrary 2xx statuses.
+            checkStatus(connection, path.equals("/api/player/enroll"));
             try (InputStream input = connection.getInputStream()) {
-                return new JSONObject(new String(readBounded(input, JSON_LIMIT), StandardCharsets.UTF_8));
+                String bodyText = new String(readBounded(input, JSON_LIMIT), StandardCharsets.UTF_8).trim();
+                String contentType = connection.getContentType();
+                if ((contentType != null && contentType.toLowerCase(java.util.Locale.ROOT).contains("text/html"))
+                        || bodyText.startsWith("<")) {
+                    throw new ConnectionFailure("The server returned a webpage instead of the player API. Check the server address and any sign-in proxy.");
+                }
+                try { return new JSONObject(bodyText); }
+                catch (org.json.JSONException ex) {
+                    throw new ConnectionFailure("The server returned an invalid player API response. Check the server address and OpenFrame server version.");
+                }
             }
         } finally { connection.disconnect(); }
     }
 
-    private static void checkStatus(HttpURLConnection connection) throws Exception {
+    private static void checkStatus(HttpURLConnection connection, boolean enrollment) throws Exception {
         int status = connection.getResponseCode();
         if (status == 401 && connection.getErrorStream() != null) {
             try (InputStream input = connection.getErrorStream()) {
@@ -274,7 +295,24 @@ final class PlayerAgent {
                 } catch (org.json.JSONException ignored) { /* Proxy login pages are not device revocation. */ }
             }
         }
-        if (status != 200) throw new IOException("Server returned HTTP " + status);
+        if (status == 200 || (enrollment && status == 201)) return;
+        if (status >= 300 && status < 400)
+            throw new ConnectionFailure("The server redirected the player request. Use the final server address and check any sign-in proxy.");
+        if (status == 401 || status == 403)
+            throw new ConnectionFailure("Server access was denied (HTTP " + status + "). Check proxy access rules for the player API.");
+        if (status == 404)
+            throw new ConnectionFailure("The player API was not found (HTTP 404). Check the server address and OpenFrame server version.");
+        if (status == 429)
+            throw new ConnectionFailure(enrollment
+                    ? "The server has too many pending pairing requests (HTTP 429). Remove unused pending screens on the server and try again."
+                    : "The server is limiting requests (HTTP 429). Wait a few minutes before reconnecting.");
+        throw new ConnectionFailure("The server returned HTTP " + status + ". Check the server and try again.");
+    }
+
+    // Only fixed, locally generated messages may be shown. Never echo response
+    // bodies, URLs, tokens, or raw JSON parser exceptions into the renderer.
+    private static class ConnectionFailure extends IOException {
+        ConnectionFailure(String message) { super(message); }
     }
 
     private static class Revoked extends IOException {}

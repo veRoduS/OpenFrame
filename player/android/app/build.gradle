@@ -61,3 +61,8 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20250107'
 }
+
+// Native integration tests start the real Node server against disposable data.
+tasks.withType(Test).configureEach {
+    systemProperty 'openframe.root', rootProject.projectDir.parentFile.parentFile.absolutePath
+}

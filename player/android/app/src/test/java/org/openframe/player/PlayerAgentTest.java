@@ -20,6 +20,9 @@ public class PlayerAgentTest {
     private JSONObject response, lastRequest;
     private String unauthorizedCode;
     private int status = 200;
+    private int enrollmentStatus = 201;
+    private String enrollmentBody, syncBody;
+    private String responseType = "application/json";
     private final AtomicInteger enrollments = new AtomicInteger();
     private final byte[] image = "test image bytes".getBytes(StandardCharsets.UTF_8);
     private static final String FILE = "12345678-1234-1234-1234-123456789012.webp";
@@ -34,16 +37,18 @@ public class PlayerAgentTest {
                 int code = 200;
                 if (path.equals("/api/player/enroll")) {
                     enrollments.incrementAndGet();
-                    body = "{\"id\":\"device\",\"token\":\"secret-token\",\"code\":\"ABC123\"}".getBytes(StandardCharsets.UTF_8);
+                    code = enrollmentStatus;
+                    body = (enrollmentBody == null ? "{\"id\":\"device\",\"token\":\"secret-token\",\"code\":\"ABC123\"}" : enrollmentBody).getBytes(StandardCharsets.UTF_8);
                 } else if (!"Bearer secret-token".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
                     code = 403; body = new byte[0];
                 } else if (path.equals("/api/player/sync")) {
                     lastRequest = new JSONObject(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                     code = status;
-                    body = (code == 200 ? response.toString() : new JSONObject().put("code", unauthorizedCode).toString()).getBytes(StandardCharsets.UTF_8);
+                    body = (syncBody != null ? syncBody : code == 200 ? response.toString() : new JSONObject().put("code", unauthorizedCode).toString()).getBytes(StandardCharsets.UTF_8);
                 } else if (path.equals("/media/" + FILE)) {
                     body = image;
                 } else { code = 404; body = new byte[0]; }
+                exchange.getResponseHeaders().set("Content-Type", responseType);
                 exchange.sendResponseHeaders(code, body.length);
                 exchange.getResponseBody().write(body);
             } catch (Exception ex) { throw new java.io.IOException(ex); }
@@ -52,7 +57,7 @@ public class PlayerAgentTest {
         server.start();
         origin = "http://127.0.0.1:" + server.getAddress().getPort();
     }
-    @After public void stop() { server.stop(0); }
+    @After public void stop() { if (server != null) server.stop(0); }
 
     private PlayerAgent agent() throws Exception { return new PlayerAgent(temp.getRoot(), origin, "Test TV", "0.10.1"); }
 
@@ -69,6 +74,102 @@ public class PlayerAgentTest {
         assertFalse(first.snapshot().contains("secret-token"));
         assertFalse(first.snapshot().contains(origin));
         agent().tick();
+        assertEquals(1, enrollments.get());
+    }
+
+    @Test public void legacyEnrollment200StillPairs() throws Exception {
+        enrollmentStatus = 200;
+        PlayerAgent player = agent(); player.tick();
+        assertEquals("ABC123", new JSONObject(player.snapshot()).getString("code"));
+        assertNotNull(lastRequest);
+    }
+
+    @Test public void enrollmentCodeRemainsVisibleWhenInitialSyncFails() throws Exception {
+        status = 503;
+        PlayerAgent player = agent(); player.tick();
+        JSONObject failed = new JSONObject(player.snapshot());
+        assertEquals("ABC123", failed.getString("code"));
+        assertTrue(failed.getString("error").contains("HTTP 503"));
+        assertFalse(player.snapshot().contains("secret-token"));
+        status = 200;
+        PlayerAgent restarted = agent(); restarted.tick();
+        assertEquals("ABC123", new JSONObject(restarted.snapshot()).getString("code"));
+        assertEquals(1, enrollments.get());
+    }
+
+    @Test public void pendingEnrollmentLimitExplainsServerCleanup() throws Exception {
+        enrollmentStatus = 429;
+        PlayerAgent player = agent(); player.tick();
+        String error = new JSONObject(player.snapshot()).getString("error");
+        assertTrue(error.contains("HTTP 429"));
+        assertTrue(error.contains("Remove unused pending screens"));
+        assertNull(lastRequest);
+        assertFalse(new JSONObject(player.snapshot()).has("code"));
+    }
+
+    @Test public void acceptsApprovedPlayerWithNoAssignedPlaylist() throws Exception {
+        response = new JSONObject().put("approved", true).put("rotation", 0).put("blank", false)
+                .put("command", JSONObject.NULL).put("weather", new JSONObject())
+                .put("manifest", new JSONObject().put("schemaVersion", 1).put("revision", "empty")
+                        .put("name", "No published playlist").put("items", new JSONArray()).put("assets", new JSONArray()));
+        PlayerAgent player = agent(); player.tick();
+        JSONObject state = new JSONObject(player.snapshot());
+        assertTrue(state.getBoolean("approved"));
+        assertEquals("empty", state.getJSONObject("manifest").getString("revision"));
+        assertTrue(state.getJSONObject("connection").getBoolean("connected"));
+        assertTrue(state.isNull("error"));
+        player.tick();
+        assertEquals("empty", lastRequest.getString("revision"));
+        assertEquals(1, enrollments.get());
+    }
+
+    @Test public void enrollmentAndSyncRejectUnexpectedSuccessStatuses() throws Exception {
+        enrollmentStatus = 202;
+        PlayerAgent player = agent(); player.tick();
+        assertTrue(new JSONObject(player.snapshot()).getString("error").contains("HTTP 202"));
+        assertNull(lastRequest);
+        enrollmentStatus = 201;
+        player.tick();
+        assertEquals("ABC123", new JSONObject(player.snapshot()).getString("code"));
+        status = 201; player.tick();
+        assertTrue(new JSONObject(player.snapshot()).getString("error").contains("HTTP 201"));
+        assertFalse(new JSONObject(player.snapshot()).getJSONObject("connection").getBoolean("connected"));
+    }
+
+    @Test public void htmlAndInvalidJsonErrorsDoNotExposeResponseBodies() throws Exception {
+        enrollmentBody = "<!doctype html><html>proxy-private-value</html>";
+        responseType = "text/html; charset=utf-8";
+        PlayerAgent player = agent(); player.tick();
+        assertTrue(new JSONObject(player.snapshot()).getString("error").contains("webpage"));
+        assertFalse(player.snapshot().contains("proxy-private-value"));
+        assertFalse(player.snapshot().contains("<!doctype"));
+        enrollmentBody = null; responseType = "application/json";
+        player.tick();
+        assertEquals("ABC123", new JSONObject(player.snapshot()).getString("code"));
+        syncBody = "invalid-json-with-private-value";
+        player.tick();
+        JSONObject state = new JSONObject(player.snapshot());
+        assertEquals("ABC123", state.getString("code"));
+        assertTrue(state.getString("error").contains("invalid player API response"));
+        assertFalse(player.snapshot().contains("private-value"));
+        syncBody = "<!doctype html><html>proxy-private-value</html>";
+        player.tick();
+        assertTrue(new JSONObject(player.snapshot()).getString("error").contains("webpage"));
+        assertFalse(player.snapshot().contains("private-value"));
+    }
+
+    @Test public void redirectsAndProxyHtmlDenialsPreserveIdentity() throws Exception {
+        PlayerAgent player = agent(); player.tick();
+        syncBody = "<!doctype html><html>proxy-private-value</html>";
+        responseType = "text/html";
+        status = 302; player.tick();
+        assertTrue(new JSONObject(player.snapshot()).getString("error").contains("redirected"));
+        status = 401; player.tick();
+        assertTrue(new JSONObject(player.snapshot()).getString("error").contains("HTTP 401"));
+        assertEquals("ABC123", new JSONObject(player.snapshot()).getString("code"));
+        assertFalse(player.snapshot().contains("private-value"));
+        status = 200; syncBody = null; responseType = "application/json"; player.tick();
+        assertTrue(new JSONObject(player.snapshot()).isNull("error"));
         assertEquals(1, enrollments.get());
     }
 

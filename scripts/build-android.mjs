@@ -110,7 +110,7 @@ const instructions = `OpenFrame Player ${version} — Android TV installation
 
 Requires Android 9 or newer and Android System WebView 100 or newer.
 Without USB, download from your OpenFrame homepage or transfer the APK over Wi-Fi.
-The stable server address is /downloads/android/openframe-player.apk.
+The latest APK is https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk.
 
 USB installation:
 1. Copy ${name} to a USB flash drive readable by your box (usually FAT32).
@@ -124,11 +124,13 @@ Installation works offline. Initial pairing and content download require the ser
 After a successful sync, downloaded content plays offline while the app stays open.
 Back or Menu opens settings. Reopen the app after restarting the box.
 For updates, install a newer APK signed with the same key without uninstalling.
-This player also checks its configured server for updates every six hours while open.
+This player checks GitHub for updates every six hours while open, independently of
+the server version. Use Back/Menu > Update source > This server for local distribution.
 Use Back/Menu > Check for updates to download and open Android's installer.
 Android requires installation approval; updates are not silent.
 
-The server mirrors the GitHub APK folder by default. For local distribution, set
+For players using This server as their update source, the server mirrors GitHub
+by default. For local distribution, set
 ANDROID_RELEASE_SOURCE=local and deploy ${name} before latest.json into ANDROID_RELEASE_DIR.
 For Docker and automated GitHub publishing, see the included guide.
 This is an experimental build; physical Android TV acceptance is still required.

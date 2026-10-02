@@ -68,7 +68,7 @@ public final class PlayerActivity extends Activity {
         if (saved != null && server.equals(saved.getString("updateServer"))) {
             try {
                 String json = saved.getString("readyUpdate");
-                if (json != null) readyUpdate = new UpdateSource.Release(new org.json.JSONObject(json));
+                if (json != null) readyUpdate = UpdateSource.Release.restore(new org.json.JSONObject(json), server);
                 waitingForInstallPermission = saved.getBoolean("waitingForInstallPermission");
             } catch (Exception ignored) { readyUpdate = null; }
         }
@@ -296,18 +296,20 @@ public final class PlayerActivity extends Activity {
 
     private void checkUpdates(boolean manual) {
         if (!resumed || activeServer == null || updateBusy) return;
+        boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
+        UpdateSource source = localUpdates ? new UpdateSource(activeServer) : new UpdateSource();
+        String sourceKey = localUpdates ? UpdateSource.SERVER + ":" + activeServer : UpdateSource.GITHUB;
         long now = System.currentTimeMillis();
         long last = getPreferences(MODE_PRIVATE).getLong("updateCheckedAt", 0);
-        if (!manual && activeServer.equals(getPreferences(MODE_PRIVATE).getString("updateCheckedServer", "")) &&
+        if (!manual && sourceKey.equals(getPreferences(MODE_PRIVATE).getString("updateCheckedSource", "")) &&
                 now >= last && now - last < UPDATE_INTERVAL_MS) return;
-        getPreferences(MODE_PRIVATE).edit().putLong("updateCheckedAt", now).putString("updateCheckedServer", activeServer).apply();
+        getPreferences(MODE_PRIVATE).edit().putLong("updateCheckedAt", now).putString("updateCheckedSource", sourceKey).apply();
         updateBusy = true;
         int request = ++updateGeneration;
-        String origin = activeServer;
         if (manual) progress("Checking for an update…");
         updateTask = updateWorker.submit(() -> {
             try {
-                UpdateSource.Release release = new UpdateSource(origin).check();
+                UpdateSource.Release release = source.check();
                 PackageInfo installed = getPackageManager().getPackageInfo(getPackageName(), 0);
                 boolean newer = release != null && release.newerThan(getPackageName(), installed.getLongVersionCode(), android.os.Build.VERSION.SDK_INT);
                 runOnUiThread(() -> {
@@ -323,14 +325,14 @@ public final class PlayerActivity extends Activity {
                             .setMessage("Download and verify this update, then approve installation in Android. Your screen pairing and saved content will be kept.")
                             .setNegativeButton("Later", null).setPositiveButton("Download and install", (dialog, which) -> downloadUpdate(release)).show();
                     else updateMessage("Player updates", release == null
-                            ? "No Android player release is available on this server yet."
+                            ? "No Android player release is available from the selected update source yet."
                             : "You're up to date. Installed version: " + BuildConfig.VERSION_NAME);
                 });
             } catch (Exception ex) {
                 runOnUiThread(() -> {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
                     cancelUpdateTask();
-                    if (manual) updateMessage("Could not check for updates", "Check the server connection and try again. " + ex.getMessage());
+                    if (manual) updateMessage("Could not check for updates", source.checkFailureMessage(ex));
                 });
             }
         });
@@ -340,11 +342,10 @@ public final class PlayerActivity extends Activity {
         if (!resumed || activeServer == null || updateBusy) return;
         updateBusy = true;
         int request = ++updateGeneration;
-        String origin = activeServer;
         progress("Downloading and verifying the update. Playback continues behind this message.");
         updateTask = updateWorker.submit(() -> {
             try {
-                File file = new UpdateSource(origin).download(release, new File(getFilesDir(), "updates"));
+                File file = new UpdateSource().download(release, new File(getFilesDir(), "updates"));
                 UpdateInstaller.verify(this, release, file);
                 runOnUiThread(() -> {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
@@ -356,7 +357,7 @@ public final class PlayerActivity extends Activity {
                 runOnUiThread(() -> {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
                     cancelUpdateTask();
-                    updateMessage("Update not installed", ex.getMessage() == null ? "Download failed. Try again." : ex.getMessage());
+                    updateMessage("Update not installed", UpdateSource.userMessage(ex));
                 });
             }
         });
@@ -399,7 +400,7 @@ public final class PlayerActivity extends Activity {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
                     cancelUpdateTask();
                     readyUpdate = null;
-                    updateMessage("Update not installed", ex.getMessage());
+                    updateMessage("Update not installed", "The downloaded APK could not be verified for this app. Check for updates again.");
                 });
             }
         });
@@ -451,12 +452,29 @@ public final class PlayerActivity extends Activity {
     }
     @Override public void onBackPressed() {
         if (web == null) { super.onBackPressed(); return; }
+        boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
         new AlertDialog.Builder(this).setTitle("OpenFrame Player")
-                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Exit player"}, (dialog, which) -> {
+                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Update source: " + (localUpdates ? "This server" : "GitHub"), "Exit player"}, (dialog, which) -> {
                     if (which == 1) setup();
                     if (which == 2) checkUpdates(true);
-                    if (which == 3) finish();
+                    if (which == 3) chooseUpdateSource();
+                    if (which == 4) finish();
                 }).show();
+    }
+    private void chooseUpdateSource() {
+        boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
+        new AlertDialog.Builder(this).setTitle("Update source")
+                .setSingleChoiceItems(new String[]{"GitHub (recommended)", "This server"}, localUpdates ? 1 : 0, (dialog, which) -> {
+                    stopUpdates();
+                    availableUpdate = readyUpdate = null;
+                    waitingForInstallPermission = false;
+                    if (updateNotice != null) updateNotice.setVisibility(View.GONE);
+                    getPreferences(MODE_PRIVATE).edit().putString("updateSource", which == 1 ? UpdateSource.SERVER : UpdateSource.GITHUB)
+                            .remove("updateCheckedAt").remove("updateCheckedSource").apply();
+                    dialog.dismiss();
+                    checkUpdates(true);
+                    startUpdates();
+                }).setNegativeButton("Cancel", null).show();
     }
     @Override public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_MENU) { onBackPressed(); return true; }

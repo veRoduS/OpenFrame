@@ -1,5 +1,15 @@
 # Validation record
 
+## Player 0.10.4: real enrollment and independent GitHub updates
+
+The reported missing pairing code was reproduced: the real server returns HTTP 201 for new enrollment, but the Android agent accepted only HTTP 200. Earlier native fixtures incorrectly returned 200, so their passing results did not establish enrollment compatibility. Correcting that fixture made five of the eight original native tests fail. Player 0.10.4 accepts 201 for enrollment (and legacy 200), keeps sync/media success restricted to 200, preserves a saved pairing code during an initial sync failure, and gives controlled HTTP, webpage, and network diagnostics.
+
+Checked on 2026-10-02: 25 native Java tests passed, including a new integration test that runs the actual Android agent against the real Express API with disposable data. It verifies initial pairing, saved-credential reuse after reopening, and approval with no assigned playlist. The 152 Node tests, 89 Python tests, lint, typecheck, production web build, and repository checks passed. The native updater also discovered and downloaded the published GitHub APK directly through this environment's HTTPS proxy, then verified its checksum.
+
+Updates now default to the fixed GitHub APK folder, independent of the content server version. Tests cover immutable version URLs, metadata that attempts to choose a foreign source, explicit local-server distribution, source binding through download/restoration, redirects, malformed HTML/JSON, bounds, checksum failures, and cancellation. The installation signer/package checks remain in place. The server runtime is unchanged at 0.10.4; the older published server's enrollment and playlist contracts are also preserved.
+
+Install the signed 0.10.4 APK over the existing app once when an old server cannot supply update metadata. Old failed enrollment retries may leave unused pending screens; remove those only if the server's pending-device limit blocks pairing. These checks do not establish physical Android TV installation, permission return, or long-run playback. Gradle dependency access remains unavailable here; native tests use the host JDK and the APK uses the official SDK fallback with the existing release key. The supplied public server could not be probed from this workspace because its outbound proxy denied that hostname; live network/proxy access on the TV remains separate from the reproduced client bug.
+
 ## Server 0.10.4 / player 0.10.3: GitHub APK distribution and independent versions
 
 Checked on 2026-10-02: 152 Node tests (including real Python-agent integration), 89 Python tests, and 13 native Java agent/updater tests passed. Typecheck, lint, production build, repository checks, and Pi shell syntax passed. Landing browser checks passed at five viewport widths; the Android download browser check verifies the direct GitHub link and downloaded bytes on desktop/mobile without a local APK or render-time metadata request.
