@@ -1,0 +1,53 @@
+{
+  "packageName": "org.openframe.player",
+  "versionName": "0.10.3",
+  "versionCode": 10003,
+  "minSdk": 28,
+  "size": 116059,
+  "sha256": "78c6ef775ccab49ed57c5f80ed40dcc4ef3ccc93b4b9f3ce137b0cb78591ee8a",
+  "apkUrl": "/downloads/android/openframe-player-0.10.3.apk",
+  "sourceCommit": "35ca248fe6bdb4aa1d66a2672763a8bc218b810e",
+  "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
+  "compatibility": {
+    "protocols": {
+      "playerSync": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "playlistManifest": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "androidUpdate": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": []
+      }
+    },
+    "reviewedWith": {
+      "server": "0.10.4",
+      "player": "0.10.3"
+    },
+    "impact": "compatible",
+    "summary": "Server 0.10.4 preserves player 0.10.3 sync, playlist schema 1, and same-origin APK update metadata; GitHub source adds verified mirroring only. 152 Node, 89 Python and 13 native Java tests plus landing/download browser checks pass; physical TV upgrade acceptance remains pending.",
+    "reviewedAt": "2026-10-02T01:01:40.398Z"
+  }
+}
