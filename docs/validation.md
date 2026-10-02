@@ -1,5 +1,10 @@
 # Validation record
 
+## Player 0.10.5: automatic update preference
+
+Automatic APK checks can now be disabled per device. The persisted setting defaults off; the Back/Menu action always supports an immediate manual update check. Choosing GitHub or This server remains independent of that preference. The SDK build verifies that the player source compiles and the signed APK metadata matches the player version. No automated tests or physical Android TV checks were run for this small settings change.
+
+
 ## Player 0.10.4: real enrollment and independent GitHub updates
 
 The reported missing pairing code was reproduced: the real server returns HTTP 201 for new enrollment, but the Android agent accepted only HTTP 200. Earlier native fixtures incorrectly returned 200, so their passing results did not establish enrollment compatibility. Correcting that fixture made five of the eight original native tests fail. Player 0.10.4 accepts 201 for enrollment (and legacy 200), keeps sync/media success restricted to 200, preserves a saved pairing code during an initial sync failure, and gives controlled HTTP, webpage, and network diagnostics.

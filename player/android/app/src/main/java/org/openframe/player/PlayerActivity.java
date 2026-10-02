@@ -47,6 +47,7 @@ public final class PlayerActivity extends Activity {
     private int generation;
     private static final ScheduledExecutorService updateWorker = Executors.newSingleThreadScheduledExecutor();
     private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L;
+    private static final String AUTO_UPDATES = "automaticUpdatesEnabled";
     private ScheduledFuture<?> updatePolling;
     private Future<?> updateTask;
     private int updateGeneration;
@@ -261,8 +262,12 @@ public final class PlayerActivity extends Activity {
         polling = null;
     }
 
+    private boolean automaticUpdatesEnabled() {
+        return getPreferences(MODE_PRIVATE).getBoolean(AUTO_UPDATES, false);
+    }
+
     private void startUpdates() {
-        if (resumed && activeServer != null && web != null && updatePolling == null) {
+        if (automaticUpdatesEnabled() && resumed && activeServer != null && web != null && updatePolling == null) {
             updatePolling = updateWorker.scheduleWithFixedDelay(() -> runOnUiThread(() -> checkUpdates(false)),
                     0, 6, TimeUnit.HOURS);
         }
@@ -295,7 +300,7 @@ public final class PlayerActivity extends Activity {
     }
 
     private void checkUpdates(boolean manual) {
-        if (!resumed || activeServer == null || updateBusy) return;
+        if ((!manual && !automaticUpdatesEnabled()) || !resumed || activeServer == null || updateBusy) return;
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
         UpdateSource source = localUpdates ? new UpdateSource(activeServer) : new UpdateSource();
         String sourceKey = localUpdates ? UpdateSource.SERVER + ":" + activeServer : UpdateSource.GITHUB;
@@ -315,6 +320,11 @@ public final class PlayerActivity extends Activity {
                 runOnUiThread(() -> {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
                     cancelUpdateTask();
+                    if (!manual && !automaticUpdatesEnabled()) {
+                        availableUpdate = null;
+                        if (updateNotice != null) updateNotice.setVisibility(View.GONE);
+                        return;
+                    }
                     availableUpdate = newer ? release : null;
                     if (updateNotice != null) {
                         updateNotice.setText(newer ? "OpenFrame " + release.versionName + " available — press Menu or Back to update" : "");
@@ -453,13 +463,32 @@ public final class PlayerActivity extends Activity {
     @Override public void onBackPressed() {
         if (web == null) { super.onBackPressed(); return; }
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
+        boolean automatic = automaticUpdatesEnabled();
         new AlertDialog.Builder(this).setTitle("OpenFrame Player")
-                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Update source: " + (localUpdates ? "This server" : "GitHub"), "Exit player"}, (dialog, which) -> {
+                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Exit player"}, (dialog, which) -> {
                     if (which == 1) setup();
                     if (which == 2) checkUpdates(true);
-                    if (which == 3) chooseUpdateSource();
-                    if (which == 4) finish();
+                    if (which == 3) chooseAutomaticUpdates();
+                    if (which == 4) chooseUpdateSource();
+                    if (which == 5) finish();
                 }).show();
+    }
+    private void chooseAutomaticUpdates() {
+        boolean enabled = automaticUpdatesEnabled();
+        new AlertDialog.Builder(this).setTitle("Automatic updates")
+                .setMessage("When enabled, OpenFrame checks for player updates when it opens and every six hours while it is open.")
+                .setSingleChoiceItems(new String[]{"Off (default)", "On"}, enabled ? 1 : 0, (dialog, which) -> {
+                    boolean next = which == 1;
+                    getPreferences(MODE_PRIVATE).edit().putBoolean(AUTO_UPDATES, next).apply();
+                    if (next) startUpdates();
+                    else {
+                        if (updatePolling != null) updatePolling.cancel(false);
+                        updatePolling = null;
+                        availableUpdate = null;
+                        if (updateNotice != null) updateNotice.setVisibility(View.GONE);
+                    }
+                    dialog.dismiss();
+                }).setNegativeButton("Cancel", null).show();
     }
     private void chooseUpdateSource() {
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));

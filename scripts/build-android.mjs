@@ -124,9 +124,9 @@ Installation works offline. Initial pairing and content download require the ser
 After a successful sync, downloaded content plays offline while the app stays open.
 Back or Menu opens settings. Reopen the app after restarting the box.
 For updates, install a newer APK signed with the same key without uninstalling.
-This player checks GitHub for updates every six hours while open, independently of
-the server version. Use Back/Menu > Update source > This server for local distribution.
-Use Back/Menu > Check for updates to download and open Android's installer.
+Automatic update checks are off by default. Turn them on in Back/Menu >
+Automatic updates. Manual Back/Menu > Check for updates is always available.
+GitHub updates are independent of the server version.
 Android requires installation approval; updates are not silent.
 
 For players using This server as their update source, the server mirrors GitHub
