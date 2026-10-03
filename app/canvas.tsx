@@ -7,6 +7,7 @@ import {
 } from 'react';
 import type { Slide, Asset, Layer } from './types';
 import { layoutText } from '../player/web/text-layout.js';
+import { customFontAlias } from './font-utils';
 import { resizeLayer } from './geometry.mjs';
 import { imageStyle, panCrop } from '../player/web/image-layout.js';
 import { counterText } from '../player/web/counter.js';
@@ -282,6 +283,9 @@ export function SlideCanvas({
             height: `${layer.height}%`,
             color: layer.color,
             fontSize: layer.fontSize * scale,
+            fontFamily: layer.fontId
+              ? customFontAlias(layer.fontId)
+              : layer.fontFamily || 'Arial',
             fontWeight: layer.bold ? 700 : 400,
             textAlign: layer.align,
             padding: 0,

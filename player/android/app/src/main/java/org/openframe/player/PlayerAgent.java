@@ -210,7 +210,7 @@ final class PlayerAgent {
 
     static void validateAsset(JSONObject asset) throws Exception {
         String filename = asset.getString("filename");
-        if (!filename.matches("[a-f0-9-]{36}\\.webp") || !asset.getString("url").equals("/media/" + filename)
+        if (!filename.matches("[a-f0-9-]{36}\\.(webp|woff2|woff|ttf|otf)") || !asset.getString("url").equals("/media/" + filename)
                 || !asset.getString("sha256").matches("[a-f0-9]{64}")) throw new IOException("Invalid asset");
     }
 

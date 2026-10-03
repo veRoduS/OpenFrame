@@ -2,17 +2,37 @@ import { z } from 'zod';
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
 const id = z.uuid();
+export const systemFontFamilies = [
+  'Arial',
+  'Georgia',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+  'Courier New',
+  'Impact',
+  'Roboto',
+];
 export const layerSchema = z
   .object({
     id,
     type: z.enum(['text', 'image', 'clock', 'counter', 'weather']),
     x: z.number().min(0).max(100),
     y: z.number().min(0).max(100),
-    width: z.number().min(1).max(100),
-    height: z.number().min(1).max(100),
+    width: z
+      .number()
+      .min(1)
+      .max(100.000001)
+      .transform((value) => Math.min(100, value)),
+    height: z
+      .number()
+      .min(1)
+      .max(100.000001)
+      .transform((value) => Math.min(100, value)),
     text: z.string().max(4000).default(''),
     assetId: id.optional(),
     fontSize: z.number().min(12).max(400).default(72),
+    fontFamily: z.enum(systemFontFamilies).default('Arial'),
+    fontId: id.optional(),
     color: color.default('#202923'),
     bold: z.boolean().default(false),
     align: z.enum(['left', 'center', 'right']).default('left'),
@@ -58,8 +78,15 @@ export const layerSchema = z
       })
       .optional(),
   })
+  .transform((layer) => ({
+    ...layer,
+    // If a size lands exactly on the canvas edge, move it inward as needed.
+    // This also absorbs small floating-point overshoots from pointer resizing.
+    x: Math.min(layer.x, 100 - layer.width),
+    y: Math.min(layer.y, 100 - layer.height),
+  }))
   .refine(
-    (l) => l.x + l.width <= 100.01 && l.y + l.height <= 100.01,
+    (l) => l.x + l.width <= 100.000001 && l.y + l.height <= 100.000001,
     'Layer must fit inside the slide',
   )
   .refine((l) => l.type !== 'image' || !!l.assetId, 'Choose an image')

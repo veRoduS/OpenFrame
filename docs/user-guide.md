@@ -20,6 +20,8 @@ Counters automatically count down to future targets and count up from past targe
 
 Images are decoded, resized to at most 1920 pixels per dimension, and stored as WebP. Upload limit: 15 MB and 25 megapixels. Text is rendered as text, never as executable HTML.
 
+Super-admins can open **Settings** to upload WOFF2, WOFF, TTF, or OTF custom fonts (up to 10 MB each). Select a built-in or custom family under **Typography** in the slide editor. A font in use by a saved slide or published playlist cannot be removed. Published screens download the font with the playlist and keep it available offline.
+
 ## Slide properties
 
 Select a layer to edit it in the right sidebar. Controls are grouped into Content, Source image, or Widget settings; Position & size; Typography or Image display; and Arrange. Related numeric fields sit side by side. Expand **Crop adjustments** under Image display to reveal image zoom, focal position, and crop reset controls.

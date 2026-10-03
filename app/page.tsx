@@ -1,4 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from 'react';
 import { version } from '../package.json';
 import {
   minimumPasswordLength,
@@ -41,6 +46,7 @@ import {
   Power,
   CheckCircle2,
   Circle,
+  Settings,
   Bold,
   AlignLeft,
   AlignCenter,
@@ -97,12 +103,14 @@ import {
 } from './types';
 import { SlideCanvas } from './canvas';
 import { MediaLibrary } from './media-library';
+import { FontSettings } from './font-settings';
 import { ScreenSetup } from './screen-setup';
 import { resizeLayer } from './geometry.mjs';
 import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 import { localDateTime } from '../player/web/counter.js';
 import { playlistItemStatus } from './playlist-status.mjs';
 import { v4 as uuid } from 'uuid';
+import { customFontAlias, systemFonts, type CustomFont } from './font-utils';
 
 function IconButton({
   label,
@@ -199,6 +207,7 @@ const viewInfo = {
   devices: { title: 'Screens', icon: Monitor },
   media: { title: 'Media', icon: Images },
   accounts: { title: 'Users & Groups', icon: Users },
+  settings: { title: 'Settings', icon: Settings },
 };
 type View = keyof typeof viewInfo;
 
@@ -208,6 +217,7 @@ export default function App() {
     new URLSearchParams(location.hash.slice(1)).get('activate'),
   );
   const [library, setLibrary] = useState<Library>(emptyLibrary);
+  const [fonts, setFonts] = useState<CustomFont[]>([]);
   const [view, setView] = useState<View>('slides');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -226,6 +236,8 @@ export default function App() {
     null,
   );
   const refresh = async () => setLibrary(await api<Library>('/api/library'));
+  const refreshFonts = async () =>
+    setFonts(await api<CustomFont[]>('/api/fonts'));
   const run = (action: () => Promise<void>, message = '') => {
     void (async () => {
       setError('');
@@ -256,6 +268,28 @@ export default function App() {
   useEffect(() => {
     if (auth?.authenticated) refresh().catch((e) => setError(e.message));
   }, [auth]);
+  useEffect(() => {
+    if (auth?.authenticated) refreshFonts().catch((e) => setError(e.message));
+  }, [auth]);
+  useEffect(() => {
+    for (const face of document.fonts) {
+      if (!face.family.startsWith('OpenFrameFont_')) continue;
+      if (!fonts.some((font) => customFontAlias(font.id) === face.family))
+        document.fonts.delete(face);
+    }
+    for (const font of fonts) {
+      if (
+        [...document.fonts].some(
+          (face) => face.family === customFontAlias(font.id),
+        )
+      )
+        continue;
+      void new FontFace(customFontAlias(font.id), `url("${font.url}")`)
+        .load()
+        .then((face) => document.fonts.add(face))
+        .catch(() => setError(`Could not load the ${font.family} font file.`));
+    }
+  }, [fonts]);
   useEffect(() => {
     if (!auth?.authenticated || view !== 'devices') return;
     const t = setInterval(
@@ -470,28 +504,31 @@ export default function App() {
             <SidebarContent>
               <div className="nav-caption">WORKSPACE</div>
               <SidebarMenu>
-                {(
-                  Object.entries(viewInfo) as [View, typeof viewInfo.slides][]
-                ).map(([key, item]) => (
-                  <SidebarMenuItem key={key}>
-                    <SidebarMenuButton
-                      isActive={view === key}
-                      onClick={() => {
-                        setView(key);
-                      }}
-                    >
-                      <item.icon size={18} />
-                      <span>{item.title}</span>
-                      <span className="nav-count">
-                        {key === 'accounts'
-                          ? ''
-                          : key === 'media'
-                            ? library.assets.length
-                            : library[key].length}
-                      </span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {(Object.entries(viewInfo) as [View, typeof viewInfo.slides][])
+                  .filter(
+                    ([key]) =>
+                      key !== 'settings' || auth.user?.role === 'superadmin',
+                  )
+                  .map(([key, item]) => (
+                    <SidebarMenuItem key={key}>
+                      <SidebarMenuButton
+                        isActive={view === key}
+                        onClick={() => {
+                          setView(key);
+                        }}
+                      >
+                        <item.icon size={18} />
+                        <span>{item.title}</span>
+                        <span className="nav-count">
+                          {key === 'accounts' || key === 'settings'
+                            ? ''
+                            : key === 'media'
+                              ? library.assets.length
+                              : library[key].length}
+                        </span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
               </SidebarMenu>
             </SidebarContent>
             <SidebarFooter>
@@ -538,7 +575,9 @@ export default function App() {
                           ? 'YOUR DISPLAY NETWORK'
                           : view === 'accounts'
                             ? 'PEOPLE & ACCESS'
-                            : 'IMAGE LIBRARY'}
+                            : view === 'settings'
+                              ? 'WORKSPACE CONFIGURATION'
+                              : 'IMAGE LIBRARY'}
                   </span>
                   <h1>{viewInfo[view].title}</h1>
                 </div>
@@ -608,6 +647,9 @@ export default function App() {
                   library={library}
                   refresh={refresh}
                 />
+              )}
+              {view === 'settings' && auth.user?.role === 'superadmin' && (
+                <FontSettings fonts={fonts} refresh={refreshFonts} />
               )}
               {view === 'slides' && (
                 <>
@@ -846,6 +888,13 @@ export default function App() {
                           canManage={auth.user?.role === 'superadmin'}
                           playlists={library.playlists}
                           busy={busy}
+                          onRename={async (name) => {
+                            await api(`/api/devices/${d.id}`, 'PUT', {
+                              name,
+                            });
+                            await refresh();
+                            setNotice('Screen renamed');
+                          }}
                           onSave={(patch) =>
                             run(async () => {
                               await api(`/api/devices/${d.id}`, 'PUT', patch);
@@ -928,6 +977,7 @@ export default function App() {
             <Editor
               initial={editing}
               assets={library.assets}
+              fonts={fonts}
               folders={library.folders}
               onRefresh={refresh}
               onUpload={upload}
@@ -950,6 +1000,20 @@ export default function App() {
               assets={library.assets}
               onClose={() => setPlaylist(null)}
               onSave={savePlaylist}
+              onSharePlan={(candidate) =>
+                api<PlaylistShareChange[]>(
+                  `/api/playlists/${candidate.id || 'new'}/share-plan`,
+                  'POST',
+                  candidate,
+                )
+              }
+              onShare={(id, changes) =>
+                api(
+                  `/api/playlists/${id || 'new'}/share-apply`,
+                  'POST',
+                  changes,
+                )
+              }
               onPublish={async (p) => {
                 const saved = await savePlaylist(p);
                 await api(`/api/playlists/${saved.id}/publish`, 'POST');
@@ -1062,6 +1126,7 @@ export default function App() {
 function DeviceRow({
   device,
   playlists,
+  onRename,
   onSave,
   onApprove,
   onCommand,
@@ -1073,6 +1138,7 @@ function DeviceRow({
   device: Device;
   canManage: boolean;
   playlists: Playlist[];
+  onRename: (name: string) => Promise<void>;
   onSave: (d: Device) => void;
   onApprove: () => void;
   onCommand: (type: 'refresh' | 'reboot') => void;
@@ -1081,6 +1147,25 @@ function DeviceRow({
   busy: boolean;
 }) {
   const [name, setName] = useState(device.name);
+  const [editingName, setEditingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
+  useEffect(() => setName(device.name), [device.name]);
+  const saveName = async (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    if (!trimmedName || trimmedName === device.name || savingName) return;
+    setSavingName(true);
+    setNameError('');
+    try {
+      await onRename(trimmedName);
+      setEditingName(false);
+    } catch (error) {
+      setNameError((error as Error).message);
+    } finally {
+      setSavingName(false);
+    }
+  };
   const online =
     device.lastSeen && Date.now() - Date.parse(device.lastSeen) < 90000;
   return (
@@ -1088,16 +1173,50 @@ function DeviceRow({
       <div className="device-identity">
         <Monitor size={25} />
         <div>
-          <input
-            aria-label="Screen name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => {
-              if (name.trim() && name !== device.name)
-                onSave({ ...device, name: name.trim() });
-            }}
-            maxLength={100}
-          />
+          {editingName ? (
+            <form className="screen-name-edit" onSubmit={saveName}>
+              <input
+                aria-label="Screen name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+                required
+                disabled={savingName}
+              />
+              <button
+                className="primary"
+                type="submit"
+                disabled={
+                  savingName || !name.trim() || name.trim() === device.name
+                }
+              >
+                {savingName ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                disabled={savingName}
+                onClick={() => {
+                  setName(device.name);
+                  setNameError('');
+                  setEditingName(false);
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="screen-name-display">
+              <strong>{device.name}</strong>
+              <button
+                type="button"
+                onClick={() => setEditingName(true)}
+                aria-label={`Rename ${device.name}`}
+              >
+                Rename
+              </button>
+            </div>
+          )}
+          {nameError && <p className="inline-error">{nameError}</p>}
           <span>
             {device.lastSeen
               ? `Last heartbeat: ${new Date(device.lastSeen).toLocaleString()}`
@@ -1241,6 +1360,7 @@ function PropertySection({
 function Editor({
   initial,
   assets,
+  fonts,
   folders,
   onRefresh,
   onClose,
@@ -1249,6 +1369,7 @@ function Editor({
 }: {
   initial: Slide;
   assets: Asset[];
+  fonts: CustomFont[];
   folders: MediaFolder[];
   onRefresh: () => Promise<void>;
   onClose: () => void;
@@ -1979,6 +2100,45 @@ function Editor({
               >
                 {current.type !== 'image' ? (
                   <>
+                    <label>
+                      Font family
+                      <select
+                        value={
+                          current.fontId
+                            ? `custom:${current.fontId}`
+                            : `system:${current.fontFamily || 'Arial'}`
+                        }
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (value.startsWith('custom:'))
+                            patchLayer({
+                              fontId: value.slice('custom:'.length),
+                            });
+                          else
+                            patchLayer({
+                              fontId: undefined,
+                              fontFamily: value.slice('system:'.length),
+                            });
+                        }}
+                      >
+                        <optgroup label="Built-in fonts">
+                          {systemFonts.map((family) => (
+                            <option key={family} value={`system:${family}`}>
+                              {family}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {fonts.length > 0 && (
+                          <optgroup label="Custom fonts">
+                            {fonts.map((font) => (
+                              <option key={font.id} value={`custom:${font.id}`}>
+                                {font.family}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </label>
                     <label className="property-switch" htmlFor="auto-size-text">
                       Auto-size to box
                       <Switch
@@ -2262,12 +2422,23 @@ function Editor({
   );
 }
 
+type PlaylistShareChange = {
+  kind: 'slide' | 'asset';
+  id: string;
+  name: string;
+  target: { userId: string; groupId: string };
+  targetLabel: string;
+  canShare: boolean;
+};
+
 function PlaylistEditor({
   initial,
   slides,
   assets,
   onClose,
   onSave,
+  onSharePlan,
+  onShare,
   onPublish,
   onPreview,
 }: {
@@ -2276,6 +2447,11 @@ function PlaylistEditor({
   assets: Asset[];
   onClose: () => void;
   onSave: (p: Playlist) => Promise<Playlist>;
+  onSharePlan: (p: Playlist) => Promise<PlaylistShareChange[]>;
+  onShare: (
+    id: string,
+    changes: Pick<PlaylistShareChange, 'kind' | 'id' | 'target'>[],
+  ) => Promise<unknown>;
   onPublish: (p: Playlist) => Promise<Playlist>;
   onPreview: (id: string) => void;
 }) {
@@ -2295,14 +2471,48 @@ function PlaylistEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [shareChanges, setShareChanges] = useState<
+    PlaylistShareChange[] | null
+  >(null);
+  const [selectedShares, setSelectedShares] = useState<Set<string>>(new Set());
+  const [pendingAction, setPendingAction] = useState({
+    publish: false,
+    preview: false,
+  });
   const [tab, setTab] = useState('sequence');
   const [saved, setSaved] = useState(JSON.stringify(initial));
   const dirty = JSON.stringify(p) !== saved;
   const navigation = useUnsavedNavigation(dirty, onClose);
-  async function action(publish = false, preview = false) {
+  function shareKey(change: PlaylistShareChange) {
+    return `${change.kind}:${change.id}:${change.target.userId}:${change.target.groupId}`;
+  }
+  async function action(
+    publish = false,
+    preview = false,
+    acceptedChanges?: PlaylistShareChange[],
+  ) {
     setBusy(true);
     setError('');
     try {
+      if (acceptedChanges) {
+        await onShare(
+          p.id,
+          acceptedChanges
+            .filter((change) => selectedShares.has(shareKey(change)))
+            .map(({ kind, id, target }) => ({ kind, id, target })),
+        );
+        setShareChanges(null);
+      } else {
+        const changes = await onSharePlan(p);
+        if (changes.length) {
+          setShareChanges(changes);
+          setSelectedShares(
+            new Set(changes.filter((change) => change.canShare).map(shareKey)),
+          );
+          setPendingAction({ publish, preview });
+          return false;
+        }
+      }
       const result = await (publish ? onPublish(p) : onSave(p));
       setP(result);
       setSaved(JSON.stringify(result));
@@ -2700,6 +2910,64 @@ function PlaylistEditor({
           >
             <Copy size={16} />
             Add another copy
+          </button>
+        </div>
+      </Modal>
+      <Modal
+        title="Share referenced content?"
+        description="These slides and media need access for the playlist owner and its recipients. All listed changes are required to continue."
+        open={shareChanges !== null}
+        onClose={() => !busy && setShareChanges(null)}
+      >
+        <div className="playlist-share-changes">
+          {shareChanges?.map((change) => {
+            const key = shareKey(change);
+            return (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={selectedShares.has(key)}
+                  disabled={!change.canShare || busy}
+                  onChange={(event) =>
+                    setSelectedShares((current) => {
+                      const next = new Set(current);
+                      if (event.target.checked) next.add(key);
+                      else next.delete(key);
+                      return next;
+                    })
+                  }
+                />
+                <span>
+                  Share <strong>{change.name}</strong> ({change.kind}) with{' '}
+                  <strong>{change.targetLabel}</strong>
+                  {!change.canShare && ' — only its owner can share this item'}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        <div className="dialog-actions">
+          <button disabled={busy} onClick={() => setShareChanges(null)}>
+            Cancel
+          </button>
+          <button
+            className="primary"
+            disabled={
+              busy ||
+              shareChanges?.some(
+                (change) =>
+                  !change.canShare || !selectedShares.has(shareKey(change)),
+              )
+            }
+            onClick={() =>
+              void action(
+                pendingAction.publish,
+                pendingAction.preview,
+                shareChanges || [],
+              )
+            }
+          >
+            {busy ? 'Sharing…' : 'Accept'}
           </button>
         </div>
       </Modal>

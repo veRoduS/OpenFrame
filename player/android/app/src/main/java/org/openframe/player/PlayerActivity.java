@@ -198,8 +198,13 @@ public final class PlayerActivity extends Activity {
                             });
                             return response("application/json", new ByteArrayInputStream(snapshot.getBytes(StandardCharsets.UTF_8)));
                         }
-                        if (path != null && path.matches("/media/[a-f0-9-]{36}\\.webp")) {
-                            return response("image/webp", new FileInputStream(new File(current.media, path.substring(7))));
+                        if (path != null && path.matches("/media/[a-f0-9-]{36}\\.(webp|woff2|woff|ttf|otf)")) {
+                            String filename = path.substring(7);
+                            String mime = filename.endsWith(".webp") ? "image/webp"
+                                    : filename.endsWith(".woff2") ? "font/woff2"
+                                    : filename.endsWith(".woff") ? "font/woff"
+                                    : filename.endsWith(".otf") ? "font/otf" : "font/ttf";
+                            return response(mime, new FileInputStream(new File(current.media, filename)));
                         }
                         if (path != null && path.matches("/[a-z-]+\\.(html|js|css|svg)")) {
                             String type = path.endsWith(".js") ? "text/javascript" : path.endsWith(".css") ? "text/css"

@@ -10,6 +10,8 @@ export type Layer = {
   text: string;
   assetId?: string;
   fontSize: number;
+  fontFamily?: string;
+  fontId?: string;
   color: string;
   bold: boolean;
   align: 'left' | 'center' | 'right';
@@ -158,6 +160,7 @@ export function newLayer(type: Layer['type'], assetId?: string): Layer {
     text: type === 'text' ? 'Your message here' : '',
     assetId,
     fontSize: 96,
+    fontFamily: 'Arial',
     color: '#202923',
     bold: false,
     align: 'left',

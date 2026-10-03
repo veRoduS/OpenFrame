@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.10.6] - 2026-10-03
+
+- Cache custom fonts with published playlists
+
 ## [0.10.5] - 2026-10-02
 
 - Make automatic update checks optional and off by default while preserving manual checks

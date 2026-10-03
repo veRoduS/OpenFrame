@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.10.5'
+VERSION = '0.10.6'
 
 
 def normalize_server(value):
@@ -153,7 +153,7 @@ class Agent:
 
     def download(self, asset):
         filename = asset['filename']
-        if not re.fullmatch(r'[a-f0-9-]{36}\.webp', filename) or asset['url'] != '/media/' + filename:
+        if not re.fullmatch(r'[a-f0-9-]{36}\.(?:webp|woff2|woff|ttf|otf)', filename) or asset['url'] != '/media/' + filename:
             raise ValueError('Invalid asset path')
         target = self.cache / 'media' / filename
         if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == asset['sha256']:
@@ -335,13 +335,17 @@ class Agent:
                     state['error'] = agent.error or state.get('error')
                     data = json.dumps(state).encode()
                     content_type = 'application/json'
-                elif re.fullmatch(r'/media/[a-f0-9-]{36}\.webp', route):
+                elif re.fullmatch(r'/media/[a-f0-9-]{36}\.(?:webp|woff2|woff|ttf|otf)', route):
                     target = agent.cache / 'media' / route.split('/')[-1]
                     if not target.is_file():
                         self.send_error(404)
                         return
                     data = None
-                    content_type = 'image/webp'
+                    extension = target.suffix.lower()
+                    content_type = {
+                        '.webp': 'image/webp', '.woff2': 'font/woff2',
+                        '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf',
+                    }[extension]
                 elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/weather-icons.js', '/image-layout.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
                     filename = 'index.html' if route == '/' else route[1:]
                     data = (web / filename).read_bytes()

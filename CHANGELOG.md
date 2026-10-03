@@ -2,6 +2,22 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.13.4] - 2026-10-03
+
+- Normalize canvas-edge dimensions when saving slides
+
+## [0.13.3] - 2026-10-03
+
+- Add dashboard custom fonts and slide font choices
+
+## [0.13.2] - 2026-10-03
+
+- Confirm and share playlist dependencies before saving
+
+## [0.13.1] - 2026-10-03
+
+- Add dashboard screen renaming
+
 ## [0.13.0] - 2026-10-03
 
 - Publish OpenFrame 0.13.0 with corrected shared-media access checks

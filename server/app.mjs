@@ -46,7 +46,8 @@ export function createApp({
   db.exec(`PRAGMA journal_mode=WAL;
     CREATE TABLE IF NOT EXISTS records (kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(kind,id));
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS custom_fonts (id TEXT PRIMARY KEY, family TEXT NOT NULL COLLATE NOCASE UNIQUE, filename TEXT NOT NULL UNIQUE, format TEXT NOT NULL, bytes INTEGER NOT NULL, sha256 TEXT NOT NULL);`);
   const accounts = createAccounts(db);
   const allRecords = (kind) =>
     db
@@ -369,9 +370,19 @@ export function createApp({
         throw fail(404, 'Referenced item not found');
     }
   }
+  function checkFonts(slide) {
+    for (const layer of slide.layers) {
+      if (
+        layer.fontId &&
+        !db.prepare('SELECT 1 FROM custom_fonts WHERE id=?').get(layer.fontId)
+      )
+        throw fail(400, 'A selected custom font is no longer available');
+    }
+  }
   app.post('/api/slides', admin, (req, res) => {
     const slide = slideSchema.parse(req.body);
     checkImages(slide, req.user);
+    checkFonts(slide);
     res.status(201).json(
       put('slide', {
         ...slide,
@@ -384,6 +395,7 @@ export function createApp({
     requireRecord('slide', req.params.id);
     const slide = slideSchema.parse(req.body);
     checkImages(slide, req.user);
+    checkFonts(slide);
     const saved = put('slide', {
       ...slide,
       id: req.params.id,
@@ -408,6 +420,149 @@ export function createApp({
     p.items.forEach((i) => requireRecord('slide', i.slideId));
     return p;
   }
+  function playlistShareChanges(user, playlistId, candidate) {
+    const targets = [];
+    const playlistOwner = playlistId
+      ? db
+          .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
+          .get('playlist', playlistId)?.ownerId
+      : user.id;
+    if (playlistOwner)
+      targets.push({
+        userId: playlistOwner,
+        groupId: '',
+        label:
+          db.prepare('SELECT name FROM users WHERE id=?').get(playlistOwner)
+            ?.name || 'Playlist owner',
+      });
+    if (playlistId) {
+      for (const grant of grants('playlist', playlistId)) {
+        targets.push({
+          ...grant,
+          label: grant.userId
+            ? db.prepare('SELECT name FROM users WHERE id=?').get(grant.userId)
+                ?.name || 'Shared user'
+            : db
+                .prepare('SELECT name FROM groups WHERE id=?')
+                .get(grant.groupId)?.name || 'Shared group',
+        });
+      }
+    }
+    const resources = new Map();
+    for (const { slideId } of candidate.items) {
+      const slide = requireRecord('slide', slideId);
+      resources.set(`slide:${slide.id}`, {
+        kind: 'slide',
+        id: slide.id,
+        name: slide.name,
+      });
+      for (const layer of slide.layers) {
+        if (layer.type !== 'image' || !layer.assetId) continue;
+        const asset = allRecords('asset').find(
+          (item) => item.id === layer.assetId,
+        );
+        if (!asset || !accounts.canViewAsset(user, asset.id))
+          throw fail(404, 'Referenced media not found');
+        resources.set(`asset:${asset.id}`, {
+          kind: 'asset',
+          id: asset.id,
+          name: asset.name,
+        });
+      }
+    }
+    const changes = [];
+    for (const resource of resources.values()) {
+      for (const target of targets) {
+        const accessible = target.userId
+          ? accounts.can(
+              db.prepare('SELECT * FROM users WHERE id=?').get(target.userId),
+              resource.kind,
+              resource.id,
+            )
+          : !!db
+              .prepare(
+                'SELECT 1 FROM resource_grants WHERE kind=? AND id=? AND groupId=?',
+              )
+              .get(resource.kind, resource.id, target.groupId);
+        if (accessible) continue;
+        const canShare = !!canShareResource(user, resource.kind, resource.id);
+        changes.push({
+          ...resource,
+          target: { userId: target.userId, groupId: target.groupId },
+          targetLabel: target.label,
+          canShare,
+        });
+      }
+    }
+    return changes;
+  }
+  function canShareResource(user, kind, id) {
+    return (
+      user.role === 'superadmin' ||
+      !!db
+        .prepare(
+          'SELECT 1 FROM resource_access WHERE kind=? AND id=? AND ownerId=?',
+        )
+        .get(kind, id, user.id)
+    );
+  }
+  app.post('/api/playlists/:id/share-plan', admin, (req, res) => {
+    const playlistId = req.params.id === 'new' ? '' : req.params.id;
+    if (playlistId) requireRecord('playlist', playlistId);
+    const candidate = validatePlaylist(req.body);
+    res.json(playlistShareChanges(req.user, playlistId, candidate));
+  });
+  app.post('/api/playlists/:id/share-apply', admin, (req, res) => {
+    const changes = z
+      .array(
+        z.object({
+          kind: z.enum(['slide', 'asset']),
+          id: z.string(),
+          target: z.object({ userId: z.string(), groupId: z.string() }),
+        }),
+      )
+      .parse(req.body);
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const change of changes) {
+        if (!!change.target.userId === !!change.target.groupId)
+          throw fail(400, 'Choose one sharing recipient');
+        requireRecord(change.kind, change.id);
+        if (!canShareResource(req.user, change.kind, change.id))
+          throw fail(403, 'You cannot share one or more referenced items');
+        if (
+          change.target.userId &&
+          (req.user.role !== 'superadmin' ||
+            !db
+              .prepare('SELECT id FROM users WHERE id=? AND disabled=0')
+              .get(change.target.userId))
+        )
+          throw fail(403, 'Only a super-admin can share with individual users');
+        if (
+          change.target.groupId &&
+          (!db
+            .prepare('SELECT id FROM groups WHERE id=?')
+            .get(change.target.groupId) ||
+            (req.user.role !== 'superadmin' &&
+              !accounts.member(req.user, change.target.groupId)))
+        )
+          throw fail(403, 'Join the recipient group before sharing');
+        db.prepare(
+          'INSERT OR IGNORE INTO resource_grants VALUES (?,?,?,?)',
+        ).run(
+          change.kind,
+          change.id,
+          change.target.userId,
+          change.target.groupId,
+        );
+      }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    res.json({ ok: true });
+  });
   app.post('/api/playlists', admin, (req, res) =>
     res.status(201).json(
       put('playlist', {
@@ -434,6 +589,40 @@ export function createApp({
     remove('playlist', req.params.id);
     res.json({ ok: true });
   });
+  function playlistAssets(items) {
+    const imageIds = new Set(
+      items.flatMap((item) =>
+        item.slide.layers
+          .filter((layer) => layer.type === 'image')
+          .map((layer) => layer.assetId),
+      ),
+    );
+    const fontIds = new Set(
+      items.flatMap((item) =>
+        item.slide.layers.map((layer) => layer.fontId).filter(Boolean),
+      ),
+    );
+    const assets = [...imageIds].map((id) => {
+      const asset = allRecords('asset').find((item) => item.id === id);
+      if (!asset) throw fail(404, 'Referenced media not found');
+      return asset;
+    });
+    for (const id of fontIds) {
+      const font = db
+        .prepare(
+          'SELECT id,family,filename,format,bytes,sha256 FROM custom_fonts WHERE id=?',
+        )
+        .get(id);
+      if (!font) throw fail(404, 'Referenced font not found');
+      assets.push({
+        ...font,
+        name: font.family,
+        kind: 'font',
+        url: `/media/${String(font.filename)}`,
+      });
+    }
+    return assets;
+  }
   function snapshot(p) {
     const items = p.items.map((item) => ({
       duration: item.duration,
@@ -443,15 +632,6 @@ export function createApp({
         item.scheduleEnabled === false ? null : (item.expiresAt ?? null),
       slide: requireRecord('slide', item.slideId),
     }));
-    const ids = [
-      ...new Set(
-        items.flatMap((i) =>
-          i.slide.layers
-            .filter((l) => l.type === 'image')
-            .map((l) => l.assetId),
-        ),
-      ),
-    ];
     return {
       schemaVersion: 1,
       revision: randomUUID(),
@@ -459,11 +639,7 @@ export function createApp({
       publishedAt: new Date().toISOString(),
       transition: p.transition || { type: 'cut', durationMs: 500 },
       items,
-      assets: ids.map((id) => {
-        const asset = allRecords('asset').find((item) => item.id === id);
-        if (!asset) throw fail(404, 'Referenced item not found');
-        return asset;
-      }),
+      assets: playlistAssets(items),
     };
   }
   function refreshPublishedSlide(slide) {
@@ -478,28 +654,12 @@ export function createApp({
       const items = published.items.map((item) =>
         item.slide?.id === slide.id ? { ...item, slide } : item,
       );
-      const assetIds = [
-        ...new Set(
-          items.flatMap((item) =>
-            item.slide.layers
-              .filter((layer) => layer.type === 'image')
-              .map((layer) => layer.assetId),
-          ),
-        ),
-      ];
-      const assets = assetIds.map((id) => {
-        const asset = db
-          .prepare("SELECT body FROM records WHERE kind='asset' AND id=?")
-          .get(id);
-        if (!asset) throw fail(404, 'Referenced item not found');
-        return JSON.parse(asset.body);
-      });
       playlist.published = {
         ...published,
         revision: randomUUID(),
         publishedAt: new Date().toISOString(),
         items,
-        assets,
+        assets: playlistAssets(items),
       };
       db.prepare(
         "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
@@ -546,6 +706,112 @@ export function createApp({
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  });
+  const fontUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  });
+  const fontFormats = {
+    woff2: { signature: 'wOF2', mime: 'font/woff2' },
+    woff: { signature: 'wOFF', mime: 'font/woff' },
+    ttf: { signature: '\u0000\u0001\u0000\u0000', mime: 'font/ttf' },
+    otf: { signature: 'OTTO', mime: 'font/otf' },
+  };
+  const fontList = () =>
+    db
+      .prepare(
+        'SELECT id,family,format,bytes FROM custom_fonts ORDER BY family COLLATE NOCASE',
+      )
+      .all()
+      .map((font) => ({ ...font, url: `/api/fonts/${String(font.id)}/file` }));
+  app.get('/api/fonts', admin, (_req, res) => res.json(fontList()));
+  app.get('/api/fonts/:id/file', admin, (req, res) => {
+    const font = db
+      .prepare('SELECT filename,format FROM custom_fonts WHERE id=?')
+      .get(req.params.id);
+    if (!font || !existsSync(path.join(root, 'media', font.filename)))
+      throw fail(404, 'Font not found');
+    res.type(fontFormats[font.format].mime);
+    res.set('Cache-Control', 'private, no-store');
+    res.sendFile(path.join(root, 'media', font.filename));
+  });
+  app.post(
+    '/api/fonts',
+    accounts.superadmin,
+    fontUpload.single('file'),
+    (req, res) => {
+      if (!req.file) throw fail(400, 'Choose a font file');
+      const family = z.string().trim().min(1).max(80).parse(req.body.family);
+      const format = path.extname(req.file.originalname).slice(1).toLowerCase();
+      const definition = fontFormats[format];
+      if (
+        !definition ||
+        req.file.buffer.subarray(0, 4).toString('latin1') !==
+          definition.signature
+      )
+        throw fail(400, 'Use a valid WOFF2, WOFF, TTF, or OTF font file');
+      if (
+        db
+          .prepare('SELECT 1 FROM custom_fonts WHERE family=? COLLATE NOCASE')
+          .get(family)
+      )
+        throw fail(409, 'A font with that name already exists');
+      const id = randomUUID();
+      const filename = `${id}.${format}`;
+      const font = {
+        id,
+        family,
+        filename,
+        format,
+        bytes: req.file.size,
+        sha256: hash(req.file.buffer),
+      };
+      writeFileSync(path.join(root, 'media', filename), req.file.buffer, {
+        flag: 'wx',
+      });
+      try {
+        db.prepare('INSERT INTO custom_fonts VALUES (?,?,?,?,?,?)').run(
+          id,
+          family,
+          filename,
+          format,
+          req.file.size,
+          font.sha256,
+        );
+      } catch (error) {
+        unlinkSync(path.join(root, 'media', filename));
+        throw error;
+      }
+      res.status(201).json({
+        id,
+        family,
+        format,
+        bytes: font.bytes,
+        url: `/api/fonts/${id}/file`,
+      });
+    },
+  );
+  app.delete('/api/fonts/:id', accounts.superadmin, (req, res) => {
+    const font = db
+      .prepare('SELECT filename FROM custom_fonts WHERE id=?')
+      .get(req.params.id);
+    if (!font) throw fail(404, 'Font not found');
+    const usedInDraft = allRecords('slide').some((slide) =>
+      slide.layers.some((layer) => layer.fontId === req.params.id),
+    );
+    const usedInPublished = allRecords('playlist').some((playlist) =>
+      playlist.published?.assets?.some(
+        (asset) => asset.kind === 'font' && asset.id === req.params.id,
+      ),
+    );
+    if (usedInDraft || usedInPublished)
+      throw fail(
+        409,
+        'Remove this font from slides and published playlists first',
+      );
+    db.prepare('DELETE FROM custom_fonts WHERE id=?').run(req.params.id);
+    unlinkSync(path.join(root, 'media', font.filename));
+    res.json({ ok: true });
   });
   app.post('/api/assets', admin, upload.single('file'), async (req, res) => {
     if (!req.file) throw fail(400, 'Choose an image');
@@ -718,6 +984,10 @@ export function createApp({
       const user = session(req, res);
       if (user) {
         res.locals.userMedia = true;
+        const font = db
+          .prepare('SELECT 1 FROM custom_fonts WHERE filename=?')
+          .get(req.params.filename);
+        if (font) return next();
         const asset = allRecords('asset').find(
           (a) => a.filename === req.params.filename,
         );
@@ -738,7 +1008,9 @@ export function createApp({
     },
     (req, res) => {
       if (
-        !/^[a-f0-9-]{36}\.webp$/.test(req.params.filename) ||
+        !/^[a-f0-9-]{36}\.(?:webp|woff2|woff|ttf|otf)$/.test(
+          req.params.filename,
+        ) ||
         !existsSync(path.join(root, 'media', req.params.filename))
       )
         throw fail(404, 'Not found');
@@ -748,6 +1020,8 @@ export function createApp({
           ? 'private, no-store'
           : 'private, max-age=31536000, immutable',
       );
+      const format = path.extname(req.params.filename).slice(1);
+      res.type(fontFormats[format]?.mime || 'image/webp');
       res.sendFile(path.join(root, 'media', req.params.filename));
     },
   );

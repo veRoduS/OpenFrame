@@ -29,6 +29,8 @@ Each protocol has explicit `server`, `android`, and `pi` arrays of supported pos
 
 `playerSync` and `androidUpdate` numbers identify reviewed contract generations; those endpoints do not currently negotiate a protocol-version field. The playlist's `schemaVersion` is an actual wire field and must agree with its declaration. Android version codes, server/player releases, playlist publication revisions, and this file's `schemaVersion` are separate counters.
 
+Server 0.13.3 and player 0.10.6 add font files as playlist assets. Standard-font playlists remain compatible with earlier players; a playlist that uses a custom font requires player 0.10.6 or newer so the font can be downloaded, cached, and rendered offline.
+
 The check requires a shared supported version between the server and each applicable player for each protocol. `androidUpdate.pi` must remain `[]` because the Pi does not install APKs. A support declaration change also requires a new review. Do not list support that the implementation does not provide.
 
 `player/android/release-signing.json` pins the public SHA-256 certificate fingerprint verified from the existing Android 0.10.3 installer. It contains no private key. Builds and publication verify the actual APK signature, package, release version/code, minimum Android SDK, and alignment. If a CI secret supplies a different key, restore the existing release key; changing this fingerprint to make a build pass would prevent in-place updates for installed players. Any planned signing-key migration requires a separate compatibility plan and Android-supported signing continuity.

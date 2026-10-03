@@ -2,6 +2,30 @@ import { widgets } from './widgets.js';
 import { layoutText } from './text-layout.js';
 import { imageStyle } from './image-layout.js';
 
+const fontLoads = new Map();
+const fontAlias = (id) => `OpenFrameFont_${id.replaceAll('-', '')}`;
+
+async function prepareFonts(slide, assets, signal) {
+  for (const id of new Set(
+    slide.layers.map((layer) => layer.fontId).filter(Boolean),
+  )) {
+    if (signal.aborted)
+      throw new DOMException('Preparation cancelled', 'AbortError');
+    const font = assets.find(
+      (asset) => asset.kind === 'font' && asset.id === id,
+    );
+    if (!font) throw new Error('A selected font is missing from the playlist');
+    let loading = fontLoads.get(id);
+    if (!loading) {
+      const face = new FontFace(fontAlias(id), `url("${font.url}")`);
+      loading = face.load().then((loaded) => document.fonts.add(loaded));
+      fontLoads.set(id, loading);
+      loading.catch(() => fontLoads.delete(id));
+    }
+    await waitFor(loading, signal);
+  }
+}
+
 function waitFor(promise, signal, timeout = 15000) {
   return new Promise((resolve, reject) => {
     const abort = () =>
@@ -69,6 +93,7 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
   try {
     if (signal.aborted)
       throw new DOMException('Preparation cancelled', 'AbortError');
+    await prepareFonts(slide, assets, signal);
     for (const layer of slide.layers) {
       const box = document.createElement('div');
       box.className = 'layer';
@@ -80,6 +105,9 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
         height: `${layer.height}%`,
         color: layer.color,
         fontSize: `${layer.fontSize * scale}px`,
+        fontFamily: layer.fontId
+          ? fontAlias(layer.fontId)
+          : layer.fontFamily || 'Arial',
         fontWeight: layer.bold ? '700' : '400',
         textAlign: layer.align,
       });
