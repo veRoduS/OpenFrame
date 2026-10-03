@@ -123,6 +123,21 @@ public class PlayerAgentTest {
         assertEquals(1, enrollments.get());
     }
 
+    @Test public void acceptsSchemaTwoRemovedMediaManifest() throws Exception {
+        response = new JSONObject().put("approved", true).put("rotation", 0).put("blank", false)
+                .put("command", JSONObject.NULL).put("weather", new JSONObject())
+                .put("manifest", new JSONObject().put("schemaVersion", 2).put("revision", "removed-media")
+                        .put("name", "Removed media").put("items", new JSONArray().put(
+                                new JSONObject().put("slide", new JSONObject().put("layers", new JSONArray().put(
+                                        new JSONObject().put("type", "image").put("removedMedia", true))))))
+                        .put("assets", new JSONArray()));
+        PlayerAgent player = agent(); player.tick();
+        JSONObject manifest = new JSONObject(player.snapshot()).getJSONObject("manifest");
+        assertEquals(2, manifest.getInt("schemaVersion"));
+        assertTrue(manifest.getJSONArray("items").getJSONObject(0)
+                .getJSONObject("slide").getJSONArray("layers").getJSONObject(0).getBoolean("removedMedia"));
+    }
+
     @Test public void enrollmentAndSyncRejectUnexpectedSuccessStatuses() throws Exception {
         enrollmentStatus = 202;
         PlayerAgent player = agent(); player.tick();

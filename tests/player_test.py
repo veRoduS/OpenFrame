@@ -29,11 +29,21 @@ class PlayerTests(unittest.TestCase):
             self.agent.sync()
         restarted = module.Agent(self.config, self.tmp.name)
         self.assertEqual(restarted.state['manifest']['revision'], 'one')
-
         with patch.object(restarted, 'request', side_effect=OSError('Offline')):
             with self.assertRaises(OSError):
                 restarted.sync()
         self.assertEqual(restarted.state['manifest']['revision'], 'one')
+
+    def test_schema_two_published_manifest_with_removed_media_is_accepted(self):
+        response = self.response('removed-media')
+        response['manifest']['schemaVersion'] = 2
+        response['manifest']['items'] = [{
+            'slide': {'layers': [{'type': 'image', 'removedMedia': True}]}
+        }]
+        with patch.object(self.agent, 'request', return_value=response):
+            self.agent.sync()
+        self.assertEqual(self.agent.state['manifest']['schemaVersion'], 2)
+        self.assertEqual(self.agent.state['manifest']['items'][0]['slide']['layers'][0]['removedMedia'], True)
 
     def test_weather_persists_offline_and_retains_last_snapshot_for_assigned_locations(self):
         weather = {'41.8781,-87.6298': {'status': 'ready', 'fetchedAt': '2026-09-16T12:00:00Z', 'periods': [{'temperatureF': 72}]}}

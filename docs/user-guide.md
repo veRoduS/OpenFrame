@@ -40,7 +40,7 @@ Images attached to shared slides, playlists, or screens appear as **Read-only** 
 
 Select individual images or all visible results to move, add/remove tags, or delete them together. Click an image to rename it or edit its folder and full tag list. Select a folder, then choose Rename folder in the Media toolbar to change its name or move it under a different parent. Tags are normalized to lowercase and deduplicated, with a limit of 30 per image. Uploading multiple files puts them in the current folder.
 
-Deleting an image removes its file. Any saved slide or published playlist that used it keeps the same layer size and position and displays a **Removed media** placeholder. The placeholder updates on players with the next publication sync; update Pi and Android players to 0.10.7 first. Existing untagged media remains available under Unfiled; its original URL is unchanged.
+Deleting an image removes its file. Any saved slide or published playlist that used it keeps the same layer size and position and displays a **Removed media** placeholder. The placeholder updates on players with the next publication sync; update Pi and Android players to 0.10.8 first. Existing untagged media remains available under Unfiled; its original URL is unchanged.
 
 ## Groups and access
 

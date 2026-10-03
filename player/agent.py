@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.10.7'
+VERSION = '0.10.8'
 
 
 def normalize_server(value):
@@ -202,7 +202,7 @@ class Agent:
                     response['weather'][key]['observation'] = previous['observation']
                     response['weather'][key]['observationStatus'] = 'unavailable'
             manifest = response['manifest']
-            if manifest.get('schemaVersion') != 1:
+            if manifest.get('schemaVersion') not in (1, 2):
                 raise ValueError('Unsupported playlist schema')
             command = response.get('command')
             force_refresh = command and command['type'] == 'refresh' and command['id'] != self.state.get('commandAck')
