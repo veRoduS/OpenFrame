@@ -1005,7 +1005,9 @@ void test('validates geometry, images, playlist references and durations', async
   const { request } = await fixture(t);
   const invalid = slideData();
   invalid.layers[0].x = 80;
-  assert.equal((await request('/api/slides', 'POST', invalid)).status, 400);
+  const normalized = await request('/api/slides', 'POST', invalid);
+  assert.equal(normalized.status, 201);
+  assert.equal(normalized.data.layers[0].x, 20);
   invalid.layers[0].x = 0;
   invalid.layers[0].type = 'image';
   assert.equal((await request('/api/slides', 'POST', invalid)).status, 400);

@@ -128,6 +128,8 @@ void test('frame waits for the actual image nodes, widgets, fonts and layout bef
     ready = true;
     return frame;
   });
+  // Font preparation is asynchronous even when this slide uses only a system font.
+  await flush();
   const image = f.created.find((e) => e.tagName === 'img');
   assert.equal(image.decodeCalled, true);
   assert.equal(image.style.objectPosition, '10% 70%');
@@ -178,6 +180,7 @@ void test('aborting a still-decoding frame releases DOM and widget resources imm
     0,
     abort.signal,
   );
+  await flush();
   abort.abort();
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal(f.host.children.length, 0);

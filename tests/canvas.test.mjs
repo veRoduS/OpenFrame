@@ -15,6 +15,14 @@ const source = ts.transpileModule(readFileSync(url, 'utf8'), {
   },
 }).outputText;
 const exports = {};
+const fontUtils = {};
+vm.runInNewContext(
+  ts.transpileModule(
+    readFileSync(new URL('../app/font-utils.ts', import.meta.url), 'utf8'),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS } },
+  ).outputText,
+  { exports: fontUtils },
+);
 // Exercise actual canvas handlers with modeled hooks and pointer capture, not browser layout.
 vm.runInNewContext(source, {
   exports,
@@ -30,7 +38,9 @@ vm.runInNewContext(source, {
           useEffect: () => {},
           useLayoutEffect: () => {},
         }
-      : require(name),
+      : name === './font-utils'
+        ? fontUtils
+        : require(name),
 });
 
 function handles(type, options = {}) {
