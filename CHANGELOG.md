@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.11.0] - 2026-10-03
+
+- Publish OpenFrame 0.11.0 multi-architecture server image
+
 ## [0.10.6] - 2026-10-03
 
 - Refresh published slides, share uploaded media, and preserve GIF animation
