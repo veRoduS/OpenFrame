@@ -3,6 +3,12 @@
 Signed Android player builds are kept in the [apks](apks) folder. Each version is immutable.
 
 - [Download the latest APK](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk)
+
+For a TV Downloader app, copy and paste this address:
+
+```text
+https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk
+```
 - [Latest update metadata](apks/latest.json)
 - [Source and server](https://github.com/veRoduS/OpenFrame)
 
