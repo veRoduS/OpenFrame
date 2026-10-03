@@ -551,6 +551,20 @@ void test('media folders support creation, rename, moving images and safe deleti
   );
   const folder = (await request('/api/folders', 'POST', { name: 'Events' }))
     .data;
+  const child = (
+    await request('/api/folders', 'POST', {
+      name: 'Summer',
+      parentId: folder.id,
+    })
+  ).data;
+  assert.equal(child.parentId, folder.id);
+  assert.equal(
+    (await request(`/api/folders/${folder.id}`, 'PUT', {
+      name: 'Events',
+      parentId: child.id,
+    })).status,
+    400,
+  );
   assert.equal(
     (await request('/api/folders', 'POST', { name: 'events' })).status,
     409,
@@ -567,6 +581,10 @@ void test('media folders support creation, rename, moving images and safe deleti
   assert.equal(
     (await request(`/api/folders/${folder.id}`, 'DELETE')).status,
     409,
+  );
+  assert.equal(
+    (await request(`/api/folders/${child.id}`, 'DELETE')).status,
+    200,
   );
   assert.equal(
     (
@@ -660,7 +678,7 @@ void test('legacy media metadata is readable without migration or loss', async (
   assert.equal(old.url, a.url);
 });
 
-void test('batch deletion protects draft and published references before removing anything', async (t) => {
+void test('batch deletion removes referenced files and preserves slide placeholders', async (t) => {
   const { request } = await fixture(t);
   const used = (await uploadImage(request, 'used.png')).data;
   const spare = (await uploadImage(request, 'spare.png')).data;
@@ -675,9 +693,13 @@ void test('batch deletion protects draft and published references before removin
         action: 'delete',
       })
     ).status,
-    409,
+    200,
   );
-  assert.equal((await request(spare.url)).status, 200);
+  assert.equal((await request(spare.url)).status, 404);
+  assert.equal(
+    (await request('/api/library')).data.slides[0].layers[0].removedMedia,
+    true,
+  );
   const playlist = (
     await request('/api/playlists', 'POST', {
       name: 'Protected',
@@ -697,7 +719,7 @@ void test('batch deletion protects draft and published references before removin
         action: 'delete',
       })
     ).status,
-    409,
+    404,
   );
   assert.equal(
     (
@@ -706,7 +728,7 @@ void test('batch deletion protects draft and published references before removin
         action: 'delete',
       })
     ).status,
-    200,
+    404,
   );
   assert.equal((await request(spare.url)).status, 404);
   await request(`/api/playlists/${playlist.id}`, 'DELETE');
@@ -717,7 +739,7 @@ void test('batch deletion protects draft and published references before removin
         action: 'delete',
       })
     ).status,
-    200,
+    404,
   );
 });
 
@@ -1090,6 +1112,59 @@ void test('media is validated, re-encoded, and restricted to assigned players', 
   });
   assert.equal(
     (await request(asset.url, 'GET', undefined, false, headers)).status,
+    200,
+  );
+});
+
+void test('deleting referenced media leaves placeholders in slides and publications', async (t) => {
+  const { request, db } = await fixture(t);
+  const asset = (await uploadImage(request, 'removed.png')).data;
+  const slide = slideData();
+  slide.layers[0] = {
+    ...slide.layers[0],
+    type: 'image',
+    assetId: asset.id,
+  };
+  const savedSlide = (await request('/api/slides', 'POST', slide)).data;
+  const playlist = (
+    await request('/api/playlists', 'POST', {
+      name: 'Lobby',
+      items: [{ slideId: savedSlide.id, duration: 10 }],
+    })
+  ).data;
+  await request(`/api/playlists/${playlist.id}/publish`, 'POST');
+  const original = JSON.parse(
+    db
+      .prepare("SELECT body FROM records WHERE kind='playlist' AND id=?")
+      .get(playlist.id).body,
+  ).published;
+  assert.equal(original.schemaVersion, 2);
+
+  const result = await request('/api/assets/batch', 'POST', {
+    ids: [asset.id],
+    action: 'delete',
+  });
+  assert.equal(result.status, 200);
+  const library = (await request('/api/library')).data;
+  assert.equal(
+    library.assets.some((item) => item.id === asset.id),
+    false,
+  );
+  assert.equal(library.slides[0].layers[0].removedMedia, true);
+  const savedPlaylist = JSON.parse(
+    db
+      .prepare("SELECT body FROM records WHERE kind='playlist' AND id=?")
+      .get(playlist.id).body,
+  ).published;
+  assert.notEqual(savedPlaylist.revision, original.revision);
+  assert.equal(savedPlaylist.items[0].slide.layers[0].removedMedia, true);
+  assert.equal(
+    savedPlaylist.assets.some((item) => item.id === asset.id),
+    false,
+  );
+  assert.equal(
+    (await request(`/api/slides/${savedSlide.id}`, 'PUT', library.slides[0]))
+      .status,
     200,
   );
 });

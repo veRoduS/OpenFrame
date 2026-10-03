@@ -32,6 +32,7 @@ export type Auth = { setup: boolean; authenticated: boolean; user?: User };
 type Group = {
   id: string;
   name: string;
+  parentId: string | null;
   canManage: boolean;
   members: (User & { role: string })[];
 };
@@ -110,6 +111,34 @@ export function Accounts({
     asset: library.assets,
     folder: library.folders,
   };
+  const groupDepth = (group: Group) => {
+    let depth = 0;
+    let parentId = group.parentId;
+    const seen = new Set([group.id]);
+    while (parentId && !seen.has(parentId)) {
+      seen.add(parentId);
+      depth++;
+      parentId = groups.find((item) => item.id === parentId)?.parentId || null;
+    }
+    return depth;
+  };
+  const orderedGroups: { group: Group; depth: number }[] = [];
+  const visitedGroups = new Set<string>();
+  const appendGroup = (group: Group, depth: number) => {
+    if (visitedGroups.has(group.id)) return;
+    visitedGroups.add(group.id);
+    orderedGroups.push({ group, depth });
+    groups
+      .filter((child) => child.parentId === group.id)
+      .forEach((child) => appendGroup(child, depth + 1));
+  };
+  groups
+    .filter(
+      (group) =>
+        !group.parentId || !groups.some((g) => g.id === group.parentId),
+    )
+    .forEach((group) => appendGroup(group, 0));
+  groups.forEach((group) => appendGroup(group, groupDepth(group)));
   return (
     <div className="accounts">
       <div
@@ -309,7 +338,10 @@ export function Accounts({
                 const form = e.currentTarget;
                 const data = fields(e);
                 void run(async () => {
-                  await api('/api/groups', 'POST', data);
+                  await api('/api/groups', 'POST', {
+                    name: data.name,
+                    parentId: data.parentId || null,
+                  });
                   form.reset();
                   await reload();
                 });
@@ -323,6 +355,20 @@ export function Accounts({
                   maxLength={100}
                   placeholder="Group name"
                 />
+              </label>
+              <label>
+                Parent group
+                <select name="parentId" defaultValue="">
+                  <option value="">No parent (top level)</option>
+                  {groups
+                    .filter((group) => group.canManage)
+                    .map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {'— '.repeat(groupDepth(group))}
+                        {group.name}
+                      </option>
+                    ))}
+                </select>
               </label>
               <button disabled={busy}>
                 <Plus size={16} />
@@ -359,8 +405,16 @@ export function Accounts({
             </form>
           </div>
           {!groups.length && <p className="account-empty">No groups yet.</p>}
-          {groups.map((group) => (
-            <section className="group-section" key={group.id}>
+          {orderedGroups.map(({ group, depth }) => (
+            <section
+              className="group-section"
+              key={group.id}
+              style={{
+                marginLeft: `${Math.min(depth, 4) * 18}px`,
+                borderLeft: depth ? '2px solid #dbe1dd' : undefined,
+                paddingLeft: depth ? '14px' : undefined,
+              }}
+            >
               <div className="account-row">
                 <h2>{group.name}</h2>
                 {group.canManage && (

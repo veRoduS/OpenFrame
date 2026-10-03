@@ -113,16 +113,23 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
       });
       element.append(box);
       if (layer.type === 'image') {
-        const asset = assets.find((a) => a.id === layer.assetId);
-        if (!asset) throw new Error('An image is missing from the manifest');
-        const image = document.createElement('img');
-        image.alt = '';
-        image.decoding = 'async';
-        image.loading = 'eager';
-        Object.assign(image.style, imageStyle(layer));
-        image.src = asset.url;
-        images.push(image);
-        box.append(image);
+        if (layer.removedMedia) {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'removed-media-placeholder';
+          placeholder.textContent = 'Removed media';
+          box.append(placeholder);
+        } else {
+          const asset = assets.find((a) => a.id === layer.assetId);
+          if (!asset) throw new Error('An image is missing from the manifest');
+          const image = document.createElement('img');
+          image.alt = '';
+          image.decoding = 'async';
+          image.loading = 'eager';
+          Object.assign(image.style, imageStyle(layer));
+          image.src = asset.url;
+          images.push(image);
+          box.append(image);
+        }
       } else {
         const content = document.createElement('span');
         box.append(content);

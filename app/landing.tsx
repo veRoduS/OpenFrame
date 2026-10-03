@@ -43,7 +43,7 @@ const questions = [
   ],
   [
     'Can my team use it too?',
-    'Yes. Individual accounts, assigned screens, and groups let you share slides, playlists, and media. Each group has an admin, and every user manages their own password.',
+    'Yes. Individual accounts, assigned screens, and nested groups let you share slides, playlists, and media. Membership and resource access are configured separately for each group, and every user manages their own password.',
   ],
 ];
 

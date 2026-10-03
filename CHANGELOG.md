@@ -2,6 +2,14 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.14.2] - 2026-10-03
+
+- Add live playlist badges, nested media folders, and repair screen renaming
+
+## [0.14.1] - 2026-10-03
+
+- Allow deletion of referenced media with placeholders and add independently permissioned nested groups
+
 ## [0.14.0] - 2026-10-03
 
 - Rename screens from the dashboard.

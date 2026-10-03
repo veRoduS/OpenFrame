@@ -30,6 +30,7 @@ export const layerSchema = z
       .transform((value) => Math.min(100, value)),
     text: z.string().max(4000).default(''),
     assetId: id.optional(),
+    removedMedia: z.literal(true).optional(),
     fontSize: z.number().min(12).max(400).default(72),
     fontFamily: z.enum(systemFontFamilies).default('Arial'),
     fontId: id.optional(),
@@ -89,7 +90,14 @@ export const layerSchema = z
     (l) => l.x + l.width <= 100.000001 && l.y + l.height <= 100.000001,
     'Layer must fit inside the slide',
   )
-  .refine((l) => l.type !== 'image' || !!l.assetId, 'Choose an image')
+  .refine(
+    (l) => l.type !== 'image' || !!l.assetId || l.removedMedia,
+    'Choose an image',
+  )
+  .refine(
+    (l) => l.type === 'image' || l.removedMedia === undefined,
+    'Only image layers can be marked as removed media',
+  )
   .refine(
     (l) => l.type === 'image' || l.assetId === undefined,
     'Only image layers can reference media',
@@ -109,6 +117,7 @@ export const tagsSchema = z
   .transform((tags) => [...new Set(tags.map((tag) => tag.toLowerCase()))]);
 export const folderSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  parentId: id.nullable().default(null),
 });
 export const assetPatchSchema = z
   .object({

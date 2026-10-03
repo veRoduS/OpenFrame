@@ -9,6 +9,7 @@ export type Layer = {
   height: number;
   text: string;
   assetId?: string;
+  removedMedia?: boolean;
   fontSize: number;
   fontFamily?: string;
   fontId?: string;
@@ -66,6 +67,7 @@ export type Playlist = {
     expiresAt?: string | null;
   }[];
   publishedAt?: string | null;
+  publishedSlideIds?: string[];
   updatedAt?: string;
 };
 export function playlistDuration(playlist: Playlist) {
@@ -95,7 +97,7 @@ export type Asset = {
   createdAt: string | null;
   readOnly?: boolean;
 };
-export type MediaFolder = { id: string; name: string };
+export type MediaFolder = { id: string; name: string; parentId?: string | null };
 export type Device = {
   id: string;
   name: string;

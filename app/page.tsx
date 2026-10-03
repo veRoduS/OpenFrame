@@ -661,6 +661,18 @@ export default function App() {
                     <div className="slide-grid">
                       {library.slides.map((slide) => (
                         <article className="slide-card" key={slide.id}>
+                          {library.playlists.some(
+                            (playlist) =>
+                              !!playlist.publishedAt &&
+                              (playlist.publishedSlideIds || []).includes(slide.id) &&
+                              library.devices.some(
+                                (device) =>
+                                  device.approved &&
+                                  device.playlistId === playlist.id &&
+                                  !!device.lastSeen &&
+                                  Date.now() - Date.parse(device.lastSeen) < 90000,
+                              ),
+                          ) && <span className="slide-live-tag">Live</span>}
                           <button
                             className="thumbnail-button"
                             onClick={() => setEditing(slide)}
@@ -891,6 +903,9 @@ export default function App() {
                           onRename={async (name) => {
                             await api(`/api/devices/${d.id}`, 'PUT', {
                               name,
+                              playlistId: d.playlistId,
+                              blank: d.blank,
+                              rotation: d.rotation,
                             });
                             await refresh();
                             setNotice('Screen renamed');
@@ -1480,7 +1495,14 @@ function Editor({
           ...slide,
           layers: slide.layers.map((layer) =>
             layer.id === target.id
-              ? { ...layer, assetId, cropX: 50, cropY: 50, cropZoom: 1 }
+              ? {
+                  ...layer,
+                  assetId,
+                  removedMedia: undefined,
+                  cropX: 50,
+                  cropY: 50,
+                  cropZoom: 1,
+                }
               : layer,
           ),
         });
@@ -1634,8 +1656,10 @@ function Editor({
                         ? layer.weather?.name || 'Weather'
                         : layer.type === 'clock'
                           ? 'Clock'
-                          : assets.find((a) => a.id === layer.assetId)?.name ||
-                            'Image'}
+                          : layer.removedMedia
+                            ? 'Removed media'
+                            : assets.find((a) => a.id === layer.assetId)
+                                ?.name || 'Image'}
                 </span>
                 <small>{slide.layers.length - i}</small>
               </button>
@@ -1805,7 +1829,11 @@ function Editor({
                   <>
                     <div className="property-image-preview">
                       {currentAsset && <img src={currentAsset.url} alt="" />}
-                      <span>{currentAsset?.name || 'Image'}</span>
+                      <span>
+                        {current.removedMedia
+                          ? 'Removed media'
+                          : currentAsset?.name || 'Image'}
+                      </span>
                     </div>
                     <button
                       type="button"

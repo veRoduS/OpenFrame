@@ -44,12 +44,19 @@ export function createAccounts(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password TEXT, role TEXT NOT NULL DEFAULT 'user', disabled INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS user_sessions (token TEXT PRIMARY KEY, userId TEXT NOT NULL, expires INTEGER NOT NULL);
-    CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS groups (id TEXT PRIMARY KEY, name TEXT NOT NULL, parentId TEXT);
     CREATE TABLE IF NOT EXISTS memberships (groupId TEXT NOT NULL, userId TEXT NOT NULL, role TEXT NOT NULL, PRIMARY KEY(groupId,userId));
     CREATE TABLE IF NOT EXISTS invitations (token TEXT PRIMARY KEY, userId TEXT, groupId TEXT, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS resource_access (kind TEXT NOT NULL, id TEXT NOT NULL, ownerId TEXT, PRIMARY KEY(kind,id));
     CREATE TABLE IF NOT EXISTS resource_grants (kind TEXT NOT NULL, id TEXT NOT NULL, userId TEXT NOT NULL DEFAULT '', groupId TEXT NOT NULL DEFAULT '', PRIMARY KEY(kind,id,userId,groupId));
   `);
+  if (
+    !db
+      .prepare('PRAGMA table_info(groups)')
+      .all()
+      .some((column) => column.name === 'parentId')
+  )
+    db.exec('ALTER TABLE groups ADD COLUMN parentId TEXT');
   const oldPassword = db
     .prepare("SELECT value FROM settings WHERE key='password'")
     .get()?.value;
@@ -417,15 +424,18 @@ export function createAccounts(db) {
     app.get('/api/groups', admin, (req, res) => {
       const groups =
         req.user.role === 'superadmin'
-          ? db.prepare('SELECT * FROM groups').all()
+          ? db
+              .prepare('SELECT * FROM groups ORDER BY name COLLATE NOCASE')
+              .all()
           : db
               .prepare(
-                'SELECT g.* FROM groups g JOIN memberships m ON m.groupId=g.id WHERE m.userId=?',
+                'SELECT g.* FROM groups g JOIN memberships m ON m.groupId=g.id WHERE m.userId=? ORDER BY g.name COLLATE NOCASE',
               )
               .all(req.user.id);
       res.json(
         groups.map((group) => ({
           ...group,
+          parentId: group.parentId || null,
           canManage: !!groupAdmin(req.user, group.id),
           members: db
             .prepare(
@@ -436,17 +446,33 @@ export function createAccounts(db) {
       );
     });
     app.post('/api/groups', admin, (req, res) => {
-      const { name } = z
-        .object({ name: z.string().trim().min(1).max(100) })
+      const { name, parentId } = z
+        .object({
+          name: z.string().trim().min(1).max(100),
+          parentId: z.uuid().nullable().optional(),
+        })
         .parse(req.body);
+      if (
+        parentId &&
+        (!db.prepare('SELECT id FROM groups WHERE id=?').get(parentId) ||
+          !groupAdmin(req.user, parentId))
+      )
+        throw fail(
+          403,
+          'A parent group admin is required to create a subgroup',
+        );
       const id = randomUUID();
-      db.prepare('INSERT INTO groups VALUES (?,?)').run(id, name);
+      db.prepare('INSERT INTO groups(id,name,parentId) VALUES (?,?,?)').run(
+        id,
+        name,
+        parentId || null,
+      );
       db.prepare('INSERT INTO memberships VALUES (?,?,?)').run(
         id,
         req.user.id,
         'admin',
       );
-      res.status(201).json({ id, name });
+      res.status(201).json({ id, name, parentId: parentId || null });
     });
     app.post('/api/groups/join', admin, rateLimit, (req, res) => {
       const value = z.string().length(64).parse(req.body.token);

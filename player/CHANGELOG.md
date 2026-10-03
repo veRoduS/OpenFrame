@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.10.7] - 2026-10-03
+
+- Render removed media placeholders from synchronized playlists
+
 ## [0.10.6] - 2026-10-03
 
 - Cache custom fonts with published playlists

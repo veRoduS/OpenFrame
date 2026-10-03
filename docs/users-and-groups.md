@@ -28,7 +28,9 @@ Every user can change their password under **My password**, using their current 
 
 ## Groups
 
-Any signed-in user can create a group and becomes its admin. Group admins generate one-use, 24-hour invitation codes. An existing user enters the code under **Join a group**. Admins can promote members, demote admins, and remove members. Each group must keep an active admin. Super-admins can manage every group.
+Any signed-in user can create a top-level group and becomes its admin. Choose a parent group to create a subgroup; only admins of that parent can create its children. Group admins generate one-use, 24-hour invitation codes. An existing user enters the code under **Join a group**. Admins can promote members, demote admins, and remove members. Each group must keep an active admin. Super-admins can manage every group.
+
+Group nesting organizes membership and access settings. Membership does not flow between parent and child groups: invite users to each subgroup they need. Resource sharing is also independent for each group. Use **Manage access** to grant slides, playlists, screens, or media to the exact group that should receive them. The sharing picker shows the full parent path for subgroups.
 
 Members collaborate as editors on content shared with the group, including editing and deleting where normal reference checks permit. Group admins manage membership; owning an item or being a super-admin is required to change its sharing. Removing someone from a group removes that group's access on their next request. They retain their own items and any separate assignments.
 

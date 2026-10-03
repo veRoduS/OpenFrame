@@ -32,15 +32,19 @@ Changing dimensions while movement is locked limits the layer to the space avail
 
 ## Organize media
 
-Media supports named folders, image tags, filename/tag search, tag filtering, and grid/list views. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls. Upload GIFs for animated playback; OpenFrame converts them to animated WebP while keeping the frame timing and loop.
+Media supports nested named folders, image tags, filename/tag search, tag filtering, and grid/list views. Choose a parent folder when creating or renaming a folder; folder paths appear in the browser and folder selectors. Folders must have no images or subfolders before deletion. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls. Upload GIFs for animated playback; OpenFrame converts them to animated WebP while keeping the frame timing and loop.
 
 When uploading from a slide's image picker, select **Share uploaded images with this slide’s audience** to give the new images the same user and group access as that slide. This is useful when adding media to a shared slide; otherwise the media owner can share it later in Media.
 
 Images attached to shared slides, playlists, or screens appear as **Read-only** when you lack direct media access. This includes images retained in a published snapshot after the draft changes. You can view or choose them in the image picker; changing their names, tags, folders, sharing, or deleting them requires direct media access.
 
-Select individual images or all visible results to move, add/remove tags, or delete them together. Click an image to rename it or edit its folder and full tag list. Select a folder, then choose Rename folder in the Media toolbar to change its name without moving its images. Tags are normalized to lowercase and deduplicated, with a limit of 30 per image. Uploading multiple files puts them in the current folder. Folders are single-level and must be empty before deletion.
+Select individual images or all visible results to move, add/remove tags, or delete them together. Click an image to rename it or edit its folder and full tag list. Select a folder, then choose Rename folder in the Media toolbar to change its name or move it under a different parent. Tags are normalized to lowercase and deduplicated, with a limit of 30 per image. Uploading multiple files puts them in the current folder.
 
-Deletion is blocked if any selected image is used by a saved slide or a published playlist; no images in that selection are deleted on failure. A published snapshot can still reference an image even after the draft slide changes. Existing untagged media remains available under Unfiled; its original URL is unchanged.
+Deleting an image removes its file. Any saved slide or published playlist that used it keeps the same layer size and position and displays a **Removed media** placeholder. The placeholder updates on players with the next publication sync; update Pi and Android players to 0.10.7 first. Existing untagged media remains available under Unfiled; its original URL is unchanged.
+
+## Groups and access
+
+Groups can be nested by selecting a parent when creating a group. A group admin can create subgroups under groups they manage. Membership and resource access are set separately for each group: joining a parent does not automatically add someone to its subgroups, and sharing a slide or playlist with one group does not grant it to nested groups. Use **Manage access** on each resource to grant it to the exact group that needs it. In the sharing picker, nested groups show their parent path.
 
 To use cropping, counters, and prepared-frame playback on an existing Pi installation, update `player/agent.py` and the complete `player/web/` directory, then restart the agent and kiosk. Include all JavaScript modules, not just `player.js`. Updating the Docker server alone does not update installed player code. Existing slide backgrounds, colors, and saved formatting are preserved. Older images default to a centered crop at 1x zoom, with no data migration.
 

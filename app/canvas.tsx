@@ -295,7 +295,9 @@ export function SlideCanvas({
             display: 'block',
           }}
         >
-          {layer.type === 'image' ? (
+          {layer.type === 'image' && layer.removedMedia ? (
+            <span className="removed-media-placeholder">Removed media</span>
+          ) : layer.type === 'image' ? (
             <img
               draggable={false}
               alt=""

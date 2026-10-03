@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
-import { hashPassword } from '../server/accounts.mjs';
+import { createAccounts, hashPassword } from '../server/accounts.mjs';
 
 const password = 'test-password-long-enough';
 const slide = {
@@ -17,6 +17,26 @@ const slide = {
   background: '#ffffff',
   layers: [],
 };
+
+void test('existing group tables gain a nullable parent without losing groups', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE records (kind TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE TABLE sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+    CREATE TABLE groups (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+    INSERT INTO groups VALUES ('legacy-root', 'Legacy root');
+  `);
+  createAccounts(db);
+  const columns = db.prepare('PRAGMA table_info(groups)').all();
+  assert.ok(columns.some((column) => column.name === 'parentId'));
+  assert.equal(
+    db.prepare('SELECT parentId FROM groups WHERE id=?').get('legacy-root')
+      .parentId,
+    null,
+  );
+  db.close();
+});
 async function fixture(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'openframe-users-'));
   const instance = createApp({ dataDir: dir });
@@ -645,6 +665,61 @@ void test('group invitations, sharing, admin transfer and removal enforce member
   assert.equal(
     (await alice.call(`/api/groups/${group.id}/invitation`, 'POST')).status,
     403,
+  );
+});
+
+void test('nested groups keep membership and resource permissions independent', async (t) => {
+  const { user } = await fixture(t);
+  const alice = await user('alice');
+  const bob = await user('bob');
+  const outsider = await user('outsider');
+  const parent = (await alice.call('/api/groups', 'POST', { name: 'Company' }))
+    .data;
+  const child = (
+    await alice.call('/api/groups', 'POST', {
+      name: 'Warehouse',
+      parentId: parent.id,
+    })
+  ).data;
+  assert.equal(child.parentId, parent.id);
+  assert.equal(
+    (
+      await outsider.call('/api/groups', 'POST', {
+        name: 'Unauthorized subgroup',
+        parentId: parent.id,
+      })
+    ).status,
+    403,
+  );
+  const parentSlide = (await alice.call('/api/slides', 'POST', slide)).data;
+  const childSlide = (await alice.call('/api/slides', 'POST', slide)).data;
+  assert.equal(
+    (
+      await alice.call(`/api/access/slide/${parentSlide.id}`, 'POST', {
+        groupId: parent.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await alice.call(`/api/access/slide/${childSlide.id}`, 'POST', {
+        groupId: child.id,
+      })
+    ).status,
+    200,
+  );
+  const invite = (
+    await alice.call(`/api/groups/${child.id}/invitation`, 'POST')
+  ).data.invitation;
+  assert.equal(
+    (await bob.call('/api/groups/join', 'POST', { token: invite })).status,
+    200,
+  );
+  const visible = (await bob.call('/api/library')).data.slides;
+  assert.deepEqual(
+    visible.map((item) => item.id),
+    [childSlide.id],
   );
 });
 

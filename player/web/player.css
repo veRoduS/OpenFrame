@@ -43,6 +43,21 @@ body {
   height: 100%;
   display: block;
 }
+.removed-media-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  overflow: hidden;
+  padding: 0.5em;
+  color: #44534a;
+  background: #e8ece9;
+  border: 2px dashed #77867c;
+  font:
+    600 1em/1.2 Arial,
+    sans-serif;
+  text-align: center;
+}
 #message {
   position: fixed;
   inset: 0;

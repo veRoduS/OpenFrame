@@ -103,6 +103,7 @@ export function MediaLibrary({
   const [tags, setTags] = useState('');
   const [tagAction, setTagAction] = useState('add');
   const [destination, setDestination] = useState('');
+  const [parentDestination, setParentDestination] = useState('');
   const [deleting, setDeleting] = useState<'assets' | 'folder' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -120,8 +121,26 @@ export function MediaLibrary({
     .map((a) => a.id);
   const currentFolder = folders.find((f) => f.id === folder);
   const allTags = [...new Set(assets.flatMap((a) => a.tags || []))].sort();
+  const folderPaths = new Map<string, string>();
+  function folderPath(id: string, seen = new Set<string>()): string {
+    if (seen.has(id)) return '';
+    seen.add(id);
+    const item = folders.find((entry) => entry.id === id);
+    if (!item) return '';
+    return [item.parentId ? folderPath(item.parentId, seen) : '', item.name]
+      .filter(Boolean)
+      .join(' / ');
+  }
+  folders.forEach((item) => folderPaths.set(item.id, folderPath(item.id)));
+  function isDescendant(candidateId: string, ancestorId: string): boolean {
+    const parentId = folders.find((item) => item.id === candidateId)?.parentId;
+    return !!parentId &&
+      (parentId === ancestorId || isDescendant(parentId, ancestorId));
+  }
   const sortedFolders = [...folders].sort((a, b) =>
-    a.name.localeCompare(b.name),
+    (folderPaths.get(a.id) || a.name).localeCompare(
+      folderPaths.get(b.id) || b.name,
+    ),
   );
   const selectableVisible = filtered.filter((a) => !a.readOnly);
   const selectedVisible = selectableVisible.filter((a) =>
@@ -158,14 +177,25 @@ export function MediaLibrary({
     setTags(asset?.tags.join(', ') || '');
     setTagAction('add');
     setDestination(asset?.folderId || currentFolder?.id || '');
+    setParentDestination(
+      mode === 'folder'
+        ? currentFolder?.id || ''
+        : currentFolder?.parentId || '',
+    );
   }
   async function save() {
     if (mode === 'folder') {
-      const created = await api<MediaFolder>('/api/folders', 'POST', { name });
+      const created = await api<MediaFolder>('/api/folders', 'POST', {
+        name,
+        parentId: parentDestination || null,
+      });
       setFolder(created.id);
       setSelected(new Set());
     } else if (mode === 'rename-folder')
-      await api(`/api/folders/${folder}`, 'PUT', { name });
+      await api(`/api/folders/${folder}`, 'PUT', {
+        name,
+        parentId: parentDestination || null,
+      });
     else if (mode === 'asset')
       await api(`/api/assets/${activeAsset!.id}`, 'PATCH', {
         name,
@@ -334,7 +364,7 @@ export function MediaLibrary({
               onClick={() => chooseFolder(f.id)}
             >
               <Folder size={16} />
-              <span>{f.name}</span>
+              <span>{folderPaths.get(f.id) || f.name}</span>
               <small>{assets.filter((a) => a.folderId === f.id).length}</small>
             </button>
           ))}
@@ -590,9 +620,31 @@ export function MediaLibrary({
                   <option value="">Unfiled</option>
                   {sortedFolders.map((f) => (
                     <option value={f.id} key={f.id}>
-                      {f.name}
+                      {folderPaths.get(f.id) || f.name}
                     </option>
                   ))}
+                </select>
+              </label>
+            )}
+            {(mode === 'folder' || mode === 'rename-folder') && (
+              <label>
+                Parent folder
+                <select
+                  value={parentDestination}
+                  onChange={(e) => setParentDestination(e.target.value)}
+                >
+                  <option value="">No parent</option>
+                  {sortedFolders
+                    .filter(
+                      (f) =>
+                        mode !== 'rename-folder' ||
+                        (f.id !== folder && !isDescendant(f.id, folder)),
+                    )
+                    .map((f) => (
+                      <option value={f.id} key={f.id}>
+                        {folderPaths.get(f.id) || f.name}
+                      </option>
+                    ))}
                 </select>
               </label>
             )}
@@ -658,8 +710,8 @@ export function MediaLibrary({
           </AlertDialogTitle>
           <AlertDialogDescription>
             {deleting === 'folder'
-              ? 'Only empty folders can be deleted.'
-              : 'Images used by slides or published playlists cannot be deleted.'}
+              ? 'A folder must have no images or subfolders before it can be deleted.'
+              : 'Slides and published playlists will show a “Removed media” placeholder wherever these images were used.'}
           </AlertDialogDescription>
           {error && (
             <p role="alert" className="inline-error">

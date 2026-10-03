@@ -21,15 +21,17 @@ The fingerprint covers:
 
 Each protocol has explicit `server`, `android`, and `pi` arrays of supported positive integer contract versions:
 
-| Contract | Scope | Current support |
-| --- | --- | --- |
-| `playerSync` | Enrollment, pairing, sync requests/responses, commands, status, and media access | Server, Android, and Pi support review contract 1 |
-| `playlistManifest` | Published playlist schema and the renderer's interpretation of items, assets, scheduling, transitions, and widgets | Server, Android, and Pi support schema 1 |
-| `androidUpdate` | Android release metadata, discovery, downloads, and verification | Server and Android support review contract 1; Pi is not applicable |
+| Contract           | Scope                                                                                                              | Current support                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `playerSync`       | Enrollment, pairing, sync requests/responses, commands, status, and media access                                   | Server, Android, and Pi support review contract 1                  |
+| `playlistManifest` | Published playlist schema and the renderer's interpretation of items, assets, scheduling, transitions, and widgets | Server, Android, and Pi support schema 1                           |
+| `androidUpdate`    | Android release metadata, discovery, downloads, and verification                                                   | Server and Android support review contract 1; Pi is not applicable |
 
 `playerSync` and `androidUpdate` numbers identify reviewed contract generations; those endpoints do not currently negotiate a protocol-version field. The playlist's `schemaVersion` is an actual wire field and must agree with its declaration. Android version codes, server/player releases, playlist publication revisions, and this file's `schemaVersion` are separate counters.
 
 Server 0.13.3 and player 0.10.6 add font files as playlist assets. Standard-font playlists remain compatible with earlier players; a playlist that uses a custom font requires player 0.10.6 or newer so the font can be downloaded, cached, and rendered offline.
+
+Server 0.14.1 publishes playlist manifest schema 2, and player 0.10.7 understands removed-media placeholders. Update players to 0.10.7 before deleting media referenced by a published playlist; older players do not recognize these placeholder layers and may keep the affected slide from rendering. Updated players continue to accept schema 1 manifests from older servers.
 
 The check requires a shared supported version between the server and each applicable player for each protocol. `androidUpdate.pi` must remain `[]` because the Pi does not install APKs. A support declaration change also requires a new review. Do not list support that the implementation does not provide.
 

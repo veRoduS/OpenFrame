@@ -223,6 +223,30 @@ void test('missing assets and unsupported widgets never leave a partial frame be
     assert.equal(f.host.children.length, 0);
   }
 });
+void test('deleted image assets render a placeholder and need no manifest file', async (t) => {
+  const f = fixture(t);
+  const promise = prepareFrame(
+    f.host,
+    item([layer('image', { assetId: 'deleted', removedMedia: true })]),
+    [],
+    0,
+    new AbortController().signal,
+  );
+  await flush();
+  f.font.resolve();
+  await flush();
+  await f.paint();
+  await f.paint();
+  const frame = await promise;
+  const placeholder = frame.element.children[0].children[0];
+  assert.equal(placeholder.textContent, 'Removed media');
+  assert.equal(placeholder.className, 'removed-media-placeholder');
+  assert.equal(
+    f.created.some((element) => element.tagName === 'img'),
+    false,
+  );
+  frame.dispose();
+});
 void test('activation failure leaves the old frame visible', () => {
   const previous = { element: { style: { visibility: 'visible' } } };
   const next = {

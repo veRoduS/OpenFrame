@@ -245,12 +245,17 @@ export function createApp({
   }
   function dependencies(kind, item) {
     if (kind === 'folder')
-      return allRecords('asset')
-        .filter((a) => a.folderId === item.id)
-        .map((a) => ['asset', a.id]);
+      return [
+        ...allRecords('asset')
+          .filter((a) => a.folderId === item.id)
+          .map((a) => ['asset', a.id]),
+        ...allRecords('folder')
+          .filter((f) => f.parentId === item.id)
+          .map((f) => ['folder', f.id]),
+      ];
     if (kind === 'slide')
       return item.layers
-        .filter((l) => l.type === 'image')
+        .filter((l) => l.type === 'image' && !l.removedMedia)
         .map((l) => ['asset', l.assetId]);
     if (kind === 'playlist')
       return [
@@ -349,6 +354,7 @@ export function createApp({
       playlists: list('playlist').map(({ published, ...p }) => ({
         ...p,
         publishedAt: published?.publishedAt || null,
+        publishedSlideIds: published?.items?.map((item) => item.slideId) || [],
       })),
       assets: allRecords('asset')
         .filter((asset) => accounts.canViewAsset(req.user, asset.id))
@@ -363,6 +369,7 @@ export function createApp({
   function checkImages(slide, user) {
     for (const layer of slide.layers) {
       if (layer.type !== 'image') continue;
+      if (layer.removedMedia) continue;
       const asset = allRecords('asset').find(
         (item) => item.id === layer.assetId,
       );
@@ -458,6 +465,7 @@ export function createApp({
       });
       for (const layer of slide.layers) {
         if (layer.type !== 'image' || !layer.assetId) continue;
+        if (layer.removedMedia) continue;
         const asset = allRecords('asset').find(
           (item) => item.id === layer.assetId,
         );
@@ -593,7 +601,7 @@ export function createApp({
     const imageIds = new Set(
       items.flatMap((item) =>
         item.slide.layers
-          .filter((layer) => layer.type === 'image')
+          .filter((layer) => layer.type === 'image' && !layer.removedMedia)
           .map((layer) => layer.assetId),
       ),
     );
@@ -633,7 +641,7 @@ export function createApp({
       slide: requireRecord('slide', item.slideId),
     }));
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       revision: randomUUID(),
       name: p.name,
       publishedAt: new Date().toISOString(),
@@ -888,6 +896,17 @@ export function createApp({
   }
   function folderName(body, currentId) {
     const folder = folderSchema.parse(body);
+    validateFolder(folder.parentId);
+    if (currentId && folder.parentId) {
+      let parent = folder.parentId;
+      const visited = new Set();
+      while (parent && !visited.has(parent)) {
+        if (parent === currentId)
+          throw fail(400, 'A folder cannot be moved inside itself');
+        visited.add(parent);
+        parent = list('folder').find((f) => f.id === parent)?.parentId;
+      }
+    }
     if (
       list('folder').some(
         (f) =>
@@ -914,6 +933,8 @@ export function createApp({
   });
   app.delete('/api/folders/:id', admin, (req, res) => {
     requireRecord('folder', req.params.id);
+    if (list('folder').some((f) => f.parentId === req.params.id))
+      throw fail(409, 'Move subfolders out of this folder before deleting it');
     if (allRecords('asset').some((a) => a.folderId === req.params.id))
       throw fail(409, 'Move the images out of this folder before deleting it');
     remove('folder', req.params.id);
@@ -930,22 +951,31 @@ export function createApp({
     const assets = patch.ids.map((id) =>
       publicAsset(requireRecord('asset', id)),
     );
+    if (
+      patch.action === 'delete' &&
+      assets.some((asset) => !canShare(req.user, 'asset', asset.id))
+    )
+      throw fail(403, 'Only the media owner or super-admin can delete images');
     validateFolder(patch.folderId);
-    if (patch.action === 'delete') {
-      const used = new Set(
-        allRecords('slide').flatMap((s) =>
-          s.layers.filter((l) => l.type === 'image').map((l) => l.assetId),
-        ),
-      );
-      for (const p of allRecords('playlist'))
-        for (const a of p.published?.assets || []) used.add(a.id);
-      const blocked = assets.filter((a) => used.has(a.id));
-      if (blocked.length)
-        throw fail(
-          409,
-          `Cannot delete images used by slides or published playlists: ${blocked.map((a) => a.name).join(', ')}`,
-        );
-    }
+    const deletedIds = new Set(
+      patch.action === 'delete' ? assets.map((asset) => asset.id) : [],
+    );
+    const markRemoved = (slide) => {
+      let changed = false;
+      const layers = slide.layers.map((layer) => {
+        if (
+          layer.type !== 'image' ||
+          layer.removedMedia ||
+          !deletedIds.has(layer.assetId)
+        )
+          return layer;
+        changed = true;
+        return { ...layer, removedMedia: true };
+      });
+      return changed
+        ? { ...slide, layers, updatedAt: new Date().toISOString() }
+        : slide;
+    };
     const updated = assets.map((a) => ({
       ...a,
       ...(patch.folderId !== undefined ? { folderId: patch.folderId } : {}),
@@ -958,9 +988,55 @@ export function createApp({
     // Validate the entire selection before making any changes.
     db.exec('BEGIN IMMEDIATE');
     try {
+      if (patch.action === 'delete') {
+        for (const slide of allRecords('slide')) {
+          const updatedSlide = markRemoved(slide);
+          if (updatedSlide !== slide)
+            db.prepare(
+              "UPDATE records SET body=? WHERE kind='slide' AND id=?",
+            ).run(JSON.stringify(updatedSlide), slide.id);
+        }
+        for (const playlist of allRecords('playlist')) {
+          const published = playlist.published;
+          if (!published) continue;
+          let changed = false;
+          const items = published.items.map((item) => {
+            const slide = item.slide && markRemoved(item.slide);
+            if (slide !== item.slide) changed = true;
+            return slide === item.slide ? item : { ...item, slide };
+          });
+          const publishedAssets = (published.assets || []).filter(
+            (asset) => !deletedIds.has(asset.id),
+          );
+          if (
+            !changed &&
+            publishedAssets.length === (published.assets || []).length
+          )
+            continue;
+          playlist.published = {
+            ...published,
+            revision: randomUUID(),
+            publishedAt: new Date().toISOString(),
+            items,
+            assets: publishedAssets,
+          };
+          db.prepare(
+            "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
+          ).run(JSON.stringify(playlist), playlist.id);
+        }
+      }
       for (const a of updated) {
-        if (patch.action === 'delete') remove('asset', a.id);
-        else put('asset', a);
+        if (patch.action === 'delete') {
+          remove('asset', a.id);
+          db.prepare('DELETE FROM resource_access WHERE kind=? AND id=?').run(
+            'asset',
+            a.id,
+          );
+          db.prepare('DELETE FROM resource_grants WHERE kind=? AND id=?').run(
+            'asset',
+            a.id,
+          );
+        } else put('asset', a);
       }
       db.exec('COMMIT');
     } catch (error) {
@@ -1162,7 +1238,7 @@ export function createApp({
       command: device.command,
       weather: weather.forManifest(published),
       manifest: published || {
-        schemaVersion: 1,
+        schemaVersion: 2,
         revision: 'empty',
         name: 'No published playlist',
         items: [],

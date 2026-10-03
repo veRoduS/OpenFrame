@@ -10,7 +10,7 @@ import {
 } from './components/ui/dialog';
 
 export type SharedResource = { kind: string; id: string; name: string };
-type Group = { id: string; name: string };
+type Group = { id: string; name: string; parentId: string | null };
 type Grant = { userId: string; groupId: string };
 
 export function ResourceAccessDialog({
@@ -32,6 +32,17 @@ export function ResourceAccessDialog({
   } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const groupName = (id: string) => {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let group = groups.find((item) => item.id === id);
+    while (group && !seen.has(group.id)) {
+      seen.add(group.id);
+      names.unshift(group.name);
+      group = groups.find((item) => item.id === group?.parentId);
+    }
+    return names.join(' / ') || 'Shared group';
+  };
 
   useEffect(() => {
     if (!resource) {
@@ -107,8 +118,7 @@ export function ResourceAccessDialog({
               {grant.userId
                 ? users.find((u) => u.id === grant.userId)?.name ||
                   'Assigned user'
-                : groups.find((g) => g.id === grant.groupId)?.name ||
-                  'Shared group'}
+                : groupName(grant.groupId)}
             </span>
             {access.canShare && (
               <button
@@ -153,7 +163,7 @@ export function ResourceAccessDialog({
                 </option>
                 {groups.map((group) => (
                   <option key={group.id} value={`group:${group.id}`}>
-                    {group.name} (group)
+                    {groupName(group.id)} (group)
                   </option>
                 ))}
                 {user.role === 'superadmin' &&
