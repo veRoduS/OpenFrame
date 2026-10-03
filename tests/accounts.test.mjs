@@ -211,6 +211,15 @@ void test('published media is read-only for shared playlists and screens until t
       ).status,
       200,
     );
+    assert.equal(
+      (
+        await admin(`/api/access/slide/${item.id}`, 'POST', {
+          ...target,
+          remove: true,
+        })
+      ).status,
+      200,
+    );
     assert.equal((await recipient.call(asset.url)).status, 404);
   }
   const device = (
@@ -238,9 +247,14 @@ void test('published media is read-only for shared playlists and screens until t
     userId: recipient.user.id,
     remove: true,
   });
-  // Sharing a screen also grants its playlist; that independent grant remains.
+  // Parent grants leave slide access intact until its separate grant is removed.
   assert.equal((await recipient.call(asset.url)).status, 200);
   await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+    userId: recipient.user.id,
+    remove: true,
+  });
+  assert.equal((await recipient.call(asset.url)).status, 200);
+  await admin(`/api/access/slide/${item.id}`, 'POST', {
     userId: recipient.user.id,
     remove: true,
   });
@@ -254,6 +268,11 @@ void test('published media is read-only for shared playlists and screens until t
   });
   assert.equal((await recipient.call(asset.url)).status, 200);
   await admin(`/api/access/device/${device.id}`, 'POST', {
+    userId: recipient.user.id,
+    remove: true,
+  });
+  assert.equal((await recipient.call(asset.url)).status, 200);
+  await admin(`/api/access/slide/${item.id}`, 'POST', {
     userId: recipient.user.id,
     remove: true,
   });

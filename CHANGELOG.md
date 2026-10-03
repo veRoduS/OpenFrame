@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.13.0] - 2026-10-03
+
+- Publish OpenFrame 0.13.0 with corrected shared-media access checks
+
 ## [0.12.0] - 2026-10-03
 
 - Publish OpenFrame 0.12.0 after aligning checks with automatic slide refresh
