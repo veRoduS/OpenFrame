@@ -170,10 +170,6 @@ void test('published media is read-only for shared playlists and screens until t
     (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
     200,
   );
-  assert.equal(
-    (await admin(`/api/slides/${item.id}`, 'PUT', slide)).status,
-    200,
-  );
   const group = (
     await recipient.call('/api/groups', 'POST', { name: 'Viewers' })
   ).data;

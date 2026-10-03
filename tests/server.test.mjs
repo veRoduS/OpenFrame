@@ -802,7 +802,7 @@ void test('white slide defaults, photo crops and counter settings persist throug
     (await request(`/api/slides/${slide.id}`, 'PUT', slide)).status,
     200,
   );
-  assert.equal(publishedSlide().background, '#ffffff');
+  assert.equal(publishedSlide().background, '#2355aa');
   assert.equal(
     (await request(`/api/preview/${playlist.id}`)).data.items[0].slide
       .background,
@@ -940,7 +940,7 @@ void test('administrator setup, authentication, logout and CSRF protection', asy
   assert.equal((await request('/api/library')).status, 200);
 });
 
-void test('publishing creates an immutable snapshot until republished', async (t) => {
+void test('publishing refreshes included slides automatically after edits', async (t) => {
   const { request } = await fixture(t);
   const slide = (await request('/api/slides', 'POST', slideData())).data;
   const playlist = (
@@ -986,17 +986,11 @@ void test('publishing creates an immutable snapshot until republished', async (t
   assert.equal(first.items[0].slide.layers[0].text, 'Hello');
   slide.layers[0].text = 'Updated';
   await request(`/api/slides/${slide.id}`, 'PUT', slide);
-  const unchanged = (
+  const refreshed = (
     await request('/api/player/sync', 'POST', {}, false, headers)
   ).data.manifest;
-  assert.equal(unchanged.revision, first.revision);
-  assert.equal(unchanged.items[0].slide.layers[0].text, 'Hello');
-  await request(`/api/playlists/${playlist.id}/publish`, 'POST');
-  const changed = (
-    await request('/api/player/sync', 'POST', {}, false, headers)
-  ).data.manifest;
-  assert.notEqual(changed.revision, first.revision);
-  assert.equal(changed.items[0].slide.layers[0].text, 'Updated');
+  assert.notEqual(refreshed.revision, first.revision);
+  assert.equal(refreshed.items[0].slide.layers[0].text, 'Updated');
   assert.equal(
     (await request(`/api/slides/${slide.id}`, 'DELETE')).status,
     409,
