@@ -272,10 +272,12 @@ export default function App() {
   async function upload(
     file: File,
     folderId: string | null = null,
+    shareWithSlideId?: string,
   ): Promise<Asset> {
     const form = new FormData();
     form.append('file', file);
     if (folderId) form.append('folderId', folderId);
+    if (shareWithSlideId) form.append('shareWithSlideId', shareWithSlideId);
     const asset = await api<Asset>('/api/assets', 'POST', form);
     await refresh();
     return asset;
@@ -1251,7 +1253,11 @@ function Editor({
   onRefresh: () => Promise<void>;
   onClose: () => void;
   onSave: (s: Slide) => Promise<Slide>;
-  onUpload: (f: File, folderId?: string | null) => Promise<Asset>;
+  onUpload: (
+    f: File,
+    folderId?: string | null,
+    shareWithSlideId?: string,
+  ) => Promise<Asset>;
 }) {
   const [slide, setSlide] = useState<Slide>(structuredClone(initial));
   const [saved, setSaved] = useState(JSON.stringify(initial));
@@ -2213,6 +2219,7 @@ function Editor({
           folders={folders}
           onRefresh={onRefresh}
           onUpload={onUpload}
+          shareWithSlideId={slide.id}
           onPick={(asset) => chooseImage(asset.id)}
         />
       </Modal>

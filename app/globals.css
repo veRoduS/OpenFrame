@@ -2074,6 +2074,13 @@ input[type='color'] {
   padding-bottom: 20px;
   border-bottom: 1px solid #dce3de;
 }
+.media-share-upload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #526359;
+  font-size: 13px;
+}
 .media-search {
   display: flex;
   flex-direction: row;

@@ -58,7 +58,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | GET | `/api/library` | Slides, playlist summaries, assets, folders, device status |
 | POST | `/api/slides` | Create slide |
 | PUT / DELETE | `/api/slides/:id` | Replace/delete slide; deletion blocked while used in drafts |
-| POST | `/api/assets` | Upload image as multipart field `file`, optional `folderId` |
+| POST | `/api/assets` | Upload image as multipart field `file`, optional `folderId`; GIF animation is preserved in bounded animated WebP. From a slide picker, optional `shareWithSlideId` copies that slide's user/group grants to the new asset (slide owner or super-admin only) |
 | PATCH | `/api/assets/:id` | Edit `{name?,folderId?,tags?}`; null folderId means Unfiled |
 | POST | `/api/assets/batch` | `{ids,action?,folderId?,addTags?,removeTags?}`; action is update (default) or delete |
 | POST | `/api/folders` | Create `{name}`; names are case-insensitively unique |
@@ -66,7 +66,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | GET | `/media/:filename` | Image, with an authorized user session or assigned-device token |
 | POST | `/api/playlists` | Create `{name,items:[{slideId,duration}]}` |
 | PUT / DELETE | `/api/playlists/:id` | Replace draft/delete playlist; deletion blocked while assigned |
-| POST | `/api/playlists/:id/publish` | Snapshot current slides; requires nonempty playlist |
+| POST | `/api/playlists/:id/publish` | Snapshot current slides; requires nonempty playlist. Later saves to an included slide refresh its published copy and referenced asset list automatically; playlist structure and settings still require republishing |
 | GET | `/api/preview/:id` | Renderable saved-draft manifest for administrator preview |
 | POST | `/api/player/enroll` | Enroll `{name}`; returns `{id,token,code}` |
 | POST | `/api/devices/:id/approve` | Approve by matching `{code}` |

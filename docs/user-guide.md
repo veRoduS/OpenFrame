@@ -7,7 +7,7 @@ The playlist's Add slides tab marks slides already included with **In playlist**
 1. Create a slide. New slides have a white background; change it with the Background color swatch in the editor header. Add text, images, a clock, a count-up/countdown widget, or [NWS weather](weather.md). Weather supports US ZIP lookup, current observations or a six-hour forecast, and offline weather icons. Matching locations share server requests and cached player snapshots; no API key is needed.
 2. Drag layers on the canvas or resize photos with the four corner handles. Proportions stay locked unless disabled in Properties. Text supports top/middle/bottom alignment and automatic sizing to fit its box. With Image fit set to Fill, choose Adjust crop to drag the photo inside its frame. Zoom and horizontal/vertical sliders adjust the crop without changing the source file. Reset crop restores the centered, unzoomed view. Save the slide.
 3. Create a playlist, add slides, choose durations, and reorder them with the arrows. Choose Cut, Fade, Slide left, or Slide right under Transition; animated transitions have an adjustable duration.
-4. Publish the playlist. Publishing stores a snapshot; later slide edits do not change screens until you publish again.
+4. Publish the playlist. Publishing stores its order, timing, schedule, and transition. Saving an included slide updates that slide on assigned screens automatically; changes to playlist contents or settings still require republishing.
 5. Pair a player using its displayed code, then assign the published playlist in Screens.
 
 Screens supports naming, assignment, last-seen status, rotation, a black display, refresh, restart, and credential revocation. Changes normally reach a connected player within 15 seconds, plus download time. Online status means a recent agent heartbeat, not proof that a physical monitor is working.
@@ -30,7 +30,9 @@ Changing dimensions while movement is locked limits the layer to the space avail
 
 ## Organize media
 
-Media supports named folders, image tags, filename/tag search, tag filtering, and grid/list views. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls.
+Media supports named folders, image tags, filename/tag search, tag filtering, and grid/list views. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls. Upload GIFs for animated playback; OpenFrame converts them to animated WebP while keeping the frame timing and loop.
+
+When uploading from a slide's image picker, select **Share uploaded images with this slide’s audience** to give the new images the same user and group access as that slide. This is useful when adding media to a shared slide; otherwise the media owner can share it later in Media.
 
 Images attached to shared slides, playlists, or screens appear as **Read-only** when you lack direct media access. This includes images retained in a published snapshot after the draft changes. You can view or choose them in the image picker; changing their names, tags, folders, sharing, or deleting them requires direct media access.
 

@@ -312,6 +312,99 @@
           "player/wireguard.py": "492248451dac7b9b300bf258ec5247f47793452ff4f3e47877879903ba5e2542"
         }
       }
+    },
+    {
+      "reviewedAt": "2026-10-03T05:13:54.000Z",
+      "impact": "compatible",
+      "summary": "Server refreshes slide snapshots in existing playlist manifests, can copy slide audience grants to uploaded assets, and converts GIFs to animated WebP; player sync and manifest schema 1 remain unchanged.",
+      "versions": {
+        "server": "0.10.6",
+        "player": "0.10.5"
+      },
+      "protocols": {
+        "playerSync": {
+          "server": [
+            1
+          ],
+          "android": [
+            1
+          ],
+          "pi": [
+            1
+          ]
+        },
+        "playlistManifest": {
+          "server": [
+            1
+          ],
+          "android": [
+            1
+          ],
+          "pi": [
+            1
+          ]
+        },
+        "androidUpdate": {
+          "server": [
+            1
+          ],
+          "android": [
+            1
+          ],
+          "pi": []
+        }
+      },
+      "fingerprints": {
+        "server": {
+          "server/accounts.mjs": "12a648e51976beba954f284885f6406357e4139ef078b146fdd3946b3026b9e9",
+          "server/android-release-config.mjs": "450d550a5a85e70d571114b9095e5da6623eee9f9ee4a67e52656489b236250c",
+          "server/android-releases.mjs": "d4b4a78942f05f7bb67920c90fd15fa46986099977829468ad7e116af90f38b1",
+          "server/app.mjs": "8c7c62ad2a10fe8c191f1465701497ad88527e777b3e9a0b91321ca4c78653f1",
+          "server/index.mjs": "775de971e15940aa09f65b46ec51fab65b79e6c88d88d8a0deb82e1c1a8dd962",
+          "server/managed-vpn.mjs": "cd88e411ad17023123b0143795635afbfcfa4a4218a4065b1d0124b904904605",
+          "server/password-policy.mjs": "75df22cc9782cab8caab2629527b3526bd0d4e0c50c1e5aaa9aa1722949e09e8",
+          "server/recovery.mjs": "1ed2ea26b05986e017201de492997b1a677332191438e6c3385024c4347042b8",
+          "server/schema.mjs": "255dc82948bb93978388bbdd8af7587bc1868a46a7d0948fa13f396028154337",
+          "server/screen-setup.mjs": "c3b1d261cd5f63eb0ff1a2ebac571cf174f4ce2f097b44b6319ef5893c575a6d",
+          "server/weather.mjs": "ffe58f3d08f5a60cb78ead56bfea273d8c1d9cb5ed875c2ca91e2af0cd04d7a5",
+          "server/wireguard-core.mjs": "a5393aad5db8e240b1d29165438bed1606916c76c3d49c18a99c8fdc99876f7b",
+          "server/wireguard-host.mjs": "ea316639f0f963a5f62d3695691c1bd808422b3ea036f77b5779c5d53ce9c39b",
+          "server/zip.mjs": "91a286e0b2c96e2bf8ad7847e629adda32fa435e12ed2258e83f85354f13cc68"
+        },
+        "renderer": {
+          "player/web/clock.js": "c95971d8a0c14f0cc55886c3e20460a6a3b3d1b9294773b97403c291e3227686",
+          "player/web/counter.js": "03ab58c6e84748915ca2d97d72eecb437abcd1e90fe7fb94ce59be9aa78ccba9",
+          "player/web/frame.js": "33cca0946c3a6e9b6c66e3f142cc1ba2cd1ed97edc53bd57860ae94f86171a82",
+          "player/web/image-layout.js": "eaa3e96d3bd8f71ae202b1be85743923ebf2e64291af24b9da2c7463c4978b3b",
+          "player/web/index.html": "d4534b47049a2bedeae24485cec3b07fe9bb1f0c71c071dc9192d470b44e6c79",
+          "player/web/playback.js": "00ffcc8189145d886ef86e726cef7a5062a14863516d1712da08e9bc219c804d",
+          "player/web/player.css": "9a901a6258c3a392cb29b9c98d089eebbf1bbbc5ff2c3b3012be5117f28771e5",
+          "player/web/player.js": "6be39a12ed8c1354bf52738397324b291ab3f3c33d4d6d7837c4eae7e1e37c71",
+          "player/web/text-layout.js": "c36730209c8c88fb588addd3a50bc62c1eb42dc12b2e5380f19cd48ad679798a",
+          "player/web/weather-icons.js": "b0e63e85f21e68b9c9119cbfd0c4e0feb0250742ed304a78674e855e1e6fa738",
+          "player/web/weather.js": "bfc5bc61b6fca4deb22634654157ad37e458a9b56171f12d365c75361fd8df68",
+          "player/web/widgets.js": "c6bb7d386b7a852024f669aa398f4668d8d050ff1f119ef4e16b56ff31e208a6",
+          "player/web/wifi-off.svg": "ff6d0788cd66beb280a9fef6aa364f1d6ceb6fbc93aee661424e90f7ad74a9b9"
+        },
+        "android": {
+          "player/android/app/build.gradle": "d191a6f9b1dd6755c185728bfc9539b7db8d099e15b6f453fffbb6785a771924",
+          "player/android/app/src/main/AndroidManifest.xml": "dacb0547c4425638ef8b3cc4fd60653cd7b1dbfa54807736d3cb851e9a2dc3e0",
+          "player/android/app/src/main/java/org/openframe/player/PlayerActivity.java": "eff3a8f1bb81962e5247ac45b5d159668922fd18ff37c8b91b340bf4808250d7",
+          "player/android/app/src/main/java/org/openframe/player/PlayerAgent.java": "2286589e375efc75e95158c0eb9092240b051eea81be06e2b62e1c4af957c44a",
+          "player/android/app/src/main/java/org/openframe/player/UpdateInstaller.java": "6469d7c6543ecef6889173c24fac511bdce9932325c59d8178528b4698c86190",
+          "player/android/app/src/main/java/org/openframe/player/UpdateProvider.java": "ada1c0f7c3f51056201d50765d84bde8236c733d8aeff8829880bda7922431f7",
+          "player/android/app/src/main/java/org/openframe/player/UpdateSource.java": "4aeeb3c1ecc053f480cd17838a155ccdd6b72c0fbc09ad78a607e6d785196f7a",
+          "player/android/release-signing.json": "101e08ad9615794e7ac44dbdf0e622cf4d2a5dddd1c41a5392dae7f96461424d"
+        },
+        "pi": {
+          "player/agent.py": "d6437337a6cd8e082dd056d7c5cbcf4e917978819b333874b6df95a12c907b4c",
+          "player/bootstrap.py": "d05de067c5c37910839ba41b80a844f3c52c6bed1ef14ef56e0348b56be20188",
+          "player/managed_network.py": "c836dc68cb9ea9ac9ba4c9c6230efcb1f77e68d5be2673636fb921577502f889",
+          "player/recovery.py": "81cd3bc8814cf12cae8d45debd99ff641f7a85cb0a43204cc7d4d9cd5f577c97",
+          "player/wifi.py": "624ccbb4b5081331d8afd18a1bea8606f02c7b053a5cec8589c07fe6e518aade",
+          "player/wireguard.py": "492248451dac7b9b300bf258ec5247f47793452ff4f3e47877879903ba5e2542"
+        }
+      }
     }
   ]
 }

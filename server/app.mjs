@@ -384,13 +384,13 @@ export function createApp({
     requireRecord('slide', req.params.id);
     const slide = slideSchema.parse(req.body);
     checkImages(slide, req.user);
-    res.json(
-      put('slide', {
-        ...slide,
-        id: req.params.id,
-        updatedAt: new Date().toISOString(),
-      }),
-    );
+    const saved = put('slide', {
+      ...slide,
+      id: req.params.id,
+      updatedAt: new Date().toISOString(),
+    });
+    refreshPublishedSlide(saved);
+    res.json(saved);
   });
   app.delete('/api/slides/:id', admin, (req, res) => {
     requireRecord('slide', req.params.id);
@@ -466,6 +466,46 @@ export function createApp({
       }),
     };
   }
+  function refreshPublishedSlide(slide) {
+    const rows = db
+      .prepare("SELECT id,body FROM records WHERE kind='playlist'")
+      .all();
+    for (const row of rows) {
+      const playlist = JSON.parse(row.body);
+      const published = playlist.published;
+      if (!published?.items?.some((item) => item.slide?.id === slide.id))
+        continue;
+      const items = published.items.map((item) =>
+        item.slide?.id === slide.id ? { ...item, slide } : item,
+      );
+      const assetIds = [
+        ...new Set(
+          items.flatMap((item) =>
+            item.slide.layers
+              .filter((layer) => layer.type === 'image')
+              .map((layer) => layer.assetId),
+          ),
+        ),
+      ];
+      const assets = assetIds.map((id) => {
+        const asset = db
+          .prepare("SELECT body FROM records WHERE kind='asset' AND id=?")
+          .get(id);
+        if (!asset) throw fail(404, 'Referenced item not found');
+        return JSON.parse(asset.body);
+      });
+      playlist.published = {
+        ...published,
+        revision: randomUUID(),
+        publishedAt: new Date().toISOString(),
+        items,
+        assets,
+      };
+      db.prepare(
+        "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
+      ).run(JSON.stringify(playlist), playlist.id);
+    }
+  }
   app.post('/api/playlists/:id/publish', admin, (req, res) => {
     const p = requireRecord('playlist', req.params.id);
     if (!p.items.length)
@@ -513,11 +553,25 @@ export function createApp({
       folderId: req.body.folderId || null,
     });
     if (folderId) requireRecord('folder', folderId);
+    const shareWithSlideId = req.body.shareWithSlideId || '';
+    let slideGrants = [];
+    if (shareWithSlideId) {
+      requireRecord('slide', shareWithSlideId);
+      if (!canShare(req.user, 'slide', shareWithSlideId))
+        throw fail(
+          403,
+          'Only the slide owner or super-admin can share its audience',
+        );
+      slideGrants = grants('slide', shareWithSlideId);
+    }
     let buffer, info;
     try {
-      const result = await sharp(req.file.buffer, {
+      const source = sharp(req.file.buffer, {
         limitInputPixels: 25000000,
-      })
+        animated: true,
+      });
+      const metadata = await source.metadata();
+      const result = await source
         .rotate()
         .resize({
           width: 1920,
@@ -525,7 +579,12 @@ export function createApp({
           fit: 'inside',
           withoutEnlargement: true,
         })
-        .webp({ quality: 88 })
+        .webp({
+          quality: 88,
+          effort: 4,
+          loop: metadata.loop ?? 0,
+          ...(metadata.delay ? { delay: metadata.delay } : {}),
+        })
         .toBuffer({ resolveWithObject: true });
       buffer = result.data;
       info = result.info;
@@ -536,21 +595,27 @@ export function createApp({
     const filename = `${id}.webp`;
     if (folderId) requireRecord('folder', folderId);
     writeFileSync(path.join(root, 'media', filename), buffer);
-    res.status(201).json(
-      put('asset', {
+    const asset = put('asset', {
+      id,
+      filename,
+      name: req.file.originalname.slice(0, 200),
+      width: info.width,
+      height: info.height,
+      bytes: buffer.length,
+      sha256: hash(buffer),
+      url: `/media/${filename}`,
+      tags: [],
+      folderId,
+      createdAt: new Date().toISOString(),
+    });
+    for (const grant of slideGrants)
+      db.prepare('INSERT OR IGNORE INTO resource_grants VALUES (?,?,?,?)').run(
+        'asset',
         id,
-        filename,
-        name: req.file.originalname.slice(0, 200),
-        width: info.width,
-        height: info.height,
-        bytes: buffer.length,
-        sha256: hash(buffer),
-        url: `/media/${filename}`,
-        tags: [],
-        folderId,
-        createdAt: new Date().toISOString(),
-      }),
-    );
+        grant.userId,
+        grant.groupId,
+      );
+    res.status(201).json(asset);
   });
   function validateFolder(id) {
     if (id) requireRecord('folder', id);

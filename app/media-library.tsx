@@ -77,13 +77,19 @@ export function MediaLibrary({
   onUpload,
   onPick,
   onManageAccess,
+  shareWithSlideId,
 }: {
   assets: Asset[];
   folders: MediaFolder[];
   onRefresh: () => Promise<void>;
-  onUpload: (file: File, folderId?: string | null) => Promise<Asset>;
+  onUpload: (
+    file: File,
+    folderId?: string | null,
+    shareWithSlideId?: string,
+  ) => Promise<Asset>;
   onPick?: (asset: Asset) => void;
   onManageAccess?: (asset: Asset) => void;
+  shareWithSlideId?: string;
 }) {
   const [folder, setFolder] = useState('all');
   const [search, setSearch] = useState('');
@@ -101,6 +107,7 @@ export function MediaLibrary({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [shareUpload, setShareUpload] = useState(false);
   const uploadInput = useRef<HTMLInputElement>(null);
   const filtered = visibleMedia(assets, {
     folder,
@@ -253,6 +260,16 @@ export function MediaLibrary({
             <List size={18} />
           </Tool>
         </div>
+        {onPick && shareWithSlideId && (
+          <label className="media-share-upload">
+            <input
+              type="checkbox"
+              checked={shareUpload}
+              onChange={(event) => setShareUpload(event.target.checked)}
+            />
+            Share uploaded images with this slide’s audience
+          </label>
+        )}
         {!onPick && (
           <button onClick={() => open('folder')} disabled={busy}>
             <FolderPlus size={17} />
@@ -280,7 +297,11 @@ export function MediaLibrary({
               run(async () => {
                 let completed = 0;
                 for (const file of files) {
-                  await onUpload(file, currentFolder?.id || null);
+                  await onUpload(
+                    file,
+                    currentFolder?.id || null,
+                    shareUpload ? shareWithSlideId : undefined,
+                  );
                   completed++;
                   setNotice(`Uploaded ${completed} of ${files.length}`);
                 }
