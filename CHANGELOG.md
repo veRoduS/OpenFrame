@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.10.5] - 2026-10-03
+
+- Document the direct GitHub APK address for Android TV Downloader apps
+
 ## [0.10.4] - 2026-10-02
 
 - Publish Android APKs to GitHub, link the latest download, and track independent player/server compatibility

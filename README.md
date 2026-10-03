@@ -31,7 +31,11 @@ Prefer a prebuilt image? See [AMD64/ARM64 images and Compose setup](docs/contain
 
 ## Android TV installation
 
-[Download the latest signed Android APK](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk), transfer it over Wi-Fi or copy it to a USB flash drive, and open it with a TV downloader/file manager. Open **OpenFrame Player**, enter your server address, and approve its pairing code under **Screens**. See the [Android TV guide](docs/android-tv.md) for installation permission, device requirements, updates, and limitations.
+[Download the latest signed Android APK](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk), or paste this address into a TV Downloader app:
+
+`https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk`
+
+Transfer it over Wi-Fi or copy it to a USB flash drive, and open it with a TV downloader/file manager. Open **OpenFrame Player**, enter your server address, and approve its pairing code under **Screens**. See the [Android TV guide](docs/android-tv.md) for installation permission, device requirements, updates, and limitations.
 
 The landing page's **Download Android APK** button links directly to the latest APK on GitHub. [Previous APKs](https://github.com/veRoduS/OpenFrame/tree/android-releases/apks) remain available by player version. Android players from 0.10.4 can check GitHub directly for updates, independently of the content server version. Player 0.10.5 adds an opt-in automatic update setting, off by default; manual checks remain available. The optional **This server** update source uses the server download endpoints; older player 0.10.3 uses those endpoints exclusively. Android requires you to approve installation.
 

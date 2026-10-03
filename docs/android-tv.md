@@ -13,7 +13,13 @@ The APK contains no native CPU libraries, so the same package targets ARM32, ARM
 
 ## Install and pair
 
-On a stick without USB, use **Download Android APK** on the OpenFrame homepage. It links directly to the [latest signed APK on GitHub](https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk). You can enter that link in a TV downloader app, or use `https://YOUR-SERVER/downloads/android/openframe-player.apk` with your actual server address (including its port for a local HTTP server). Allow that downloader/file manager to install unknown apps when Android prompts. You can also transfer the downloaded APK from a phone over Wi-Fi. Then continue at step 4 below.
+On a stick without USB, use **Download Android APK** on the OpenFrame homepage, or paste this direct address into your TV Downloader app:
+
+```text
+https://raw.githubusercontent.com/veRoduS/OpenFrame/android-releases/apks/latest/openframe-player.apk
+```
+
+The address downloads the latest signed APK from GitHub. You can also use `https://YOUR-SERVER/downloads/android/openframe-player.apk` with your actual server address (including its port for a local HTTP server). Allow that downloader/file manager to install unknown apps when Android prompts. You can also transfer the downloaded APK from a phone over Wi-Fi. Then continue at step 4 below.
 
 1. Obtain the signed `openframe-player-VERSION.apk` from the local `outputs/android/` build folder, or extract the matching `-usb.zip`. Copy the APK to a flash drive in a format your box supports, usually FAT32.
 2. Insert the flash drive into the box. Open its file manager, browse the USB drive, and select the APK.
