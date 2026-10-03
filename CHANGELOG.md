@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.14.0] - 2026-10-03
+
+- Rename screens from the dashboard.
+- Confirm and apply the required sharing for playlist slides and referenced media before saving or publishing.
+- Add built-in font choices and super-admin custom-font uploads; published playlists bundle their custom fonts for offline Pi and Android playback. Custom-font playlists require player 0.10.6 or newer.
+- Normalize edge-aligned layer sizes so items can reach 100% without slide-bound errors.
+
 ## [0.13.4] - 2026-10-03
 
 - Normalize canvas-edge dimensions when saving slides
