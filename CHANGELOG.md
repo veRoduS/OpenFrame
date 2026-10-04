@@ -2,6 +2,12 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.16.0] - 2026-10-04
+
+- Publish admin/group controls, media drag-and-drop, shapes, vertical weather, stocks and workspace filters
+- Include player 0.10.11 support for schema 3; update players before publishing shapes, stocks or vertical weather.
+- Publish the owner-approved 0.16.0 GitHub release as latest after image verification, with a digest-pinned Compose bundle.
+
 ## [0.15.3] - 2026-10-04
 
 - Add combined name, nested-group and status filters to slides, playlists and screens.
