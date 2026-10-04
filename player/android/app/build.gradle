@@ -63,6 +63,17 @@ dependencies {
 }
 
 // Native integration tests start the real Node server against disposable data.
+// Host HTTP fixtures need the JDK's jdk.httpserver module. Android's restricted
+// --system image applies to production compilation, not these JVM tests.
+tasks.withType(JavaCompile).configureEach {
+    if (name.endsWith('UnitTestJavaWithJavac')) {
+        options.compilerArgumentProviders.removeAll {
+            it instanceof com.android.build.gradle.tasks.JdkImageInput
+        }
+        options.compilerArgs.addAll(['--add-modules', 'jdk.httpserver'])
+    }
+}
 tasks.withType(Test).configureEach {
+    jvmArgs '--add-modules=jdk.httpserver'
     systemProperty 'openframe.root', rootProject.projectDir.parentFile.parentFile.absolutePath
 }

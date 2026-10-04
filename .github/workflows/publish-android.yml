@@ -3,7 +3,7 @@ name: Publish Android player
 on:
   push:
     branches: [main]
-    paths: ['player/version.json', '.github/workflows/publish-android.yml']
+    paths: ['player/version.json', 'player/android/app/build.gradle', '.github/workflows/publish-android.yml']
   workflow_dispatch:
 
 permissions:

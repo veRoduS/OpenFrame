@@ -84,7 +84,7 @@ The command builds and verifies the signed APK, writes local files under `output
 
 Use `pnpm build:android --local` to keep a development build local, adding `--sdk` when using the documented SDK-only fallback. If upload fails, the local files remain available; fix the cause and run `pnpm publish:android` to retry those exact files without rebuilding. Source work can be committed locally without being pushed.
 
-`.github/workflows/publish-android.yml` runs after an approved source push changes `player/version.json` or the publisher workflow on `main`, or by manual dispatch. It checks versions, compatibility, and tests, then builds and publishes a player version that has not already been archived. A server-only version change does not trigger it. The job uses the `android-releases` GitHub environment and a `GITHUB_TOKEN` with `contents: write` for the publication branch.
+`.github/workflows/publish-android.yml` runs after an approved source push changes `player/version.json`, the Android app build configuration, or the publisher workflow on `main`, or by manual dispatch. It checks versions, compatibility, and tests, then builds and publishes a player version that has not already been archived. A server-only version change does not trigger it. The job uses the `android-releases` GitHub environment and a `GITHUB_TOKEN` with `contents: write` for the publication branch.
 
 Configure these environment or repository secrets using the **existing** Android release key:
 

@@ -95,7 +95,7 @@ cd player/android
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-On Windows use `gradlew.bat`. Run `pnpm install --frozen-lockfile` at the repository root first and keep Node available on `PATH`: `PlayerAgentIntegrationTest` starts the real Express API with disposable server data and checks HTTP 201 enrollment, displayed pairing codes, saved-credential reuse after reopening, and approval. It does not connect to your running server or modify its screens. `UpdateSourceTest` covers the direct GitHub and explicit server update sources. The debug package has a separate `.debug` application ID and cannot update a release installation. Generated build output and signing material are excluded from Git.
+On Windows use `gradlew.bat`. Run `pnpm install --frozen-lockfile` at the repository root first and keep Node available on `PATH`: `PlayerAgentIntegrationTest` starts the real Express API with disposable server data and checks HTTP 201 enrollment, displayed pairing codes, saved-credential reuse after reopening, and approval. It does not connect to your running server or modify its screens. `UpdateSourceTest` covers the direct GitHub and explicit server update sources. Gradle compiles the host JVM fixtures with the JDK’s `jdk.httpserver` module, while production compilation retains Android’s Java system image. The debug package has a separate `.debug` application ID and cannot update a release installation. Generated build output and signing material are excluded from Git.
 
 ## GitHub downloads and server updates
 
