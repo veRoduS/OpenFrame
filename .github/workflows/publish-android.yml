@@ -54,6 +54,9 @@ jobs:
       - name: Set up Android SDK command-line tools
         if: steps.existing.outputs.published != 'true'
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Prepare Android SDK and existing release key
         if: steps.existing.outputs.published != 'true'
         env:
