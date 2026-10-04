@@ -15,7 +15,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open http://localhost:3100 and sign in as `superadmin` using the unique password printed in the terminal on the first start. The server creates `data/` automatically. Existing accounts are preserved on restart. Use a separate `DATA_DIR` for test installations; never develop against your only production database. Local Node does not load `.env` automatically: set environment variables in your shell. Compose reads `.env` for interpolation.
+Open http://localhost:3100 and sign in as `admin` using the unique password printed in the terminal on the first start. The server creates `data/` automatically. Existing accounts are preserved on restart. Use a separate `DATA_DIR` for test installations; never develop against your only production database. Local Node does not load `.env` automatically: set environment variables in your shell. Compose reads `.env` for interpolation.
 
 ## Verification
 
@@ -46,7 +46,9 @@ After `pnpm build`, run `node tests/screen-setup.browser.mjs` with the same Play
 
 After building, `node tests/landing.browser.mjs` checks the public homepage, login/logout, bookmarked `/dashboard` access, persisted browser sessions, legacy invitation links, clipboard, FAQ, mobile navigation, and image loading at five viewport sizes. Use the same Playwright settings as the other browser checks. It seeds an isolated database with fictional content, never your library. To refresh the public sample workspace image deliberately, run it with `OPENFRAME_CAPTURE_LANDING=true`, then rebuild and rerun without that flag. See [public website](docs/public-website.md) for routes and asset provenance.
 
-After building, `node tests/accounts.browser.mjs` verifies user invitations, password changes, group joining, and desktop/mobile account layouts against an isolated database. Use the same Playwright environment settings as the other browser tests. Account authorization, migration, direct media access, and screen assignment are covered by `tests/accounts.test.mjs` in the standard Node suite.
+After building, `node tests/accounts.browser.mjs` verifies user invitations, password changes, group joining, and desktop/mobile account layouts against an isolated database. Use the same Playwright environment settings as the other browser tests. After building, run `node tests/organization.browser.mjs` with the same Playwright settings to verify admin-only direct membership management, account role changes, user access editing, group reparenting, indented sharing options, folder drag/drop (including return to top level and cycle rejection), and desktop/mobile layouts against an isolated database. Screenshots are written under ignored `work/`.
+
+Account authorization, migration, direct media access, and screen assignment are covered by `tests/accounts.test.mjs` in the standard Node suite.
 
 After building, `node tests/editor-locks.browser.mjs` verifies eight-character login, separate image insertion/replacement, full locks, and movement-locked dimension edits for text, images, clocks, and counters in an isolated database. The accounts and editor-lock browser checks also accept `OPENFRAME_BROWSER_EXECUTABLE` for an installed Chromium executable.
 

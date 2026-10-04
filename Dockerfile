@@ -22,7 +22,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile && mkdir /data && chown node:node /data
 COPY --from=build /app/dist ./dist
 COPY server ./server
-COPY scripts/create-superadmin.mjs ./scripts/create-superadmin.mjs
+COPY scripts/create-admin.mjs scripts/create-superadmin.mjs ./scripts/
 COPY player/web ./player/web
 USER node
 VOLUME /data

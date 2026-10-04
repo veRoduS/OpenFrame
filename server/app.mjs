@@ -101,11 +101,7 @@ export function createApp({
                 childKind,
                 childId,
               )
-            : db
-                .prepare(
-                  'SELECT 1 FROM resource_grants WHERE kind=? AND id=? AND groupId=?',
-                )
-                .get(childKind, childId, audience.groupId);
+            : accounts.groupCan(audience.groupId, childKind, childId);
           if (!granted)
             throw fail(
               409,
@@ -177,7 +173,7 @@ export function createApp({
         .json({ error: 'Too many attempts. Try again in a minute.' });
     next();
   }
-  const { admin, superadmin, session } = accounts;
+  const { admin, administrator, session } = accounts;
   const player = (req, res, next) => {
     const token = req.headers.authorization?.replace(/^Bearer /, '');
     const device =
@@ -193,7 +189,7 @@ export function createApp({
   app.get('/api/health', (req, res) => res.json({ ok: true, version }));
   accounts.mount(app, rateLimit);
   const vault = mountScreenSetup(app, {
-    admin: superadmin,
+    admin: administrator,
     db,
     root,
     list,
@@ -210,7 +206,7 @@ export function createApp({
     vault,
   });
   const managedVpn = mountManagedVpn(app, {
-    admin: superadmin,
+    admin: administrator,
     player,
     list,
     get,
@@ -235,7 +231,7 @@ export function createApp({
       .all(kind, id);
   function canShare(user, kind, id) {
     return (
-      user.role === 'superadmin' ||
+      user.role === 'admin' ||
       db
         .prepare(
           'SELECT 1 FROM resource_access WHERE kind=? AND id=? AND ownerId=?',
@@ -277,7 +273,7 @@ export function createApp({
     if (!exists && !canShare(user, kind, id))
       throw fail(
         403,
-        'Only the owner or super-admin can share this item and its contents',
+        'Only the owner or admin can share this item and its contents',
       );
     if (!exists)
       db.prepare('INSERT INTO resource_grants VALUES (?,?,?,?)').run(
@@ -292,6 +288,50 @@ export function createApp({
       grantTree(user, childKind, childId, target, visited);
     }
   }
+  app.get('/api/users/:id/access', administrator, (req, res) => {
+    const user = db
+      .prepare('SELECT * FROM users WHERE id=?')
+      .get(req.params.id);
+    if (!user) throw fail(404, 'User not found');
+    res.json(
+      ['device', 'slide', 'playlist', 'asset', 'folder'].flatMap((kind) =>
+        allRecords(kind).map((item) => {
+          const audience = grants(kind, item.id);
+          const direct = audience.some((grant) => grant.userId === user.id);
+          const owner =
+            db
+              .prepare(
+                'SELECT ownerId FROM resource_access WHERE kind=? AND id=?',
+              )
+              .get(kind, item.id)?.ownerId === user.id;
+          const viaGroups = audience
+            .filter(
+              (grant) => grant.groupId && accounts.member(user, grant.groupId),
+            )
+            .map(
+              (grant) =>
+                db
+                  .prepare('SELECT name FROM groups WHERE id=?')
+                  .get(grant.groupId)?.name,
+            )
+            .filter(Boolean);
+          return {
+            kind,
+            id: item.id,
+            name: item.name,
+            direct,
+            owner,
+            viaGroups,
+            effective: accounts.can(user, kind, item.id),
+            readOnly:
+              kind === 'asset' &&
+              !accounts.can(user, kind, item.id) &&
+              !!accounts.canViewAsset(user, item.id),
+          };
+        }),
+      ),
+    );
+  });
   app.get('/api/access/:kind/:id', admin, (req, res) => {
     const { kind, id } = req.params;
     if (!['slide', 'asset', 'playlist', 'folder', 'device'].includes(kind))
@@ -317,20 +357,20 @@ export function createApp({
       throw fail(400, 'Choose one user or group');
     requireRecord(kind, id);
     if (!canShare(req.user, kind, id))
-      throw fail(403, 'Owner or super-admin required');
+      throw fail(403, 'Owner or admin required');
     if (
       target.userId &&
-      (req.user.role !== 'superadmin' ||
+      (req.user.role !== 'admin' ||
         !db
           .prepare('SELECT id FROM users WHERE id=? AND (disabled=0 OR ?=1)')
           .get(target.userId, Number(target.remove)))
     )
-      throw fail(403, 'Super-admin assigns users');
+      throw fail(403, 'Admin assigns users');
     if (
       target.groupId &&
       (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
         (!target.remove &&
-          req.user.role !== 'superadmin' &&
+          req.user.role !== 'admin' &&
           !accounts.member(req.user, target.groupId)))
     )
       throw fail(403, 'Join the group before sharing');
@@ -487,11 +527,7 @@ export function createApp({
               resource.kind,
               resource.id,
             )
-          : !!db
-              .prepare(
-                'SELECT 1 FROM resource_grants WHERE kind=? AND id=? AND groupId=?',
-              )
-              .get(resource.kind, resource.id, target.groupId);
+          : accounts.groupCan(target.groupId, resource.kind, resource.id);
         if (accessible) continue;
         const canShare = !!canShareResource(user, resource.kind, resource.id);
         changes.push({
@@ -506,7 +542,7 @@ export function createApp({
   }
   function canShareResource(user, kind, id) {
     return (
-      user.role === 'superadmin' ||
+      user.role === 'admin' ||
       !!db
         .prepare(
           'SELECT 1 FROM resource_access WHERE kind=? AND id=? AND ownerId=?',
@@ -540,18 +576,18 @@ export function createApp({
           throw fail(403, 'You cannot share one or more referenced items');
         if (
           change.target.userId &&
-          (req.user.role !== 'superadmin' ||
+          (req.user.role !== 'admin' ||
             !db
               .prepare('SELECT id FROM users WHERE id=? AND disabled=0')
               .get(change.target.userId))
         )
-          throw fail(403, 'Only a super-admin can share with individual users');
+          throw fail(403, 'Only an admin can share with individual users');
         if (
           change.target.groupId &&
           (!db
             .prepare('SELECT id FROM groups WHERE id=?')
             .get(change.target.groupId) ||
-            (req.user.role !== 'superadmin' &&
+            (req.user.role !== 'admin' &&
               !accounts.member(req.user, change.target.groupId)))
         )
           throw fail(403, 'Join the recipient group before sharing');
@@ -745,7 +781,7 @@ export function createApp({
   });
   app.post(
     '/api/fonts',
-    accounts.superadmin,
+    accounts.administrator,
     fontUpload.single('file'),
     (req, res) => {
       if (!req.file) throw fail(400, 'Choose a font file');
@@ -799,7 +835,7 @@ export function createApp({
       });
     },
   );
-  app.delete('/api/fonts/:id', accounts.superadmin, (req, res) => {
+  app.delete('/api/fonts/:id', accounts.administrator, (req, res) => {
     const font = db
       .prepare('SELECT filename FROM custom_fonts WHERE id=?')
       .get(req.params.id);
@@ -832,10 +868,7 @@ export function createApp({
     if (shareWithSlideId) {
       requireRecord('slide', shareWithSlideId);
       if (!canShare(req.user, 'slide', shareWithSlideId))
-        throw fail(
-          403,
-          'Only the slide owner or super-admin can share its audience',
-        );
+        throw fail(403, 'Only the slide owner or admin can share its audience');
       slideGrants = grants('slide', shareWithSlideId);
     }
     let buffer, info;
@@ -904,7 +937,7 @@ export function createApp({
         if (parent === currentId)
           throw fail(400, 'A folder cannot be moved inside itself');
         visited.add(parent);
-        parent = list('folder').find((f) => f.id === parent)?.parentId;
+        parent = allRecords('folder').find((f) => f.id === parent)?.parentId;
       }
     }
     if (
@@ -933,7 +966,7 @@ export function createApp({
   });
   app.delete('/api/folders/:id', admin, (req, res) => {
     requireRecord('folder', req.params.id);
-    if (list('folder').some((f) => f.parentId === req.params.id))
+    if (allRecords('folder').some((f) => f.parentId === req.params.id))
       throw fail(409, 'Move subfolders out of this folder before deleting it');
     if (allRecords('asset').some((a) => a.folderId === req.params.id))
       throw fail(409, 'Move the images out of this folder before deleting it');
@@ -955,7 +988,7 @@ export function createApp({
       patch.action === 'delete' &&
       assets.some((asset) => !canShare(req.user, 'asset', asset.id))
     )
-      throw fail(403, 'Only the media owner or super-admin can delete images');
+      throw fail(403, 'Only the media owner or admin can delete images');
     validateFolder(patch.folderId);
     const deletedIds = new Set(
       patch.action === 'delete' ? assets.map((asset) => asset.id) : [],
@@ -1155,7 +1188,7 @@ export function createApp({
     });
     res.status(201).json({ id: device.id, token, code });
   });
-  app.post('/api/devices/:id/approve', superadmin, (req, res) => {
+  app.post('/api/devices/:id/approve', administrator, (req, res) => {
     const device = requireRecord('device', req.params.id);
     const { code } = z.object({ code: z.string() }).parse(req.body);
     if (device.code !== code.trim().toUpperCase())
@@ -1182,7 +1215,7 @@ export function createApp({
     put('device', device);
     res.json({ ok: true });
   });
-  app.delete('/api/devices/:id', superadmin, async (req, res) => {
+  app.delete('/api/devices/:id', administrator, async (req, res) => {
     requireRecord('device', req.params.id);
     remove('device', req.params.id);
     recovery.remove(req.params.id);

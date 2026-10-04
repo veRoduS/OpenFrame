@@ -5,7 +5,7 @@ Use the server and player source from the same milestone checkout. The automated
 ## Easiest existing setup
 
 1. Install Docker with Compose on your server. In the OpenFrame folder, run `docker compose up -d --build`.
-2. Read the unique first-start password with `docker compose logs openframe`. Open `http://SERVER_LAN_IP:3100`, sign in as `superadmin`, change the password under **Users & Groups > My password**, and create/publish a playlist.
+2. Read the unique first-start password with `docker compose logs openframe`. Open `http://SERVER_LAN_IP:3100`, sign in as `admin`, change the password under **Users & Groups > My password**, and create/publish a playlist.
 3. Flash Raspberry Pi OS Lite with Raspberry Pi Imager. Set the Pi's Wi-Fi, country, user, and SSH credentials in Imager.
 4. In OpenFrame, open **Screens > Screen setup**. Enter the server's reachable address and download a setup ZIP. Extract it, then transfer its files and this repository's `player` folder to the Pi.
 5. On the Pi, run:

@@ -507,7 +507,7 @@ export default function App() {
                 {(Object.entries(viewInfo) as [View, typeof viewInfo.slides][])
                   .filter(
                     ([key]) =>
-                      key !== 'settings' || auth.user?.role === 'superadmin',
+                      key !== 'settings' || auth.user?.role === 'admin',
                   )
                   .map(([key, item]) => (
                     <SidebarMenuItem key={key}>
@@ -607,7 +607,7 @@ export default function App() {
                       New playlist
                     </button>
                   )}
-                  {view === 'devices' && auth.user?.role === 'superadmin' && (
+                  {view === 'devices' && auth.user?.role === 'admin' && (
                     <>
                       <button onClick={() => setSetupOpen(true)}>
                         <FileCog size={18} />
@@ -648,7 +648,7 @@ export default function App() {
                   refresh={refresh}
                 />
               )}
-              {view === 'settings' && auth.user?.role === 'superadmin' && (
+              {view === 'settings' && auth.user?.role === 'admin' && (
                 <FontSettings fonts={fonts} refresh={refreshFonts} />
               )}
               {view === 'slides' && (
@@ -664,13 +664,16 @@ export default function App() {
                           {library.playlists.some(
                             (playlist) =>
                               !!playlist.publishedAt &&
-                              (playlist.publishedSlideIds || []).includes(slide.id) &&
+                              (playlist.publishedSlideIds || []).includes(
+                                slide.id,
+                              ) &&
                               library.devices.some(
                                 (device) =>
                                   device.approved &&
                                   device.playlistId === playlist.id &&
                                   !!device.lastSeen &&
-                                  Date.now() - Date.parse(device.lastSeen) < 90000,
+                                  Date.now() - Date.parse(device.lastSeen) <
+                                    90000,
                               ),
                           ) && <span className="slide-live-tag">Live</span>}
                           <button
@@ -897,7 +900,7 @@ export default function App() {
                         <DeviceRow
                           key={d.id}
                           device={d}
-                          canManage={auth.user?.role === 'superadmin'}
+                          canManage={auth.user?.role === 'admin'}
                           playlists={library.playlists}
                           busy={busy}
                           onRename={async (name) => {

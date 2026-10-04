@@ -53,7 +53,7 @@ docker compose --env-file .env.cloudflare -f compose.cloudflare.yaml config
 docker compose --env-file .env.cloudflare -f compose.cloudflare.yaml up -d --build
 ```
 
-Read the unique initial `superadmin` password from the server startup logs, sign in through the protected hostname, and change it under **Users & Groups > My password** before distributing player credentials. Then complete normal pairing and playlist assignment.
+Read the unique initial `admin` password from the server startup logs, sign in through the protected hostname, and change it under **Users & Groups > My password** before distributing player credentials. Then complete normal pairing and playlist assignment.
 
 The connector reads its token from a mounted Docker secret, using cloudflared's [token-file option](https://developers.cloudflare.com/tunnel/advanced/run-parameters/). On Linux, use a private `.secrets` directory (mode 700), with the token file readable by the container's non-root user. One option is file mode 444 inside that private directory. Docker Compose file-backed secrets preserve source permissions; setting `mode` in Compose does not change them. On Windows, restrict the host directory with its ACLs and use Docker's Linux-container mode. [Docker secret permissions](https://docs.docker.com/reference/compose-file/services/#secrets).
 

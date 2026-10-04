@@ -23,7 +23,7 @@ cd OpenFrame
 docker compose up -d --build
 ```
 
-Run `docker compose logs openframe` to find the unique first-start password. Open [localhost:3100](http://localhost:3100), select **Log in**, sign in as `superadmin`, and change it under **Users & Groups > My password**. Each fresh install generates its own password. Bookmark `/dashboard` for management; sign-ins last 30 days and renew during use. The public homepage is at `/` and sign-in at `/login`.
+Run `docker compose logs openframe` to find the unique first-start password. Open [localhost:3100](http://localhost:3100), select **Log in**, sign in as `admin`, and change it under **Users & Groups > My password**. Each fresh install generates its own password. Bookmark `/dashboard` for management; sign-ins last 30 days and renew during use. The public homepage is at `/` and sign-in at `/login`.
 
 Content is stored in a persistent Docker volume. Back it up before upgrades; `docker compose down -v` deletes it.
 

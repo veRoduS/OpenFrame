@@ -98,14 +98,14 @@ void test('fresh server boots seed unique admins; restarts preserve changed pass
   assert.equal(
     (
       await post(second.base, '/api/login', {
-        username: 'superadmin',
+        username: 'admin',
         password: first.password,
       })
     ).status,
     401,
   );
   const login = await post(first.base, '/api/login', {
-    username: 'superadmin',
+    username: 'admin',
     password: first.password,
   });
   assert.equal(login.status, 200);
@@ -113,7 +113,7 @@ void test('fresh server boots seed unique admins; restarts preserve changed pass
   const auth = await fetch(first.base + '/api/auth', {
     headers: { cookie },
   }).then((r) => r.json());
-  assert.equal(auth.user.role, 'superadmin');
+  assert.equal(auth.user.role, 'admin');
   const changed = await post(
     first.base,
     '/api/account/password',
@@ -133,7 +133,7 @@ void test('fresh server boots seed unique admins; restarts preserve changed pass
     headers: { cookie: updatedCookie },
   }).then((r) => r.json());
   assert.equal(resumed.authenticated, true);
-  assert.equal(resumed.user.username, 'superadmin');
+  assert.equal(resumed.user.username, 'admin');
   const revoked = await fetch(restarted.base + '/api/auth', {
     headers: { cookie },
   }).then((r) => r.json());
@@ -141,7 +141,7 @@ void test('fresh server boots seed unique admins; restarts preserve changed pass
   assert.equal(
     (
       await post(restarted.base, '/api/login', {
-        username: 'superadmin',
+        username: 'admin',
         password: 'my-replacement-password-long',
       })
     ).status,

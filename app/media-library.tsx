@@ -1,3 +1,4 @@
+import { orderedTree, isWithin, indentedName } from './hierarchy';
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Folder,
@@ -91,6 +92,8 @@ export function MediaLibrary({
   onManageAccess?: (asset: Asset) => void;
   shareWithSlideId?: string;
 }) {
+  const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [folder, setFolder] = useState('all');
   const [search, setSearch] = useState('');
   const [tag, setTag] = useState('');
@@ -132,16 +135,35 @@ export function MediaLibrary({
       .join(' / ');
   }
   folders.forEach((item) => folderPaths.set(item.id, folderPath(item.id)));
-  function isDescendant(candidateId: string, ancestorId: string): boolean {
-    const parentId = folders.find((item) => item.id === candidateId)?.parentId;
-    return !!parentId &&
-      (parentId === ancestorId || isDescendant(parentId, ancestorId));
+  const isDescendant = (candidateId: string, ancestorId: string) =>
+    isWithin(folders, candidateId, ancestorId);
+  const folderRows = orderedTree(folders);
+  const sortedFolders = folderRows.map(({ item }) => item);
+  function canDrop(target: string | null) {
+    return (
+      !busy &&
+      !onPick &&
+      !!draggedFolder &&
+      (target || null) !==
+        (folders.find((f) => f.id === draggedFolder)?.parentId || null) &&
+      (!target || !isWithin(folders, target, draggedFolder))
+    );
   }
-  const sortedFolders = [...folders].sort((a, b) =>
-    (folderPaths.get(a.id) || a.name).localeCompare(
-      folderPaths.get(b.id) || b.name,
-    ),
-  );
+  function dropFolder(target: string | null) {
+    const item = folders.find((entry) => entry.id === draggedFolder);
+    const valid = canDrop(target);
+    setDraggedFolder(null);
+    setDropTarget(null);
+    if (!item || !valid) return;
+    run(async () => {
+      await api(`/api/folders/${item.id}`, 'PUT', {
+        name: item.name,
+        parentId: target,
+      });
+      await onRefresh();
+      setNotice(`Moved ${item.name}`);
+    });
+  }
   const selectableVisible = filtered.filter((a) => !a.readOnly);
   const selectedVisible = selectableVisible.filter((a) =>
     selected.has(a.id),
@@ -234,7 +256,7 @@ export function MediaLibrary({
   }
   const titles = {
     folder: 'New folder',
-    'rename-folder': 'Rename folder',
+    'rename-folder': 'Edit folder',
     asset: 'Image details',
     move: 'Move selected images',
     tags: 'Tag selected images',
@@ -342,7 +364,20 @@ export function MediaLibrary({
       <div className="media-library-body">
         <nav className="folder-navigation" aria-label="Media folders">
           <button
-            className={folder === 'all' ? 'chosen' : ''}
+            className={`${folder === 'all' ? 'chosen' : ''} ${dropTarget === 'root' ? 'folder-drop-target' : ''}`}
+            onDragOver={(event) => {
+              if (canDrop(null)) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTarget('root');
+              }
+            }}
+            onDragLeave={() => setDropTarget(null)}
+            onDrop={(event) => {
+              event.preventDefault();
+              dropFolder(null);
+            }}
+            title={draggedFolder ? 'Move folder to top level' : undefined}
             onClick={() => chooseFolder('all')}
           >
             <Images size={16} />
@@ -357,14 +392,41 @@ export function MediaLibrary({
             <span>Unfiled</span>
             <small>{assets.filter((a) => !a.folderId).length}</small>
           </button>
-          {sortedFolders.map((f) => (
+          {folderRows.map(({ item: f, depth }) => (
             <button
               key={f.id}
-              className={folder === f.id ? 'chosen' : ''}
+              className={`${folder === f.id ? 'chosen' : ''} ${dropTarget === f.id ? 'folder-drop-target' : ''}`}
+              style={{ paddingLeft: 12 + depth * 18 }}
+              title={folderPaths.get(f.id)}
+              draggable={!busy && !onPick}
+              onDragStart={(event) => {
+                event.dataTransfer.setData(
+                  'application/x-openframe-folder',
+                  f.id,
+                );
+                event.dataTransfer.effectAllowed = 'move';
+                setDraggedFolder(f.id);
+              }}
+              onDragEnd={() => {
+                setDraggedFolder(null);
+                setDropTarget(null);
+              }}
+              onDragOver={(event) => {
+                if (canDrop(f.id)) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setDropTarget(f.id);
+                }
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => {
+                event.preventDefault();
+                dropFolder(f.id);
+              }}
               onClick={() => chooseFolder(f.id)}
             >
               <Folder size={16} />
-              <span>{folderPaths.get(f.id) || f.name}</span>
+              <span>{f.name}</span>
               <small>{assets.filter((a) => a.folderId === f.id).length}</small>
             </button>
           ))}
@@ -380,7 +442,7 @@ export function MediaLibrary({
               <>
                 <button disabled={busy} onClick={() => open('rename-folder')}>
                   <Pencil size={15} />
-                  Rename folder
+                  Edit folder
                 </button>
                 <Tool
                   label="Delete folder"
@@ -620,7 +682,11 @@ export function MediaLibrary({
                   <option value="">Unfiled</option>
                   {sortedFolders.map((f) => (
                     <option value={f.id} key={f.id}>
-                      {folderPaths.get(f.id) || f.name}
+                      {indentedName(
+                        f.name,
+                        folderRows.find((row) => row.item.id === f.id)?.depth ||
+                          0,
+                      )}
                     </option>
                   ))}
                 </select>
@@ -642,7 +708,11 @@ export function MediaLibrary({
                     )
                     .map((f) => (
                       <option value={f.id} key={f.id}>
-                        {folderPaths.get(f.id) || f.name}
+                        {indentedName(
+                          f.name,
+                          folderRows.find((row) => row.item.id === f.id)
+                            ?.depth || 0,
+                        )}
                       </option>
                     ))}
                 </select>

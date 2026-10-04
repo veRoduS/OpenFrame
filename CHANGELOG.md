@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.15.1] - 2026-10-04
+
+- Add admin account and membership controls, inherited group access and moves, user access editing, and draggable indented media folders
+
 ## [0.15.0] - 2026-10-04
 
 - Show live playlist badges on slides, support nested media folders, and preserve existing screen settings when renaming.

@@ -6,23 +6,25 @@
 
 ## User accounts and access
 
-`GET /api/auth` includes `user:{id,username,name,role,disabled}` when signed in. Normal server startup seeds a unique super-admin before listening, so `setup` is false and `/api/setup` returns 409. The legacy setup route remains for isolated application-factory tests; custom entrypoints must call the returned `seedInitialAdmin()` before accepting requests, as `server/index.mjs` does. Initial credentials are never exposed through HTTP. All library reads, edits, previews, reference validation, and browser media requests are checked against ownership and direct/group grants. Inaccessible resources return 404. Player APIs retain their existing device-token authorization.
+`GET /api/auth` includes `user:{id,username,name,role,disabled}` when signed in. Normal server startup seeds a unique admin before listening, so `setup` is false and `/api/setup` returns 409. The legacy setup route remains for isolated application-factory tests; custom entrypoints must call the returned `seedInitialAdmin()` before accepting requests, as `server/index.mjs` does. Initial credentials are never exposed through HTTP. All library reads, edits, previews, reference validation, and browser media requests are checked against ownership and direct/group grants. Inaccessible resources return 404. Player APIs retain their existing device-token authorization.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/activate` | Accept one-use password invitation `{token,password}`; signs in |
 | POST | `/api/account/password` | `{currentPassword,password}`; invalidates other sessions and invitations |
-| GET / POST | `/api/users` | Super-admin list/create; create `{username,name}` returns `{user,invitation}` |
-| POST | `/api/users/:id/invitation` | Super-admin replacement password invitation; returns `{invitation}` |
-| PATCH | `/api/users/:id` | Super-admin enable/disable with `{disabled:boolean}` |
-| GET / POST | `/api/groups` | List accessible groups with members; create `{name}` as group admin |
+| GET / POST | `/api/users` | Admin list/create; create `{username,name}` returns `{user,invitation}` |
+| POST | `/api/users/:id/invitation` | Admin replacement password invitation; returns `{invitation}` |
+| PATCH | `/api/users/:id` | Admin role/status update with `{role?:"user"|"admin",disabled?:boolean}`; self-demotion/disable and last-admin removal protected |
+| GET | `/api/users/:id/access` | Admin overview of direct grants, ownership, group sources, effective and read-only access |
+| GET / POST | `/api/groups` | List accessible groups including descendants with direct members; create `{name,parentId?:string|null}` as group admin |
+| PATCH | `/api/groups/:id` | Group admin renames/reparents `{name?:string,parentId?:string|null}`; cycle and both-parent authorization checks |
 | POST | `/api/groups/:id/invitation` | Group admin creates one-use join token; returns `{invitation}` |
 | POST | `/api/groups/join` | Signed-in user accepts `{token}` |
-| PUT | `/api/groups/:id/members/:userId` | Group admin sets `{role:"admin"|"member"|"remove"}`; last active admin protected |
+| PUT | `/api/groups/:id/members/:userId` | Global admin adds existing users; group admin updates direct members with `{role:"admin"|"member"|"remove"}`; last active group admin protected |
 | GET | `/api/access/:kind/:id` | Returns `{canShare,grants:[{userId,groupId}]}` for an accessible item |
-| POST | `/api/access/:kind/:id` | Owner/super-admin grants `{groupId}` or super-admin grants `{userId}`; add `remove:true` to revoke |
+| POST | `/api/access/:kind/:id` | Owner/admin grants `{groupId}` or admin grants `{userId}`; add `remove:true` to revoke |
 
-Access kinds are `device`, `slide`, `playlist`, `asset`, and `folder`. Grants are additive. Sharing includes current referenced content atomically; revocation affects only the selected resource. Existing recipients must have access to newly referenced content before an update (409 otherwise). A valid `X-OpenFrame-Group` header shares newly created resources with that group; users must be members (or super-admins). Invitations expire after 24 hours and are never returned in user listings. Super-admin permission is required for screen approval/deletion, screen-setup/VPN inventory and exports, and managed-VPN status. See [permission details](users-and-groups.md).
+Access kinds are `device`, `slide`, `playlist`, `asset`, and `folder`. Grants are additive. Parent memberships and group-admin management extend to all descendants, never upward or to siblings. Account roles are `user` and `admin`; old `superadmin` roles migrate without changing credentials or sessions. Sharing includes current referenced content atomically; revocation affects only the selected resource. Existing recipients must have access to newly referenced content before an update (409 otherwise). A valid `X-OpenFrame-Group` header shares newly created resources with that group; users must be members (or admins). Invitations expire after 24 hours and are never returned in user listings. Admin permission is required for screen approval/deletion, screen-setup/VPN inventory and exports, and managed-VPN status. See [permission details](users-and-groups.md).
 
 ## Local recovery portal
 
@@ -58,7 +60,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | GET | `/api/library` | Slides, playlist summaries, assets, folders, device status |
 | POST | `/api/slides` | Create slide |
 | PUT / DELETE | `/api/slides/:id` | Replace/delete slide; deletion blocked while used in drafts |
-| POST | `/api/assets` | Upload image as multipart field `file`, optional `folderId`; GIF animation is preserved in bounded animated WebP. From a slide picker, optional `shareWithSlideId` copies that slide's user/group grants to the new asset (slide owner or super-admin only) |
+| POST | `/api/assets` | Upload image as multipart field `file`, optional `folderId`; GIF animation is preserved in bounded animated WebP. From a slide picker, optional `shareWithSlideId` copies that slide's user/group grants to the new asset (slide owner or admin only) |
 | PATCH | `/api/assets/:id` | Edit `{name?,folderId?,tags?}`; null folderId means Unfiled |
 | POST | `/api/assets/batch` | `{ids,action?,folderId?,addTags?,removeTags?}`; action is update (default) or delete |
 | POST | `/api/folders` | Create `{name}`; names are case-insensitively unique |

@@ -668,7 +668,7 @@ void test('group invitations, sharing, admin transfer and removal enforce member
   );
 });
 
-void test('nested groups keep membership and resource permissions independent', async (t) => {
+void test('child membership cannot access parent content', async (t) => {
   const { user } = await fixture(t);
   const alice = await user('alice');
   const bob = await user('bob');
@@ -883,7 +883,7 @@ void test('legacy administrator migrates without losing content or retaining ano
   const user = instance.db.prepare('SELECT * FROM users').get();
   assert.equal(user.username, 'admin');
   assert.equal(user.password, saved);
-  assert.equal(user.role, 'superadmin');
+  assert.equal(user.role, 'admin');
   assert.equal(instance.seedInitialAdmin(), null);
   assert.equal(
     instance.db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n,
@@ -892,5 +892,337 @@ void test('legacy administrator migrates without losing content or retaining ano
   assert.equal(
     instance.db.prepare('SELECT * FROM settings WHERE key=?').get('password'),
     undefined,
+  );
+});
+
+void test('parent access reaches descendants, shared images, and screens and follows group moves', async (t) => {
+  const { admin, user, client, db } = await fixture(t);
+  const parentMember = await user('parent-member');
+  const childMember = await user('child-member');
+  const outsider = await user('outsider');
+  const parent = (await admin('/api/groups', 'POST', { name: 'A' })).data;
+  const other = (await admin('/api/groups', 'POST', { name: 'Other' })).data;
+  const children = [];
+  for (const name of ['1', '2', '3'])
+    children.push(
+      (await admin('/api/groups', 'POST', { name, parentId: parent.id })).data,
+    );
+  const deep = (
+    await admin('/api/groups', 'POST', {
+      name: 'Deep',
+      parentId: children[0].id,
+    })
+  ).data;
+  await admin(
+    `/api/groups/${parent.id}/members/${parentMember.user.id}`,
+    'PUT',
+    { role: 'member' },
+  );
+  await admin(
+    `/api/groups/${children[0].id}/members/${childMember.user.id}`,
+    'PUT',
+    { role: 'member' },
+  );
+  const items = [];
+  for (const group of [parent, ...children, deep, other]) {
+    const item = (
+      await admin('/api/slides', 'POST', { ...slide, name: group.name })
+    ).data;
+    await admin(`/api/access/slide/${item.id}`, 'POST', { groupId: group.id });
+    items.push(item);
+  }
+  assert.equal((await parentMember.call('/api/groups')).data.length, 5);
+  assert.equal((await parentMember.call('/api/library')).data.slides.length, 5);
+  assert.equal((await childMember.call('/api/library')).data.slides.length, 2);
+  assert.equal((await outsider.call('/api/library')).data.slides.length, 0);
+  assert.equal(
+    (await childMember.call(`/api/slides/${items[0].id}`, 'PUT', slide)).status,
+    404,
+  );
+  assert.equal(
+    (await parentMember.call(`/api/slides/${items[4].id}`, 'PUT', slide))
+      .status,
+    200,
+  );
+  // Group context and dependency validation use the same inherited access.
+  const playlist = await parentMember.call(
+    '/api/playlists',
+    'POST',
+    {
+      name: 'Inherited playlist',
+      items: [{ slideId: items[4].id, duration: 10 }],
+      loop: true,
+    },
+    { 'X-OpenFrame-Group': parent.id },
+  );
+  assert.equal(playlist.status, 201);
+  const asset = await uploadImage(admin);
+  const imageSlide = (
+    await admin('/api/slides', 'POST', {
+      ...slide,
+      layers: [
+        {
+          id: randomUUID(),
+          type: 'image',
+          assetId: asset.id,
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+        },
+      ],
+    })
+  ).data;
+  await admin(`/api/access/slide/${imageSlide.id}`, 'POST', {
+    groupId: deep.id,
+  });
+  assert.equal((await parentMember.call(asset.url)).status, 200);
+  assert.equal(
+    (await parentMember.call('/api/library')).data.assets[0].readOnly,
+    true,
+  );
+  assert.equal(
+    (
+      await parentMember.call(`/api/assets/${asset.id}`, 'PATCH', {
+        name: 'Denied',
+      })
+    ).status,
+    404,
+  );
+  const screen = (
+    await client()('/api/player/enroll', 'POST', { name: 'Nested screen' })
+  ).data;
+  await admin(`/api/devices/${screen.id}/approve`, 'POST', {
+    code: screen.code,
+  });
+  await admin(`/api/access/device/${screen.id}`, 'POST', { groupId: deep.id });
+  assert.equal(
+    (await parentMember.call('/api/library')).data.devices.length,
+    1,
+  );
+  assert.equal(
+    (await outsider.call(`/api/devices/${screen.id}/recovery`)).status,
+    404,
+  );
+  assert.equal(
+    (await admin(`/api/groups/${parent.id}`, 'PATCH', { parentId: deep.id }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (
+      await outsider.call(`/api/groups/${deep.id}`, 'PATCH', {
+        parentId: other.id,
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await admin(`/api/groups/${children[0].id}`, 'PATCH', {
+        parentId: other.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await parentMember.call(`/api/slides/${items[4].id}`, 'PUT', slide))
+      .status,
+    404,
+  );
+  assert.equal((await parentMember.call(asset.url)).status, 404);
+  assert.equal(
+    (await parentMember.call('/api/library')).data.devices.length,
+    0,
+  );
+  assert.equal(
+    (await childMember.call('/api/library')).data.slides.some(
+      (item) => item.id === items[4].id,
+    ),
+    true,
+  );
+  assert.equal(
+    (await admin(`/api/groups/${children[0].id}`, 'PATCH', { parentId: null }))
+      .status,
+    200,
+  );
+  assert.equal(
+    db.prepare('SELECT parentId FROM groups WHERE id=?').get(children[0].id)
+      .parentId,
+    null,
+  );
+});
+
+void test('admins manage existing memberships, account roles, and user access without escalation by users', async (t) => {
+  const { admin, user } = await fixture(t);
+  const alice = await user('alice');
+  const bob = await user('bob');
+  const group = (await alice.call('/api/groups', 'POST', { name: 'Team' }))
+    .data;
+  assert.equal(
+    (
+      await alice.call(
+        `/api/groups/${group.id}/members/${bob.user.id}`,
+        'PUT',
+        { role: 'member' },
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await admin(`/api/groups/${group.id}/members/${bob.user.id}`, 'PUT', {
+        role: 'member',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await admin(`/api/groups/${group.id}/members/${randomUUID()}`, 'PUT', {
+        role: 'member',
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (await bob.call(`/api/users/${alice.user.id}`, 'PATCH', { role: 'admin' }))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await bob.call(`/api/users/${alice.user.id}/access`)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await admin(`/api/users/${alice.user.id}`, 'PATCH', {
+        role: 'superadmin',
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await admin(`/api/users/${bob.user.id}`, 'PATCH', { role: 'admin' }))
+      .status,
+    200,
+  );
+  assert.equal((await bob.call('/api/auth')).data.user.role, 'admin');
+  assert.equal((await bob.call('/api/users')).status, 200);
+  const item = (await admin('/api/slides', 'POST', slide)).data;
+  await admin(`/api/access/slide/${item.id}`, 'POST', { groupId: group.id });
+  let overview = (await admin(`/api/users/${alice.user.id}/access`)).data.find(
+    (entry) => entry.id === item.id,
+  );
+  assert.equal(overview.direct, false);
+  assert.equal(overview.effective, true);
+  assert.deepEqual(overview.viaGroups, ['Team']);
+  await admin(`/api/access/slide/${item.id}`, 'POST', {
+    userId: alice.user.id,
+  });
+  overview = (await admin(`/api/users/${alice.user.id}/access`)).data.find(
+    (entry) => entry.id === item.id,
+  );
+  assert.equal(overview.direct, true);
+  await admin(`/api/access/slide/${item.id}`, 'POST', {
+    userId: alice.user.id,
+    remove: true,
+  });
+  assert.equal((await alice.call('/api/library')).data.slides.length, 1);
+  assert.equal(
+    (await bob.call(`/api/users/${bob.user.id}`, 'PATCH', { role: 'user' }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await bob.call(`/api/users/${bob.user.id}`, 'PATCH', { disabled: true }))
+      .status,
+    400,
+  );
+  assert.equal(
+    (await admin(`/api/users/${bob.user.id}`, 'PATCH', { role: 'user' }))
+      .status,
+    200,
+  );
+  assert.equal((await bob.call('/api/users')).status, 403);
+  assert.equal((await bob.call('/api/library')).data.slides.length, 1);
+});
+
+void test('existing superadmin identities migrate to admin without changing credentials or sessions', async (t) => {
+  const { db, admin } = await fixture(t);
+  db.prepare("UPDATE users SET role='superadmin',username='superadmin'").run();
+  const before = db.prepare('SELECT * FROM users').get();
+  const savedSession = db.prepare('SELECT * FROM user_sessions').get();
+  createAccounts(db);
+  const after = db.prepare('SELECT * FROM users').get();
+  assert.equal(after.role, 'admin');
+  assert.equal(after.username, 'superadmin');
+  assert.equal(after.password, before.password);
+  assert.deepEqual(
+    db.prepare('SELECT * FROM user_sessions').get(),
+    savedSession,
+  );
+  assert.equal((await admin('/api/users')).status, 200);
+});
+
+void test('folder moves reject cycles across hidden ancestors and preserve descendants and grants', async (t) => {
+  const { admin, user, db } = await fixture(t);
+  const alice = await user('alice');
+  const parent = (await alice.call('/api/folders', 'POST', { name: 'Parent' }))
+    .data;
+  const hidden = (
+    await admin('/api/folders', 'POST', { name: 'Hidden', parentId: parent.id })
+  ).data;
+  const deep = (
+    await admin('/api/folders', 'POST', { name: 'Deep', parentId: hidden.id })
+  ).data;
+  await admin(`/api/access/folder/${deep.id}`, 'POST', {
+    userId: alice.user.id,
+  });
+  assert.equal(
+    (
+      await alice.call(`/api/folders/${parent.id}`, 'PUT', {
+        name: parent.name,
+        parentId: deep.id,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await alice.call(`/api/folders/${parent.id}`, 'DELETE')).status,
+    409,
+  );
+  const other = (await admin('/api/folders', 'POST', { name: 'Other' })).data;
+  assert.equal(
+    (
+      await alice.call(`/api/folders/${parent.id}`, 'PUT', {
+        name: parent.name,
+        parentId: other.id,
+      })
+    ).status,
+    404,
+  );
+  const saved = db
+    .prepare("SELECT * FROM resource_grants WHERE kind='folder' AND id=?")
+    .all(deep.id);
+  assert.equal(
+    (
+      await admin(`/api/folders/${parent.id}`, 'PUT', {
+        name: parent.name,
+        parentId: other.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await admin('/api/library')).data.folders.find((f) => f.id === deep.id)
+      .parentId,
+    hidden.id,
+  );
+  assert.deepEqual(
+    db
+      .prepare("SELECT * FROM resource_grants WHERE kind='folder' AND id=?")
+      .all(deep.id),
+    saved,
   );
 });

@@ -57,6 +57,8 @@ export function createAccounts(db) {
       .some((column) => column.name === 'parentId')
   )
     db.exec('ALTER TABLE groups ADD COLUMN parentId TEXT');
+  // Preserve existing identities and sessions while retiring the old global role.
+  db.exec("UPDATE users SET role='admin' WHERE role='superadmin'");
   const oldPassword = db
     .prepare("SELECT value FROM settings WHERE key='password'")
     .get()?.value;
@@ -66,7 +68,7 @@ export function createAccounts(db) {
       'admin',
       'Administrator',
       oldPassword,
-      'superadmin',
+      'admin',
     );
   }
   // The legacy password is migrated once; legacy sessions cannot identify a user.
@@ -76,37 +78,61 @@ export function createAccounts(db) {
   );
   const context = new AsyncLocalStorage();
   const userById = (id) => db.prepare('SELECT * FROM users WHERE id=?').get(id);
+  const descendants = `WITH RECURSIVE effective_groups(id) AS (
+    SELECT groupId FROM memberships WHERE userId=?
+    UNION
+    SELECT g.id FROM groups g JOIN effective_groups e ON g.parentId=e.id
+  )`;
   const groupAdmin = (user, id) =>
-    user.role === 'superadmin' ||
-    db
-      .prepare(
-        "SELECT 1 FROM memberships WHERE groupId=? AND userId=? AND role='admin'",
-      )
-      .get(id, user.id);
+    user.role === 'admin' ||
+    !!db
+      .prepare(`
+      WITH RECURSIVE managed(id) AS (
+        SELECT groupId FROM memberships WHERE userId=? AND role='admin'
+        UNION SELECT g.id FROM groups g JOIN managed m ON g.parentId=m.id
+      ) SELECT 1 FROM managed WHERE id=?`)
+      .get(user.id, id);
   const member = (user, id) =>
-    db
-      .prepare('SELECT 1 FROM memberships WHERE groupId=? AND userId=?')
-      .get(id, user.id);
+    !!db
+      .prepare(`${descendants} SELECT 1 FROM effective_groups WHERE id=?`)
+      .get(user.id, id);
   const can = (user, kind, id) =>
     !!user &&
-    (user.role === 'superadmin' ||
+    !user.disabled &&
+    (user.role === 'admin' ||
       !!db
-        .prepare(
-          `SELECT 1 FROM resource_access a WHERE a.kind=? AND a.id=? AND (a.ownerId=? OR EXISTS (SELECT 1 FROM resource_grants g WHERE g.kind=a.kind AND g.id=a.id AND (g.userId=? OR g.groupId IN (SELECT groupId FROM memberships WHERE userId=?))))`,
-        )
-        .get(kind, id, user.id, user.id, user.id));
+        .prepare(`
+      ${descendants}
+      SELECT 1 FROM resource_access a WHERE a.kind=? AND a.id=? AND (
+        a.ownerId=? OR EXISTS (SELECT 1 FROM resource_grants g
+          WHERE g.kind=a.kind AND g.id=a.id AND
+          (g.userId=? OR g.groupId IN (SELECT id FROM effective_groups))))
+    `)
+        .get(user.id, kind, id, user.id, user.id));
+  const groupCan = (groupId, kind, id) =>
+    !!db
+      .prepare(`
+    WITH RECURSIVE audience(id) AS (
+      SELECT id FROM groups WHERE id=?
+      UNION SELECT g.id FROM groups g JOIN audience a ON g.parentId=a.id
+    ) SELECT 1 FROM resource_grants WHERE kind=? AND id=? AND groupId IN (SELECT id FROM audience)
+  `)
+      .get(groupId, kind, id);
   const canViewAsset = (user, id) =>
     can(user, 'asset', id) ||
     !!db
       .prepare(
-        `WITH visible AS (
+        `WITH RECURSIVE effective_groups(id) AS (
+          SELECT groupId FROM memberships WHERE userId=@userId
+          UNION SELECT g.id FROM groups g JOIN effective_groups e ON g.parentId=e.id
+        ), visible AS (
           SELECT r.kind, r.body FROM records r
           JOIN resource_access a ON a.kind=r.kind AND a.id=r.id
           WHERE r.kind IN ('slide','playlist','device') AND (
             a.ownerId=@userId OR EXISTS (
               SELECT 1 FROM resource_grants g WHERE g.kind=a.kind AND g.id=a.id
               AND (g.userId=@userId OR g.groupId IN (
-                SELECT groupId FROM memberships WHERE userId=@userId
+                SELECT id FROM effective_groups
               ))
             )
           )
@@ -213,16 +239,16 @@ export function createAccounts(db) {
     if (
       groupId &&
       (!db.prepare('SELECT id FROM groups WHERE id=?').get(groupId) ||
-        (user.role !== 'superadmin' && !member(user, groupId)))
+        (user.role !== 'admin' && !member(user, groupId)))
     )
       throw fail(403, 'Group access required');
     req.user = user;
     context.run({ user, groupId }, next);
   }
-  function superadmin(req, res, next) {
+  function administrator(req, res, next) {
     admin(req, res, () => {
-      if (req.user.role !== 'superadmin')
-        return res.status(403).json({ error: 'Super-admin access required' });
+      if (req.user.role !== 'admin')
+        return res.status(403).json({ error: 'Admin access required' });
       next();
     });
   }
@@ -232,7 +258,7 @@ export function createAccounts(db) {
         username,
         name: z.string().trim().min(1).max(100),
         password: password.optional(),
-        role: z.enum(['user', 'superadmin']).default('user'),
+        role: z.enum(['user', 'admin']).default('user'),
       })
       .parse(body);
     if (db.prepare('SELECT id FROM users WHERE username=?').get(input.username))
@@ -267,13 +293,13 @@ export function createAccounts(db) {
         return null;
       }
       const credentials = {
-        username: 'superadmin',
+        username: 'admin',
         password: randomBytes(24).toString('base64url'),
       };
       createUser({
         ...credentials,
-        name: 'Super Administrator',
-        role: 'superadmin',
+        name: 'Administrator',
+        role: 'admin',
       });
       db.exec('COMMIT');
       return credentials;
@@ -299,7 +325,7 @@ export function createAccounts(db) {
         username: req.body.username || 'admin',
         name: 'Administrator',
         password: value,
-        role: 'superadmin',
+        role: 'admin',
       });
       login(res, user);
       res.json({ ok: true });
@@ -370,7 +396,7 @@ export function createAccounts(db) {
       login(res, user);
       res.json({ ok: true });
     });
-    app.get('/api/users', superadmin, (req, res) =>
+    app.get('/api/users', administrator, (req, res) =>
       res.json(
         db
           .prepare('SELECT * FROM users ORDER BY username')
@@ -378,7 +404,7 @@ export function createAccounts(db) {
           .map(publicUser),
       ),
     );
-    app.post('/api/users', superadmin, (req, res) => {
+    app.post('/api/users', administrator, (req, res) => {
       const user = createUser({
         ...req.body,
         password: undefined,
@@ -389,18 +415,40 @@ export function createAccounts(db) {
         invitation: invite({ userId: user.id }),
       });
     });
-    app.post('/api/users/:id/invitation', superadmin, (req, res) => {
+    app.post('/api/users/:id/invitation', administrator, (req, res) => {
       const user = userById(req.params.id);
       if (!user || user.disabled) throw fail(404, 'User not found');
       db.prepare('DELETE FROM invitations WHERE userId=?').run(user.id);
       res.json({ invitation: invite({ userId: user.id }) });
     });
-    app.patch('/api/users/:id', superadmin, (req, res) => {
-      const input = z.object({ disabled: z.boolean() }).parse(req.body);
+    app.patch('/api/users/:id', administrator, (req, res) => {
+      const input = z
+        .object({
+          disabled: z.boolean().optional(),
+          role: z.enum(['user', 'admin']).optional(),
+        })
+        .refine(
+          (value) => value.disabled !== undefined || value.role !== undefined,
+          'Choose a role or status',
+        )
+        .parse(req.body);
       const user = userById(req.params.id);
       if (!user) throw fail(404, 'User not found');
-      if (user.id === req.user.id || user.role === 'superadmin')
-        throw fail(400, 'Cannot disable a super-admin');
+      const nextRole = input.role ?? user.role;
+      const disabled = input.disabled ?? !!user.disabled;
+      if (user.id === req.user.id && (disabled || nextRole !== 'admin'))
+        throw fail(400, 'Cannot disable or demote your own admin account');
+      if (
+        user.role === 'admin' &&
+        !user.disabled &&
+        (disabled || nextRole !== 'admin') &&
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM users WHERE role='admin' AND disabled=0",
+          )
+          .get().n <= 1
+      )
+        throw fail(409, 'Keep at least one active admin');
       if (input.disabled) {
         const soleAdmin = db
           .prepare(
@@ -413,23 +461,26 @@ export function createAccounts(db) {
             'Assign another active group admin before disabling this user',
           );
       }
-      db.prepare('UPDATE users SET disabled=? WHERE id=?').run(
-        Number(input.disabled),
+      db.prepare('UPDATE users SET disabled=?,role=? WHERE id=?').run(
+        Number(disabled),
+        nextRole,
         user.id,
       );
-      db.prepare('DELETE FROM user_sessions WHERE userId=?').run(user.id);
-      db.prepare('DELETE FROM invitations WHERE userId=?').run(user.id);
+      if (disabled) {
+        db.prepare('DELETE FROM user_sessions WHERE userId=?').run(user.id);
+        db.prepare('DELETE FROM invitations WHERE userId=?').run(user.id);
+      }
       res.json({ ok: true });
     });
     app.get('/api/groups', admin, (req, res) => {
       const groups =
-        req.user.role === 'superadmin'
+        req.user.role === 'admin'
           ? db
               .prepare('SELECT * FROM groups ORDER BY name COLLATE NOCASE')
               .all()
           : db
               .prepare(
-                'SELECT g.* FROM groups g JOIN memberships m ON m.groupId=g.id WHERE m.userId=? ORDER BY g.name COLLATE NOCASE',
+                `${descendants} SELECT g.* FROM groups g JOIN effective_groups e ON e.id=g.id ORDER BY g.name COLLATE NOCASE`,
               )
               .all(req.user.id);
       res.json(
@@ -474,6 +525,55 @@ export function createAccounts(db) {
       );
       res.status(201).json({ id, name, parentId: parentId || null });
     });
+    app.patch('/api/groups/:id', admin, (req, res) => {
+      const group = db
+        .prepare('SELECT * FROM groups WHERE id=?')
+        .get(req.params.id);
+      if (!group) throw fail(404, 'Group not found');
+      if (!groupAdmin(req.user, group.id))
+        throw fail(403, 'Group admin required');
+      const input = z
+        .object({
+          name: z.string().trim().min(1).max(100).optional(),
+          parentId: z.uuid().nullable().optional(),
+        })
+        .refine(
+          (value) => value.name !== undefined || value.parentId !== undefined,
+          'Choose a name or parent',
+        )
+        .parse(req.body);
+      const parentId =
+        input.parentId === undefined ? group.parentId : input.parentId;
+      if (
+        parentId &&
+        (!db.prepare('SELECT id FROM groups WHERE id=?').get(parentId) ||
+          !groupAdmin(req.user, parentId))
+      )
+        throw fail(403, 'Parent group admin required');
+      if (
+        req.user.role !== 'admin' &&
+        group.parentId &&
+        group.parentId !== parentId &&
+        !groupAdmin(req.user, group.parentId)
+      )
+        throw fail(403, 'Current parent group admin required');
+      let ancestor = parentId;
+      const seen = new Set([group.id]);
+      while (ancestor) {
+        if (seen.has(ancestor))
+          throw fail(400, 'A group cannot be moved inside itself');
+        seen.add(ancestor);
+        ancestor = db
+          .prepare('SELECT parentId FROM groups WHERE id=?')
+          .get(ancestor)?.parentId;
+      }
+      db.prepare('UPDATE groups SET name=?,parentId=? WHERE id=?').run(
+        input.name ?? group.name,
+        parentId,
+        group.id,
+      );
+      res.json({ ok: true });
+    });
     app.post('/api/groups/join', admin, rateLimit, (req, res) => {
       const value = z.string().length(64).parse(req.body.token);
       const invitation = db
@@ -498,6 +598,8 @@ export function createAccounts(db) {
       res.json({ invitation: invite({ groupId: req.params.id }) });
     });
     app.put('/api/groups/:id/members/:userId', admin, (req, res) => {
+      if (!db.prepare('SELECT id FROM groups WHERE id=?').get(req.params.id))
+        throw fail(404, 'Group not found');
       if (!groupAdmin(req.user, req.params.id))
         throw fail(403, 'Group admin required');
       const { role } = z
@@ -506,9 +608,14 @@ export function createAccounts(db) {
       const existing = db
         .prepare('SELECT role FROM memberships WHERE groupId=? AND userId=?')
         .get(req.params.id, req.params.userId);
-      if (!existing) throw fail(404, 'Member not found');
+      const target = userById(req.params.userId);
+      if (!target || (target.disabled && role !== 'remove'))
+        throw fail(404, 'Active user not found');
+      if (!existing && req.user.role !== 'admin')
+        throw fail(403, 'Only an admin can add existing users');
+      if (!existing && role === 'remove') throw fail(404, 'Member not found');
       if (
-        existing.role === 'admin' &&
+        existing?.role === 'admin' &&
         role !== 'admin' &&
         db
           .prepare(
@@ -524,8 +631,8 @@ export function createAccounts(db) {
         );
       else
         db.prepare(
-          'UPDATE memberships SET role=? WHERE groupId=? AND userId=?',
-        ).run(role, req.params.id, req.params.userId);
+          'INSERT INTO memberships(groupId,userId,role) VALUES (?,?,?) ON CONFLICT(groupId,userId) DO UPDATE SET role=excluded.role',
+        ).run(req.params.id, req.params.userId, role);
       res.json({ ok: true });
     });
   }
@@ -535,10 +642,11 @@ export function createAccounts(db) {
     created,
     session,
     admin,
-    superadmin,
+    administrator,
     mount,
     can,
     groupAdmin,
+    groupCan,
     member,
     createUser,
     seedInitialAdmin,

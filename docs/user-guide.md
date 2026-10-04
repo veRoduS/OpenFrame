@@ -20,7 +20,7 @@ Counters automatically count down to future targets and count up from past targe
 
 Images are decoded, resized to at most 1920 pixels per dimension, and stored as WebP. Upload limit: 15 MB and 25 megapixels. Text is rendered as text, never as executable HTML.
 
-Super-admins can open **Settings** to upload WOFF2, WOFF, TTF, or OTF custom fonts (up to 10 MB each). Select a built-in or custom family under **Typography** in the slide editor. A font in use by a saved slide or published playlist cannot be removed. Published screens download the font with the playlist and keep it available offline.
+Admins can open **Settings** to upload WOFF2, WOFF, TTF, or OTF custom fonts (up to 10 MB each). Select a built-in or custom family under **Typography** in the slide editor. A font in use by a saved slide or published playlist cannot be removed. Published screens download the font with the playlist and keep it available offline.
 
 ## Slide properties
 
@@ -44,7 +44,7 @@ Deleting an image removes its file. Any saved slide or published playlist that u
 
 ## Groups and access
 
-Groups can be nested by selecting a parent when creating a group. A group admin can create subgroups under groups they manage. Membership and resource access are set separately for each group: joining a parent does not automatically add someone to its subgroups, and sharing a slide or playlist with one group does not grant it to nested groups. Use **Manage access** on each resource to grant it to the exact group that needs it. In the sharing picker, nested groups show their parent path.
+Groups can be nested and existing groups can be moved using **Parent group**. A parent membership grants access to content in every subgroup; child memberships do not grant access to parents or siblings. **Manage access** indents nested groups. Global admins can add existing users directly to groups and click a user under **Users & Groups > Users** to edit their account role, memberships, and direct content access.
 
 To use cropping, counters, and prepared-frame playback on an existing Pi installation, update `player/agent.py` and the complete `player/web/` directory, then restart the agent and kiosk. Include all JavaScript modules, not just `player.js`. Updating the Docker server alone does not update installed player code. Existing slide backgrounds, colors, and saved formatting are preserved. Older images default to a centered crop at 1x zoom, with no data migration.
 
@@ -69,3 +69,5 @@ Only visible widgets run update timers. Counters wake at their selected unit bou
 Screens shows the browser's playback phase, last preparation time, delayed-switch count, and readiness error. A delayed-switch count means the player held a slide past its deadline; it is cumulative for the browser session. The browser reports to the local agent every five seconds, and the agent includes this in its normal server heartbeat. No browser report for 30 seconds is reported as stalled.
 
 This removes the clear-then-load transition path, but is not a guarantee of zero dropped frames on every device. Two complex slides can still exceed a small device's memory or rendering capacity, and browser decoding/layout tests do not measure HDMI output or GPU composition. Start with a representative photo/widget loop and measure on your target Pi. See [docs/playback-testing.md](playback-testing.md) for the hardware acceptance checklist.
+
+Media folders appear as an indented tree. Drag a folder onto another folder to move it inside, or onto **All media** to move it back to the top level. Its subfolders and images remain inside it. On touch devices or with a keyboard, select **Edit folder** and choose **Parent folder** instead. Moves preserve existing access grants; moving a folder does not automatically share its contents with the destination audience.

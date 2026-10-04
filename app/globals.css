@@ -2469,14 +2469,15 @@ input[type='color'] {
     gap: 16px;
   }
   .folder-navigation {
-    flex-direction: row;
+    flex-direction: column;
+    max-height: 240px;
     overflow: auto;
     border: 0;
     padding: 0 0 8px;
   }
   .folder-navigation button {
     flex-shrink: 0;
-    max-width: 200px;
+    max-width: 100%;
   }
   .media-search {
     flex-basis: 100%;
@@ -2524,4 +2525,43 @@ input[type='color'] {
     margin: 4px 10px 0;
     max-width: calc(100% - 20px);
   }
+}
+
+.user-name-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-weight: 600;
+  text-align: left;
+  color: #17613d;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.of-modal.user-access-modal {
+  max-width: min(760px, calc(100vw - 32px)) !important;
+}
+.user-access-modal .account-row select {
+  width: auto;
+  max-width: 100%;
+}
+.of-modal .direct-access-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.of-modal .direct-access-toggle input {
+  width: 16px;
+  height: 16px;
+}
+.folder-navigation button.folder-drop-target {
+  background: #d7eadf;
+  outline: 2px solid #17613d;
+  outline-offset: -2px;
+}
+.folder-navigation button[draggable='true'] {
+  cursor: grab;
+}
+.folder-navigation button[draggable='true']:active {
+  cursor: grabbing;
 }

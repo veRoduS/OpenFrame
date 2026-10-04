@@ -6,7 +6,7 @@ const project = fileURLToPath(new URL('..', import.meta.url));
 const { app, db, close, seedInitialAdmin } = createApp();
 const initialAdmin = seedInitialAdmin();
 if (initialAdmin) {
-  console.log('OpenFrame: created a unique super-admin for this installation.');
+  console.log('OpenFrame: created a unique admin for this installation.');
   console.log(`Username: ${initialAdmin.username}`);
   console.log(`Initial password: ${initialAdmin.password}`);
   console.log(

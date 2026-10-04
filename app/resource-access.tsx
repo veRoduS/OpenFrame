@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Shield, X } from 'lucide-react';
 import { api } from './types';
+import { orderedTree, indentedName } from './hierarchy';
 import type { User } from './accounts';
 import {
   Dialog,
@@ -56,7 +57,7 @@ export function ResourceAccessDialog({
         `/api/access/${resource.kind}/${resource.id}`,
       ),
       api<Group[]>('/api/groups'),
-      ...(user.role === 'superadmin' ? [api<User[]>('/api/users')] : []),
+      ...(user.role === 'admin' ? [api<User[]>('/api/users')] : []),
     ])
       .then(([nextAccess, nextGroups, nextUsers]) => {
         if (!current) return;
@@ -159,14 +160,14 @@ export function ResourceAccessDialog({
                 defaultValue=""
               >
                 <option value="" disabled>
-                  Select a group{user.role === 'superadmin' ? ' or user' : ''}
+                  Select a group{user.role === 'admin' ? ' or user' : ''}
                 </option>
-                {groups.map((group) => (
+                {orderedTree(groups).map(({ item: group, depth }) => (
                   <option key={group.id} value={`group:${group.id}`}>
-                    {groupName(group.id)} (group)
+                    {indentedName(group.name, depth)} (group)
                   </option>
                 ))}
-                {user.role === 'superadmin' &&
+                {user.role === 'admin' &&
                   users
                     .filter((u) => !u.disabled)
                     .map((entry) => (
@@ -182,7 +183,7 @@ export function ResourceAccessDialog({
             </button>
           </form>
         ) : access ? (
-          <p>Only the owner or super-admin can change sharing.</p>
+          <p>Only the owner or admin can change sharing.</p>
         ) : null}
       </DialogContent>
     </Dialog>
