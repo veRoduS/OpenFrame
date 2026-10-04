@@ -764,11 +764,7 @@ export default function App() {
                 </div>
               )}
               {view === 'accounts' && auth.user?.role === 'admin' && (
-                <Accounts
-                  user={auth.user}
-                  library={library}
-                  refresh={refresh}
-                />
+                <Accounts user={auth.user} refresh={refresh} />
               )}
               {view === 'password' && auth.user && (
                 <PasswordSettings user={auth.user} />

@@ -38,7 +38,7 @@ Members collaborate as editors on content shared with the group, including editi
 
 ## Screen assignments and sharing
 
-Manage sharing from **Sharing & assignments** or select **Manage access** on a slide, playlist, screen, or media item to open its access settings in place. Slides and media have a labeled access footer; playlists and screens have a button beside their other controls. Use the separate **Groups** and **Users** dropdowns; only admins can assign individual users. Tags beside Manage access show current group grants and directly assigned users who do not already inherit access through a granted group. Admin access is automatic and does not require a grant. Folders remain available in the central sharing list.
+Select **Manage access** on a slide, playlist, screen, or media item to open its access settings in place. Slides and media have a labeled access footer; playlists and screens have a button beside their other controls. Use the separate **Groups** and **Users** dropdowns; only admins can assign individual users. Tags beside Manage access show current group grants and directly assigned users who do not already inherit access through a granted group. Admin access is automatic and does not require a grant. For individual user access to folders and other content, click a user under **Users & Groups > Users**. Users & Groups contains Groups, Users, and My password; the Sharing & assignments tab is removed.
 
 - Admins can assign screens and other resources to individual users or groups.
 - Owners can share their own items with groups they belong to.

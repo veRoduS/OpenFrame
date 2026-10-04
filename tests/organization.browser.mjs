@@ -292,9 +292,22 @@ try {
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.getByRole('tab', { name: 'Sharing & assignments' }).click();
-  await page.getByLabel('Resource', { exact: true }).selectOption('slide');
-  await page.getByRole('button', { name: 'Access', exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole('tab', { name: 'Sharing & assignments', exact: true })
+      .count(),
+    0,
+  );
+  await page
+    .getByRole('button', { name: /^Slides/ })
+    .first()
+    .click();
+  await page
+    .getByRole('button', {
+      name: 'Manage access to Nested welcome',
+      exact: true,
+    })
+    .click();
   const options = await page
     .getByLabel('Groups', { exact: true })
     .locator('option')

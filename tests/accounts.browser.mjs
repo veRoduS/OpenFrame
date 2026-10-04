@@ -100,9 +100,22 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.reload();
   await page.getByRole('button', { name: 'Users & Groups' }).click();
-  await page.getByRole('tab', { name: 'Sharing & assignments' }).click();
-  await page.getByLabel('Resource', { exact: true }).selectOption('slide');
-  await page.getByRole('button', { name: 'Access', exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole('tab', { name: 'Sharing & assignments', exact: true })
+      .count(),
+    0,
+  );
+  await page
+    .getByRole('button', { name: /^Slides/ })
+    .first()
+    .click();
+  await page
+    .getByRole('button', {
+      name: 'Manage access to Campus welcome',
+      exact: true,
+    })
+    .click();
   await page
     .getByLabel('Groups', { exact: true })
     .selectOption({ label: 'Campus displays' });

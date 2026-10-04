@@ -3,16 +3,8 @@ import {
   minimumPasswordLength,
   maximumPasswordLength,
 } from '../server/password-policy.mjs';
-import {
-  Copy,
-  KeyRound,
-  Plus,
-  Share2,
-  UserRound,
-  Users,
-  X,
-} from 'lucide-react';
-import { api, type Library } from './types';
+import { Copy, KeyRound, Plus, UserRound, Users, X } from 'lucide-react';
+import { api } from './types';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +12,6 @@ import {
   DialogDescription,
 } from './components/ui/dialog';
 import { orderedTree, isWithin, indentedName } from './hierarchy';
-import { ResourceAccessDialog } from './resource-access';
 
 export type User = {
   id: string;
@@ -159,11 +150,9 @@ export function PasswordSettings({ user }: { user: User }) {
 
 export function Accounts({
   user,
-  library,
   refresh,
 }: {
   user: User;
-  library: Library;
   refresh: () => Promise<void>;
 }) {
   const [dragged, setDragged] = useState<{
@@ -186,10 +175,7 @@ export function Accounts({
     value: string;
     group: boolean;
   } | null>(null);
-  const [selected, setSelected] = useState<Resource | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [kind, setKind] = useState('device');
-  const [search, setSearch] = useState('');
   const isAdmin = user.role === 'admin';
   const reload = useCallback(async () => {
     setGroups(await api<Group[]>('/api/groups'));
@@ -231,13 +217,6 @@ export function Accounts({
       setNotice('Group moved. Inherited access has been updated.');
     });
   }
-  const resources: Record<string, { id: string; name: string }[]> = {
-    device: library.devices,
-    slide: library.slides,
-    playlist: library.playlists,
-    asset: library.assets,
-    folder: library.folders,
-  };
   const orderedGroups = orderedTree(groups).map(({ item: group, depth }) => ({
     group,
     depth,
@@ -251,7 +230,6 @@ export function Accounts({
       >
         {[
           ['groups', 'Groups', Users],
-          ['sharing', 'Sharing & assignments', Share2],
           ...(isAdmin ? [['users', 'Users', UserRound]] : []),
           ['password', 'My password', KeyRound],
         ].map(([id, title, Icon]) => {
@@ -677,56 +655,6 @@ export function Accounts({
           ))}
         </section>
       )}
-      {tab === 'sharing' && (
-        <section className="account-section">
-          <div className="account-inline-form">
-            <label>
-              Resource
-              <select
-                aria-label="Resource"
-                value={kind}
-                onChange={(e) => setKind(e.target.value)}
-              >
-                <option value="device">Screens</option>
-                <option value="slide">Slides</option>
-                <option value="playlist">Playlists</option>
-                <option value="asset">Media</option>
-                <option value="folder">Folders</option>
-              </select>
-            </label>
-            <label>
-              Search
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name"
-              />
-            </label>
-          </div>
-          <div className="account-list">
-            {resources[kind]
-              .filter((item) =>
-                item.name.toLowerCase().includes(search.toLowerCase()),
-              )
-              .map((item) => (
-                <div className="account-row" key={item.id}>
-                  <strong>{item.name}</strong>
-                  <button
-                    disabled={busy}
-                    onClick={() => setSelected({ kind, ...item })}
-                  >
-                    <Share2 size={16} />
-                    Access
-                  </button>
-                </div>
-              ))}
-          </div>
-          {!resources[kind].length && (
-            <p className="account-empty">No items available.</p>
-          )}
-        </section>
-      )}
       <Dialog
         open={!!credentials}
         onOpenChange={(open) => !open && setCredentials(null)}
@@ -832,12 +760,6 @@ export function Accounts({
           await reload();
           await refresh();
         }}
-      />
-      <ResourceAccessDialog
-        resource={selected}
-        user={user}
-        onClose={() => setSelected(null)}
-        refresh={refresh}
       />
     </div>
   );
