@@ -3,7 +3,7 @@ name: Publish Android player
 on:
   push:
     branches: [main]
-    paths: ['player/version.json']
+    paths: ['player/version.json', '.github/workflows/publish-android.yml']
   workflow_dispatch:
 
 permissions:
@@ -54,15 +54,34 @@ jobs:
       - name: Prepare Android SDK and existing release key
         if: steps.existing.outputs.published != 'true'
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.OPENFRAME_ANDROID_KEYSTORE }}
+          KEYSTORE_PRIMARY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_LEGACY: ${{ secrets.OPENFRAME_ANDROID_KEYSTORE }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD || secrets.OPENFRAME_ANDROID_STORE_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_B64" || { echo 'Configure ANDROID_KEYSTORE_BASE64 or OPENFRAME_ANDROID_KEYSTORE with the base64-encoded existing release keystore; do not create a replacement key.'; exit 1; }
           umask 077
-          if ! printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/openframe-release.jks"; then
-            echo 'The keystore secret must contain base64-encoded file contents, not a file path.'
-            exit 1
-          fi
-          test -s "$RUNNER_TEMP/openframe-release.jks" || { echo 'The decoded release keystore is empty.'; exit 1; }
+          python3 - <<'PY'
+          import base64, json, os, pathlib, subprocess
+          destination = pathlib.Path(os.environ['RUNNER_TEMP']) / 'openframe-release.jks'
+          pin = json.loads(pathlib.Path('player/android/release-signing.json').read_text())['certificateSha256']
+          for variable, name in [('KEYSTORE_PRIMARY', 'ANDROID_KEYSTORE_BASE64'), ('KEYSTORE_LEGACY', 'OPENFRAME_ANDROID_KEYSTORE')]:
+              try:
+                  encoded = ''.join(os.environ.get(variable, '').split())
+                  content = base64.b64decode(encoded, validate=True)
+                  if not content:
+                      continue
+                  destination.write_bytes(content)
+                  destination.chmod(0o600)
+                  result = subprocess.run(['keytool', '-J-Duser.language=en', '-list', '-v', '-keystore', str(destination), '-storepass:env', 'RELEASE_STORE_PASSWORD'], capture_output=True, text=True)
+                  # Validate the existing signer before choosing either alias.
+                  if result.returncode == 0 and pin in result.stdout.lower().replace(':', ''):
+                      print(f'Validated existing release key from {name}.')
+                      break
+              except (ValueError, OSError):
+                  pass
+          else:
+              destination.unlink(missing_ok=True)
+              raise SystemExit('Neither keystore alias contains a valid base64 keystore matching the existing signer and store password. Check android-releases environment secrets; provide file contents, not a file path. Do not create a replacement key.')
+          PY
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
