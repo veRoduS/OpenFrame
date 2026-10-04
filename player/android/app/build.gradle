@@ -67,8 +67,11 @@ dependencies {
 // --system image applies to production compilation, not these JVM tests.
 tasks.withType(JavaCompile).configureEach {
     if (name.endsWith('UnitTestJavaWithJavac')) {
-        options.compilerArgumentProviders.removeAll {
-            it instanceof com.android.build.gradle.tasks.JdkImageInput
+        // AGP attaches its system-image provider after project configuration.
+        doFirst {
+            options.compilerArgumentProviders.removeAll {
+                it instanceof com.android.build.gradle.tasks.JdkImageInput
+            }
         }
         options.compilerArgs.addAll(['--add-modules', 'jdk.httpserver'])
     }
