@@ -76,7 +76,7 @@ The frontend is built on the builder's native platform; production dependencies,
 
 The action uses its repository-scoped `GITHUB_TOKEN` for `packages: write`; no personal token is needed in workflow secrets. Other jobs remain read-only. It verifies both platform entries in the registry manifest and creates a digest-pinned Compose artifact from an allowlist of public files. Published version tags are not intentionally overwritten; only the `latest` alias moves forward when a new approved milestone succeeds. If publishing succeeded but artifact upload failed, recover the existing digest rather than replacing the versioned image. Artifacts expire after 90 days; maintainers can attach the reviewed bundle to a manual GitHub Release for longer retention.
 
-Source commits, Git tags, image publication, and deployment are separate operations. Routine local work still receives patch bumps without pushing. The owner approves minor milestones and explicitly requests major releases. This workflow never commits code, creates GitHub releases, or updates installed servers/players.
+Source commits, Git tags, image publication, and deployment are separate operations. Routine local work still receives patch bumps without pushing. The owner approves minor milestones and explicitly requests major releases. This workflow never commits code or updates installed servers/players. The owner-approved 0.16.0 and 0.17.0 milestones are allowlisted to create a latest GitHub Release with reviewed notes and the digest-pinned Compose bundle after image verification; other milestones require separate release publication approval.
 
 ## Upgrade and rollback
 

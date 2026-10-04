@@ -134,11 +134,11 @@ jobs:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           printf '## OpenFrame %s\n\nImage: `%s:%s`\n\nDigest: `%s@%s`\n\nDownload the Compose artifact, copy `.env.example` to `.env`, then run `docker compose up -d`. Requires 64-bit Linux on ARM.\n' "$VERSION" "$IMAGE" "$VERSION" "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
-      - name: Publish the owner-approved 0.16.0 GitHub release as latest
-        if: env.VERSION == '0.16.0'
+      - name: Publish an owner-approved GitHub release as latest
+        if: env.VERSION == '0.16.0' || env.VERSION == '0.17.0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: v0.16.0
+          RELEASE_TAG: v${{ env.VERSION }}
         run: |
-          (cd outputs/compose-stack && zip -r ../openframe-0.16.0-compose.zip .)
-          gh release create "$RELEASE_TAG" outputs/openframe-0.16.0-compose.zip --repo "$GITHUB_REPOSITORY" --verify-tag --title "OpenFrame 0.16.0" --notes-file docs/release-notes/0.16.0.md --latest
+          (cd outputs/compose-stack && zip -r "../openframe-$VERSION-compose.zip" .)
+          gh release create "$RELEASE_TAG" "outputs/openframe-$VERSION-compose.zip" --repo "$GITHUB_REPOSITORY" --verify-tag --title "OpenFrame $VERSION" --notes-file "docs/release-notes/$VERSION.md" --latest
