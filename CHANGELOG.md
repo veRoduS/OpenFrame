@@ -2,6 +2,18 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.17.5] - 2026-10-04
+
+- Compact phone library filters into expandable controls, remove duplicate result counts, align desktop sorting, and place slide-list actions on a shared row.
+- Improve secondary-text contrast, field boundaries, focus states, mobile input sizes, and touch targets across the workspace.
+- Add collapsible Media folder branches and a phone folder picker with full paths; align card access footers and bound image/access tag summaries with full-detail disclosures.
+- Use compact expandable group rows, preserve admin drag/drop and Add existing user, and remove the redundant admin Join form.
+- Split user access into persistent Account, Groups, and Content tabs with keyboard navigation, searchable content, and explicit inherited/direct membership labels.
+- Keep grant controls visible above separate Groups/Users access lists, align named remove buttons, and retain the direct-user distinction in sharing summaries.
+- Give the phone slide editor a readable title row, Canvas/Layers/Properties navigation, retained previews, and an inspector that responds to viewport changes.
+- Move screen diagnostics into Details and show Recovery Wi-Fi only for players reporting the supported recovery service, preserving existing assigned-user permissions.
+- Preserve player 0.10.11, sync/publication contracts, and APKs; this is a server/web UI revision.
+
 ## [0.17.4] - 2026-10-04
 
 - Add slide name and modified-time sorting across list and grid layouts

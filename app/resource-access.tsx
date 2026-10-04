@@ -1,3 +1,4 @@
+import './resource-access.css';
 import { useEffect, useState } from 'react';
 import { ChevronRight, Shield, X } from 'lucide-react';
 import { api, type AccessTag } from './types';
@@ -42,7 +43,7 @@ export function ResourceAccessDialog({
       names.unshift(group.name);
       group = groups.find((item) => item.id === group?.parentId);
     }
-    return names.join(' / ') || 'Shared group';
+    return names.length ? names : ['Shared group'];
   };
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function ResourceAccessDialog({
       return;
     }
     let current = true;
+    setAccess(null);
     Promise.all([
       api<{ canShare: boolean; grants: Grant[] }>(
         `/api/access/${resource.kind}/${resource.id}`,
@@ -103,9 +105,8 @@ export function ResourceAccessDialog({
       <DialogContent className="of-modal resource-access-modal">
         <DialogTitle>Access: {resource?.name}</DialogTitle>
         <DialogDescription>
-          Shared members can edit this item. Images attached to shared slides
-          remain visible and read-only. Removing access here does not remove
-          separately shared content.
+          Shared users and groups can edit this item. Attached images are
+          visible read-only.
         </DialogDescription>
         {error && (
           <p role="alert" className="inline-error">
@@ -113,26 +114,6 @@ export function ResourceAccessDialog({
           </p>
         )}
         {!access && !error && <p>Loading access...</p>}
-        {access?.grants.map((grant) => (
-          <div className="account-row" key={grant.userId || grant.groupId}>
-            <span>
-              {grant.userId
-                ? users.find((u) => u.id === grant.userId)?.name ||
-                  'Assigned user'
-                : groupName(grant.groupId)}
-            </span>
-            {access.canShare && (
-              <button
-                aria-label="Remove access"
-                title="Remove access"
-                disabled={busy}
-                onClick={() => void run(() => share(grant, true))}
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-        ))}
         {access?.canShare ? (
           <div className="access-grant-forms">
             {(
@@ -186,20 +167,88 @@ export function ResourceAccessDialog({
                           ))}
                   </select>
                 </label>
-                <button className="primary" disabled={busy}>
-                  <Shield size={16} />
-                  Grant {type} access
+                <button
+                  className="primary"
+                  disabled={busy}
+                  aria-label={`Grant ${type} access`}
+                >
+                  <Shield size={16} /> Grant
                 </button>
               </form>
             ))}
-            <p className="muted">
-              Admins always have unrestricted access. Group access includes
-              every subgroup.
-            </p>
           </div>
         ) : access ? (
           <p>Only the owner or admin can change sharing.</p>
         ) : null}
+        {access && (
+          <div className="access-existing-grants" aria-label="Existing access">
+            {(['group', 'user'] as const).map((type) => {
+              const grants = access.grants.filter((grant) =>
+                type === 'group' ? grant.groupId : grant.userId,
+              );
+              return (
+                <section
+                  key={type}
+                  className="access-grant-section"
+                  aria-label={
+                    type === 'group'
+                      ? 'Existing group access'
+                      : 'Existing user access'
+                  }
+                >
+                  <h3>
+                    {type === 'group' ? 'Groups' : 'Users'}{' '}
+                    <span>{grants.length}</span>
+                  </h3>
+                  {!grants.length && (
+                    <p className="muted">
+                      No {type === 'group' ? 'group' : 'direct user'} grants.
+                    </p>
+                  )}
+                  {grants.map((grant) => {
+                    const names =
+                      type === 'group'
+                        ? groupName(grant.groupId)
+                        : [
+                            users.find((entry) => entry.id === grant.userId)
+                              ?.name || 'Assigned user',
+                          ];
+                    const name = names.at(-1)!;
+                    const path = names.slice(0, -1).join(' / ');
+                    return (
+                      <div
+                        className="access-grant-row"
+                        key={grant.userId || grant.groupId}
+                      >
+                        <div>
+                          <strong>{name}</strong>
+                          {path && <span>{path}</span>}
+                        </div>
+                        {access.canShare &&
+                          (type === 'group' || user.role === 'admin') && (
+                            <button
+                              type="button"
+                              className="icon-button"
+                              aria-label={`Remove access for ${names.join(' / ')}`}
+                              title={`Remove access for ${name}`}
+                              disabled={busy}
+                              onClick={() => void run(() => share(grant, true))}
+                            >
+                              <X size={16} />
+                            </button>
+                          )}
+                      </div>
+                    );
+                  })}
+                </section>
+              );
+            })}
+          </div>
+        )}
+        <p className="muted access-explanation">
+          Admins always have unrestricted access. Group grants include
+          subgroups. Removing a grant keeps access shared separately.
+        </p>
       </DialogContent>
     </Dialog>
   );
@@ -208,12 +257,20 @@ export function ResourceAccessDialog({
 export function ManageAccessButton({
   resourceName,
   tags = [],
+  maxTags = 2,
   onClick,
 }: {
   resourceName: string;
   tags?: AccessTag[];
+  maxTags?: number;
   onClick: () => void;
 }) {
+  const firstGroup = tags.find((tag) => tag.type === 'group');
+  const firstUser = tags.find((tag) => tag.type === 'user');
+  const visible =
+    maxTags > 1 && firstGroup && firstUser
+      ? [firstGroup, firstUser]
+      : tags.slice(0, maxTags);
   return (
     <div className="resource-access-summary">
       <button
@@ -230,7 +287,7 @@ export function ManageAccessButton({
           className="access-tags"
           aria-label={`Current access to ${resourceName}`}
         >
-          {tags.map((tag) => (
+          {visible.map((tag) => (
             <span
               key={`${tag.type}:${tag.id}`}
               className={`access-tag ${tag.type}`}
@@ -244,6 +301,16 @@ export function ManageAccessButton({
               {tag.name}
             </span>
           ))}
+          {tags.length > visible.length && (
+            <button
+              type="button"
+              className="access-more"
+              aria-label={`Show all ${tags.length} access grants for ${resourceName}`}
+              onClick={onClick}
+            >
+              +{tags.length - visible.length} more
+            </button>
+          )}
         </div>
       )}
     </div>

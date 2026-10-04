@@ -1,5 +1,6 @@
 import { orderedTree, isWithin, indentedName } from './hierarchy';
-import { useRef, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
+import './media-library.css';
 import {
   Folder,
   FolderPlus,
@@ -14,6 +15,9 @@ import {
   Tags,
   X,
   Check,
+  ChevronDown,
+  ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -100,6 +104,13 @@ export function MediaLibrary({
   const [tag, setTag] = useState('');
   const [sort, setSort] = useState('newest');
   const [display, setDisplay] = useState('grid');
+  const [foldersOpen, setFoldersOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+    new Set(),
+  );
+  const folderNavigationId = useId();
+  const filtersId = useId();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<FormMode>(null);
   const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
@@ -140,6 +151,32 @@ export function MediaLibrary({
     isWithin(folders, candidateId, ancestorId);
   const folderRows = orderedTree(folders);
   const sortedFolders = folderRows.map(({ item }) => item);
+  const branches = new Set(
+    folders.map((item) => item.parentId).filter(Boolean),
+  );
+  const visibleFolders = folderRows.filter(({ item }) => {
+    let ancestor = item.parentId;
+    const seen = new Set<string>();
+    while (ancestor && !seen.has(ancestor)) {
+      if (collapsedFolders.has(ancestor)) return false;
+      seen.add(ancestor);
+      ancestor = folders.find((entry) => entry.id === ancestor)?.parentId;
+    }
+    return true;
+  });
+  const currentFolderName =
+    currentFolder?.name || (folder === 'unfiled' ? 'Unfiled' : 'All media');
+  const currentFolderPath = currentFolder
+    ? folderPaths.get(currentFolder.id)
+    : currentFolderName;
+  function toggleFolderBranch(id: string) {
+    setCollapsedFolders((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   const canDropMedia = () => !busy && !onPick && draggedAssets.length > 0;
   function dropMedia(target: string | null) {
     const ids = draggedAssets;
@@ -185,6 +222,7 @@ export function MediaLibrary({
   ).length;
   function chooseFolder(value: string) {
     setFolder(value);
+    setFoldersOpen(false);
     setSelected(new Set());
   }
   function toggle(id: string, checked: boolean) {
@@ -292,40 +330,87 @@ export function MediaLibrary({
             }}
           />
         </label>
-        <label
-          className="sr-only"
-          htmlFor={onPick ? 'picker-sort' : 'media-sort'}
-        >
-          Sort images
-        </label>
-        <select
-          id={onPick ? 'picker-sort' : 'media-sort'}
-          className="media-sort"
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="name">Name A-Z</option>
-          <option value="name-desc">Name Z-A</option>
-          <option value="largest">Largest first</option>
-          <option value="smallest">Smallest first</option>
-        </select>
-        <div className="media-display">
-          <Tool
-            label="Grid view"
-            active={display === 'grid'}
-            onClick={() => setDisplay('grid')}
+        <div className="media-toolbar-options">
+          <label
+            className="sr-only"
+            htmlFor={onPick ? 'picker-sort' : 'media-sort'}
           >
-            <Grid2X2 size={18} />
-          </Tool>
-          <Tool
-            label="List view"
-            active={display === 'list'}
-            onClick={() => setDisplay('list')}
+            Sort images
+          </label>
+          <select
+            id={onPick ? 'picker-sort' : 'media-sort'}
+            className="media-sort"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
           >
-            <List size={18} />
-          </Tool>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="largest">Largest first</option>
+            <option value="smallest">Smallest first</option>
+          </select>
+          <div className="media-display">
+            <Tool
+              label="Grid view"
+              active={display === 'grid'}
+              onClick={() => setDisplay('grid')}
+            >
+              <Grid2X2 size={18} />
+            </Tool>
+            <Tool
+              label="List view"
+              active={display === 'list'}
+              onClick={() => setDisplay('list')}
+            >
+              <List size={18} />
+            </Tool>
+          </div>
+          <button
+            type="button"
+            className="media-filter-toggle"
+            aria-label={`Tags${tag ? ' (1)' : ''}`}
+            title="Filter by tag"
+            aria-expanded={filtersOpen}
+            aria-controls={filtersId}
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <SlidersHorizontal size={17} />
+            <span className="media-filter-toggle-label">
+              Tags{tag ? ' (1)' : ''}
+            </span>
+          </button>
+        </div>
+        <div
+          id={filtersId}
+          className={`media-filter-options ${filtersOpen ? 'is-open' : ''}`}
+        >
+          <select
+            aria-label="Filter by tag"
+            value={tag}
+            onChange={(e) => {
+              setTag(e.target.value);
+              setSelected(new Set());
+            }}
+          >
+            <option value="">All tags</option>
+            {allTags.map((t) => (
+              <option value={t} key={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          {tag && (
+            <button
+              type="button"
+              onClick={() => {
+                setTag('');
+                setSelected(new Set());
+              }}
+            >
+              Clear tag
+            </button>
+          )}
         </div>
         {onPick && shareWithSlideId && (
           <label className="media-share-upload">
@@ -337,14 +422,8 @@ export function MediaLibrary({
             Share uploaded images with this slide’s audience
           </label>
         )}
-        {!onPick && (
-          <button onClick={() => open('folder')} disabled={busy}>
-            <FolderPlus size={17} />
-            New folder
-          </button>
-        )}
         <button
-          className="primary"
+          className="primary media-upload"
           onClick={() => uploadInput.current?.click()}
           disabled={busy}
         >
@@ -377,95 +456,165 @@ export function MediaLibrary({
         />
       </div>
       <div className="media-library-body">
-        <nav className="folder-navigation" aria-label="Media folders">
+        <div className="media-folder-sidebar">
           <button
-            className={`${folder === 'all' ? 'chosen' : ''} ${dropTarget === 'root' ? 'folder-drop-target' : ''}`}
-            onDragOver={(event) => {
-              if (canDrop(null)) {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'move';
-                setDropTarget('root');
-              }
-            }}
-            onDragLeave={() => setDropTarget(null)}
-            onDrop={(event) => {
-              event.preventDefault();
-              dropFolder(null);
-            }}
-            title={draggedFolder ? 'Move folder to top level' : undefined}
-            onClick={() => chooseFolder('all')}
+            type="button"
+            className="media-folder-picker"
+            aria-label={`Choose media folder: ${currentFolderName}`}
+            aria-expanded={foldersOpen}
+            aria-controls={folderNavigationId}
+            onClick={() => setFoldersOpen(!foldersOpen)}
           >
-            <Images size={16} />
-            <span>All media</span>
-            <small>{assets.length}</small>
+            <Folder size={18} />
+            <span>{currentFolderName}</span>
+            <ChevronDown size={18} />
           </button>
-          <button
-            className={`${folder === 'unfiled' ? 'chosen' : ''} ${dropTarget === 'unfiled' ? 'folder-drop-target' : ''}`}
-            onDragOver={(event) => {
-              if (canDropMedia()) {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'move';
-                setDropTarget('unfiled');
-              }
-            }}
-            onDragLeave={() => setDropTarget(null)}
-            onDrop={(event) => {
-              event.preventDefault();
-              dropMedia(null);
-            }}
-            onClick={() => chooseFolder('unfiled')}
+          {foldersOpen && currentFolder?.parentId && (
+            <p className="mobile-folder-context">{currentFolderPath}</p>
+          )}
+          <nav
+            id={folderNavigationId}
+            className={`folder-navigation ${foldersOpen ? 'is-open' : ''}`}
+            aria-label="Media folders"
           >
-            <Folder size={16} />
-            <span>Unfiled</span>
-            <small>{assets.filter((a) => !a.folderId).length}</small>
-          </button>
-          {folderRows.map(({ item: f, depth }) => (
+            <div className="folder-navigation-heading">
+              <strong>Folders</strong>
+              {!onPick && (
+                <button
+                  type="button"
+                  onClick={() => open('folder')}
+                  disabled={busy}
+                >
+                  <FolderPlus size={16} />
+                  New folder
+                </button>
+              )}
+            </div>
             <button
-              key={f.id}
-              className={`${folder === f.id ? 'chosen' : ''} ${dropTarget === f.id ? 'folder-drop-target' : ''}`}
-              style={{ paddingLeft: 12 + depth * 18 }}
-              title={folderPaths.get(f.id)}
-              draggable={!busy && !onPick}
-              onDragStart={(event) => {
-                event.dataTransfer.setData(
-                  'application/x-openframe-folder',
-                  f.id,
-                );
-                event.dataTransfer.effectAllowed = 'move';
-                setDraggedAssets([]);
-                setDraggedFolder(f.id);
-              }}
-              onDragEnd={() => {
-                setDraggedFolder(null);
-                setDropTarget(null);
-              }}
+              className={`${folder === 'all' ? 'chosen' : ''} ${dropTarget === 'root' ? 'folder-drop-target' : ''}`}
               onDragOver={(event) => {
-                if (canDrop(f.id) || canDropMedia()) {
+                if (canDrop(null)) {
                   event.preventDefault();
                   event.dataTransfer.dropEffect = 'move';
-                  setDropTarget(f.id);
+                  setDropTarget('root');
                 }
               }}
               onDragLeave={() => setDropTarget(null)}
               onDrop={(event) => {
                 event.preventDefault();
-                if (draggedAssets.length) dropMedia(f.id);
-                else dropFolder(f.id);
+                dropFolder(null);
               }}
-              onClick={() => chooseFolder(f.id)}
+              title={draggedFolder ? 'Move folder to top level' : undefined}
+              onClick={() => chooseFolder('all')}
+            >
+              <Images size={16} />
+              <span>All media</span>
+              <small>{assets.length}</small>
+            </button>
+            <button
+              className={`${folder === 'unfiled' ? 'chosen' : ''} ${dropTarget === 'unfiled' ? 'folder-drop-target' : ''}`}
+              onDragOver={(event) => {
+                if (canDropMedia()) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setDropTarget('unfiled');
+                }
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => {
+                event.preventDefault();
+                dropMedia(null);
+              }}
+              onClick={() => chooseFolder('unfiled')}
             >
               <Folder size={16} />
-              <span>{f.name}</span>
-              <small>{assets.filter((a) => a.folderId === f.id).length}</small>
+              <span>Unfiled</span>
+              <small>{assets.filter((a) => !a.folderId).length}</small>
             </button>
-          ))}
-        </nav>
+            {visibleFolders.map(({ item: f, depth }) => (
+              <div className="folder-tree-row" key={f.id}>
+                {branches.has(f.id) && (
+                  <button
+                    type="button"
+                    className="folder-branch-toggle"
+                    style={{ left: depth * 16 }}
+                    aria-label={`${collapsedFolders.has(f.id) ? 'Expand' : 'Collapse'} ${f.name}`}
+                    aria-expanded={!collapsedFolders.has(f.id)}
+                    onClick={() => toggleFolderBranch(f.id)}
+                  >
+                    {collapsedFolders.has(f.id) ? (
+                      <ChevronRight size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </button>
+                )}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-current={folder === f.id ? 'page' : undefined}
+                        aria-label={`${f.name} ${assets.filter((asset) => asset.folderId === f.id).length}`}
+                        className={`${folder === f.id ? 'chosen' : ''} ${dropTarget === f.id ? 'folder-drop-target' : ''}`}
+                        style={
+                          {
+                            paddingLeft: 30 + depth * 16,
+                            '--folder-depth': depth,
+                          } as React.CSSProperties
+                        }
+                        title={folderPaths.get(f.id)}
+                        draggable={!busy && !onPick}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData(
+                            'application/x-openframe-folder',
+                            f.id,
+                          );
+                          event.dataTransfer.effectAllowed = 'move';
+                          setDraggedAssets([]);
+                          setDraggedFolder(f.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedFolder(null);
+                          setDropTarget(null);
+                        }}
+                        onDragOver={(event) => {
+                          if (canDrop(f.id) || canDropMedia()) {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = 'move';
+                            setDropTarget(f.id);
+                          }
+                        }}
+                        onDragLeave={() => setDropTarget(null)}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (draggedAssets.length) dropMedia(f.id);
+                          else dropFolder(f.id);
+                        }}
+                        onClick={() => chooseFolder(f.id)}
+                      />
+                    }
+                  >
+                    <Folder size={16} />
+                    <span>{f.name}</span>
+                    <small>
+                      {assets.filter((a) => a.folderId === f.id).length}
+                    </small>
+                  </TooltipTrigger>
+                  <TooltipContent>{folderPaths.get(f.id)}</TooltipContent>
+                </Tooltip>
+              </div>
+            ))}
+          </nav>
+        </div>
         <section className="media-results">
           <div className="media-results-heading">
-            <strong>
-              {currentFolder?.name ||
-                (folder === 'unfiled' ? 'Unfiled' : 'All media')}
-            </strong>
+            <div className="media-folder-title">
+              <strong>{currentFolderName}</strong>
+              {currentFolder?.parentId && (
+                <span className="media-folder-path">{currentFolderPath}</span>
+              )}
+            </div>
             <span>{filtered.length} images</span>
             {currentFolder && !onPick && (
               <>
@@ -485,21 +634,6 @@ export function MediaLibrary({
                 </Tool>
               </>
             )}
-            <select
-              aria-label="Filter by tag"
-              value={tag}
-              onChange={(e) => {
-                setTag(e.target.value);
-                setSelected(new Set());
-              }}
-            >
-              <option value="">All tags</option>
-              {allTags.map((t) => (
-                <option value={t} key={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
           </div>
           {!onPick && (
             <div className="media-selection-bar">
@@ -639,7 +773,7 @@ export function MediaLibrary({
                       <span className="badge">Shared / read-only</span>
                     )}
                     <div className="media-tags">
-                      {(a.tags || []).map((t) => (
+                      {(a.tags || []).slice(0, 1).map((t) => (
                         <button
                           key={t}
                           aria-label={`Filter tag ${t}`}
@@ -651,10 +785,20 @@ export function MediaLibrary({
                           {t}
                         </button>
                       ))}
+                      {(a.tags || []).length > 1 && (
+                        <button
+                          type="button"
+                          aria-label={`Show all ${a.tags.length} tags for ${a.name}`}
+                          onClick={() => open('asset', a)}
+                        >
+                          +{a.tags.length - 1}
+                        </button>
+                      )}
                     </div>
                   </div>
                   {!onPick && onManageAccess && !a.readOnly && (
                     <ManageAccessButton
+                      maxTags={1}
                       resourceName={a.name}
                       tags={a.accessTags}
                       onClick={() => onManageAccess(a)}

@@ -8,9 +8,11 @@ import { StockSettings } from './stock-settings';
 import {
   useEffect,
   useState,
+  type CSSProperties,
   type ReactNode,
   type SyntheticEvent,
 } from 'react';
+import './editor.css';
 import { version } from '../package.json';
 import {
   minimumPasswordLength,
@@ -23,6 +25,7 @@ import {
   type SharedResource,
 } from './resource-access';
 import { DeviceRecovery } from './device-recovery';
+import './screens.css';
 import { WeatherOptions } from './weather-options';
 import {
   Monitor,
@@ -484,6 +487,7 @@ export default function App() {
     key: 'slides' | 'playlists' | 'devices',
     shown: number,
     statuses: { value: string; label: string }[],
+    tools?: ReactNode,
   ) => (
     <LibraryFilters
       filter={filters[key]}
@@ -495,7 +499,9 @@ export default function App() {
       shown={shown}
       total={library[key].length}
       noun={viewInfo[key].title}
-    />
+    >
+      {tools}
+    </LibraryFilters>
   );
   return (
     <TooltipProvider delay={300}>
@@ -808,18 +814,13 @@ export default function App() {
               )}
               {view === 'slides' && (
                 <>
-                  {filterBar('slides', visibleSlides.length, [
-                    { value: 'live', label: 'Live' },
-                    { value: 'not-live', label: 'Not live' },
-                  ])}
-                  {!!library.slides.length && !visibleSlides.length && (
-                    <p className="empty-filter-results">
-                      No results match these filters. Try another group or clear
-                      the filters.
-                    </p>
-                  )}
-                  <div className="section-meta slide-library-meta">
-                    <span>{library.slides.length} slides</span>
+                  {filterBar(
+                    'slides',
+                    visibleSlides.length,
+                    [
+                      { value: 'live', label: 'Live' },
+                      { value: 'not-live', label: 'Not live' },
+                    ],
                     <div className="slide-library-tools">
                       <label className="slide-sort-control">
                         Sort by
@@ -861,8 +862,14 @@ export default function App() {
                           </IconButton>
                         ))}
                       </fieldset>
-                    </div>
-                  </div>
+                    </div>,
+                  )}
+                  {!!library.slides.length && !visibleSlides.length && (
+                    <p className="empty-filter-results">
+                      No results match these filters. Try another group or clear
+                      the filters.
+                    </p>
+                  )}
                   {library.slides.length ? (
                     <div className="slide-grid" data-layout={slideLayout}>
                       {visibleSlides.map((slide) => (
@@ -878,7 +885,7 @@ export default function App() {
                                   />
                                 }
                               >
-                                Live
+                                <span>Live</span>
                               </TooltipTrigger>
                               <TooltipContent className="live-playlist-tooltip">
                                 <strong>Live in playlists</strong>
@@ -995,9 +1002,6 @@ export default function App() {
                       the filters.
                     </p>
                   )}
-                  <div className="section-meta">
-                    <span>{library.playlists.length} playlists</span>
-                  </div>
                   {library.playlists.length ? (
                     <div className="playlist-list">
                       {visiblePlaylists.map((p) => (
@@ -1422,6 +1426,7 @@ function DeviceRow({
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
   useEffect(() => setName(device.name), [device.name]);
   const saveName = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1580,19 +1585,9 @@ function DeviceRow({
               {device.command.type === 'reboot' ? 'Restart' : 'Refresh'} queued
             </p>
           )}
-          <DeviceRecovery id={device.id} phase={device.status?.recovery} />
           {device.status?.error && (
-            <p className="inline-error">{device.status.error}</p>
-          )}
-          {device.status?.playback && (
-            <p className="device-message">
-              Playback: {device.status.playback.phase}
-              {device.status.playback.preparationMs !== undefined
-                ? ` / Last preparation: ${device.status.playback.preparationMs} ms`
-                : ''}
-              {device.status.playback.missedDeadlines
-                ? ` / ${device.status.playback.missedDeadlines} delayed switches`
-                : ''}
+            <p role="alert" className="inline-error">
+              {device.status.error}
             </p>
           )}
           {device.status?.playback?.error && (
@@ -1600,6 +1595,63 @@ function DeviceRow({
               {device.status.playback.error}
             </p>
           )}
+          <details
+            className="device-diagnostics"
+            onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+          >
+            <summary aria-label={`Details for ${device.name}`}>Details</summary>
+            {detailsOpen && (
+              <div className="device-diagnostics-content">
+                <dl className="device-diagnostics-list">
+                  <div>
+                    <dt>Player ID</dt>
+                    <dd>
+                      <code>{device.id}</code>
+                    </dd>
+                  </div>
+                  {device.status?.version && (
+                    <div>
+                      <dt>Player version</dt>
+                      <dd>{device.status.version}</dd>
+                    </div>
+                  )}
+                  {device.status?.revision && (
+                    <div>
+                      <dt>Playlist revision</dt>
+                      <dd>
+                        <code>{device.status.revision}</code>
+                      </dd>
+                    </div>
+                  )}
+                  {device.status?.playback && (
+                    <div>
+                      <dt>Playback</dt>
+                      <dd>{device.status.playback.phase}</dd>
+                    </div>
+                  )}
+                  {device.status?.playback?.preparationMs !== undefined && (
+                    <div>
+                      <dt>Last preparation</dt>
+                      <dd>{device.status.playback.preparationMs} ms</dd>
+                    </div>
+                  )}
+                  {device.status?.playback?.missedDeadlines !== undefined && (
+                    <div>
+                      <dt>Delayed switches</dt>
+                      <dd>{device.status.playback.missedDeadlines}</dd>
+                    </div>
+                  )}
+                </dl>
+                {/* A Pi recovery service reports its phase; Android does not. */}
+                {device.status?.recovery && (
+                  <DeviceRecovery
+                    id={device.id}
+                    phase={device.status.recovery}
+                  />
+                )}
+              </div>
+            )}
+          </details>
         </>
       ) : (
         <div className="device-controls">
@@ -1664,10 +1716,48 @@ function Editor({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<
+    'canvas' | 'layers' | 'properties'
+  >(initial.layers.length ? 'properties' : 'layers');
+  const [mobileViewport, setMobileViewport] = useState<{
+    height: number;
+    top: number;
+  } | null>(null);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    function resizeEditor() {
+      setMobileViewport(
+        window.innerWidth < 768
+          ? {
+              height: viewport?.height ?? window.innerHeight,
+              top: viewport?.offsetTop ?? 0,
+            }
+          : null,
+      );
+    }
+    resizeEditor();
+    viewport?.addEventListener('resize', resizeEditor);
+    viewport?.addEventListener('scroll', resizeEditor);
+    window.addEventListener('resize', resizeEditor);
+    return () => {
+      viewport?.removeEventListener('resize', resizeEditor);
+      viewport?.removeEventListener('scroll', resizeEditor);
+      window.removeEventListener('resize', resizeEditor);
+    };
+  }, []);
   const dirty = JSON.stringify(slide) !== saved;
   const current = slide.layers.find((l) => l.id === selected);
   const currentAsset = assets.find((asset) => asset.id === current?.assetId);
   const navigation = useUnsavedNavigation(dirty, onClose);
+  function showProperties() {
+    setMobilePanel('properties');
+    if (window.innerWidth < 768)
+      requestAnimationFrame(() =>
+        document
+          .getElementById('editor-properties-panel')
+          ?.focus({ preventScroll: true }),
+      );
+  }
   function change(next: Slide, history = true) {
     if (history) {
       setPast((p) => [...p.slice(-49), slide]);
@@ -1751,6 +1841,7 @@ function Editor({
     }
     change({ ...slide, layers: [...slide.layers, layer] });
     setSelected(layer.id);
+    showProperties();
     setMedia(null);
   }
   function chooseImage(assetId: string) {
@@ -1802,7 +1893,19 @@ function Editor({
     change({ ...slide, layers });
   }
   return (
-    <div className="editor-overlay">
+    <div
+      className="editor-overlay slide-editor"
+      data-mobile-panel={mobilePanel}
+      style={
+        mobileViewport
+          ? {
+              height: mobileViewport.height,
+              top: mobileViewport.top,
+              bottom: 'auto',
+            }
+          : undefined
+      }
+    >
       <header className="editor-header">
         <IconButton
           label="Back to slides"
@@ -1819,7 +1922,9 @@ function Editor({
             onChange={(e) => change({ ...slide, name: e.target.value })}
             maxLength={100}
           />
-          <span>{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+          <span aria-live="polite">
+            {dirty ? 'Unsaved changes' : 'All changes saved'}
+          </span>
         </div>
         <div className="editor-header-actions">
           <label className="editor-background">
@@ -1856,16 +1961,42 @@ function Editor({
           </IconButton>
           <button
             className="primary"
+            aria-label="Save slide"
             disabled={busy || !slide.name.trim()}
             onClick={save}
           >
             <Save size={17} />
-            Save slide
+            <span className="editor-save-label">Save slide</span>
+            <span className="editor-save-label-mobile">Save</span>
           </button>
         </div>
       </header>
       <div className="editor-body" inert={busy}>
-        <aside className="layer-panel">
+        <nav className="editor-panel-navigation" aria-label="Editor panels">
+          {(
+            [
+              ['canvas', 'Canvas', LayoutTemplate],
+              ['layers', 'Layers', Layers],
+              ['properties', 'Properties', Settings],
+            ] as const
+          ).map(([panel, label, Icon]) => (
+            <button
+              key={panel}
+              type="button"
+              aria-pressed={mobilePanel === panel}
+              aria-controls={`editor-${panel}-panel`}
+              onClick={() => setMobilePanel(panel)}
+            >
+              <Icon size={17} />
+              {label}
+            </button>
+          ))}
+        </nav>
+        <aside
+          className="layer-panel"
+          id="editor-layers-panel"
+          aria-label="Layers and canvas settings"
+        >
           <h2>
             <Layers size={16} />
             Layers <span>{slide.layers.length}</span>
@@ -1916,6 +2047,7 @@ function Editor({
                 onClick={() => {
                   if (layer.id !== selected) setCropMode(false);
                   setSelected(layer.id);
+                  showProperties();
                 }}
               >
                 {layer.type === 'stocks' ? (
@@ -1981,7 +2113,14 @@ function Editor({
             </label>
           </div>
         </aside>
-        <section className="canvas-workspace">
+        <section
+          className="canvas-workspace"
+          id="editor-canvas-panel"
+          aria-label="Slide canvas"
+          style={
+            { '--canvas-ratio': slide.width / slide.height } as CSSProperties
+          }
+        >
           <div className="canvas-meta">
             <span>
               {slide.width} x {slide.height}
@@ -2043,7 +2182,12 @@ function Editor({
             </div>
           )}
         </section>
-        <aside className="properties-panel" aria-label="Layer properties">
+        <aside
+          className="properties-panel"
+          id="editor-properties-panel"
+          aria-label="Layer properties"
+          tabIndex={-1}
+        >
           <header className="property-panel-header">
             <h2>Properties</h2>
             {current && (

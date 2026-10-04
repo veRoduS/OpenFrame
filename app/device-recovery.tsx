@@ -52,9 +52,6 @@ export function DeviceRecovery({
           {value ? <EyeOff size={17} /> : <Eye size={17} />}
         </button>
       </div>
-      <div className="recovery-player-id">
-        Player ID: <code>{id}</code>
-      </div>
       {value?.available && (
         <dl className="recovery-details">
           <div>

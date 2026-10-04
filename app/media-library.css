@@ -1,0 +1,300 @@
+/* Media navigation and consistent card footers. */
+.media-toolbar-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.media-filter-toggle,
+.media-folder-picker {
+  display: none;
+}
+.media-filter-options {
+  display: flex;
+  gap: 8px;
+  min-width: 140px;
+}
+.media-filter-options select {
+  width: 150px;
+}
+.media-library-body {
+  grid-template-columns: minmax(230px, 264px) minmax(0, 1fr);
+}
+.media-folder-sidebar {
+  min-width: 0;
+}
+.folder-navigation {
+  border-right: 0;
+  padding-right: 0;
+}
+.folder-navigation-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+.folder-navigation-heading strong {
+  font-size: 13px;
+  color: var(--of-text-muted);
+}
+.folder-navigation-heading button {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.folder-tree-row {
+  position: relative;
+  min-width: 0;
+}
+.folder-tree-row > button:not(.folder-branch-toggle),
+.folder-navigation > button {
+  width: 100%;
+  gap: 8px;
+}
+.folder-navigation button span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+.folder-tree-row .folder-branch-toggle {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 28px;
+  min-width: 28px;
+  height: 100%;
+  padding: 4px;
+  justify-content: center;
+}
+.media-folder-title {
+  min-width: 0;
+}
+.media-folder-title strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.media-folder-path {
+  display: block;
+  color: var(--of-text-muted);
+  font-size: 12px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.media-browser-grid .media-entry > .resource-access-summary {
+  margin-top: auto;
+}
+.media-browser-grid
+  .media-entry
+  > .resource-access-summary
+  .manage-access-button {
+  margin-top: 0;
+}
+.media-browser-grid .media-entry-info {
+  min-height: 106px;
+}
+.media-browser-grid .media-name {
+  line-height: 1.4;
+  min-height: 2.8em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.media-browser-grid .media-entry > .resource-access-summary {
+  min-height: 108px;
+}
+.media-browser-grid .access-tags {
+  flex-wrap: nowrap;
+}
+.media-browser-grid .access-tag {
+  max-width: 100%;
+}
+@media (max-width: 1100px) and (min-width: 768px) {
+  .media-library-body {
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+@media (max-width: 767px) {
+  .media-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+  .media-search {
+    min-width: 0;
+    gap: 0;
+  }
+  .media-search > svg {
+    display: none;
+  }
+  .media-upload {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .media-toolbar-options {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+  }
+  .media-sort {
+    width: 100%;
+  }
+  .media-display {
+    gap: 0;
+  }
+  .media-filter-toggle {
+    display: flex;
+    padding: 8px;
+  }
+  .media-filter-options {
+    display: none;
+    grid-column: 1 / -1;
+  }
+  .media-filter-options.is-open {
+    display: flex;
+  }
+  .media-filter-options select {
+    width: 100%;
+  }
+  .media-share-upload {
+    grid-column: 1 / -1;
+  }
+  .media-library-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 12px;
+  }
+  .media-folder-picker {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .media-folder-picker span {
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .folder-navigation {
+    display: none;
+    margin-top: 8px;
+    max-height: 300px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid #dce4df;
+    border-radius: 6px;
+  }
+  .folder-navigation.is-open {
+    display: flex;
+  }
+  .folder-tree-row > button:not(.folder-branch-toggle) {
+    min-height: 44px;
+  }
+  .folder-tree-row .folder-branch-toggle {
+    width: 44px;
+    min-width: 44px;
+  }
+  .folder-tree-row > button:not(.folder-branch-toggle) {
+    padding-left: calc(var(--folder-depth, 0) * 16px + 46px) !important;
+  }
+  .media-results-heading {
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+  .media-results-heading > span {
+    margin-left: auto;
+  }
+  .media-results-heading > button:not(.icon-button) {
+    font-size: 13px;
+  }
+  .media-selection-bar {
+    padding: 6px 0;
+    margin-bottom: 12px;
+  }
+  .media-browser-grid {
+    gap: 10px;
+  }
+  .media-browser-grid .media-entry-info {
+    min-height: 120px;
+  }
+}
+/* Keep optional metadata from turning a grid row into a tall form. */
+.mobile-folder-context {
+  display: none;
+}
+.media-browser-grid .media-tags {
+  flex-wrap: nowrap;
+}
+.media-browser-grid .media-tags button {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+  font-size: 12px;
+}
+@media (max-width: 767px) {
+  .mobile-folder-context {
+    display: block;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--of-text-muted);
+    margin: 8px 0;
+    overflow-wrap: anywhere;
+  }
+  .media-results-heading .media-folder-title {
+    display: none;
+  }
+  .media-results-heading {
+    min-height: 0;
+    margin-bottom: 8px;
+    padding-bottom: 0;
+  }
+  .media-selection-bar {
+    min-height: 44px;
+    margin-bottom: 8px;
+    padding: 4px 0;
+  }
+  .media-browser-grid .media-tags button {
+    max-width: 50%;
+  }
+  .media-browser-grid .media-entry-info {
+    min-height: 168px;
+  }
+}
+.media-browser-grid .media-entry > .resource-access-summary {
+  height: 108px;
+  min-height: 108px;
+  flex: 0 0 108px;
+}
+.media-browser-grid
+  .media-entry
+  > .resource-access-summary
+  .manage-access-button {
+  padding: 8px;
+  gap: 6px;
+}
+@media (max-width: 767px) {
+  .media-browser-grid
+    .media-entry
+    > .resource-access-summary
+    .manage-access-button {
+    height: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 360px) {
+  .media-filter-toggle {
+    width: 44px;
+    padding: 10px;
+  }
+  .media-filter-toggle-label {
+    display: none;
+  }
+}

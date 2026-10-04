@@ -29,6 +29,9 @@ try {
   );
   browser = await chromium.launch({
     headless: true,
+    ...(process.env.OPENFRAME_BROWSER_EXECUTABLE
+      ? { executablePath: process.env.OPENFRAME_BROWSER_EXECUTABLE }
+      : {}),
     ...(process.env.OPENFRAME_BROWSER_CHANNEL
       ? { channel: process.env.OPENFRAME_BROWSER_CHANNEL }
       : {}),
@@ -248,12 +251,64 @@ try {
   ).json();
   await context.request.post(`${base}/api/player/sync`, {
     headers,
-    data: { recovery: 'standby', version: 'test' },
+    data: {
+      recovery: 'standby',
+      version: 'test',
+      playback: { phase: 'playing', preparationMs: 149, missedDeadlines: 0 },
+    },
   });
+  // Capability comes from a recovery-service report, never the device name.
+  for (const [name, status] of [
+    ['Android screen', { version: 'android-test' }],
+    ['Raspberry Pi without recovery', { version: 'test', recovery: null }],
+  ]) {
+    const unsupported = await (
+      await context.request.post(`${base}/api/player/enroll`, {
+        data: { name },
+      })
+    ).json();
+    await context.request.post(
+      `${base}/api/devices/${unsupported.id}/approve`,
+      {
+        data: { code: unsupported.code },
+      },
+    );
+    await context.request.post(`${base}/api/player/sync`, {
+      headers: { Authorization: `Bearer ${unsupported.token}` },
+      data: status,
+    });
+  }
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.reload();
   await page.getByText('Screens', { exact: true }).first().click();
-  await page.getByText(/^Last heartbeat:/).waitFor();
+  await page
+    .getByText(/^Last heartbeat:/)
+    .first()
+    .waitFor();
+  const recoveryRow = page
+    .locator('.device-row')
+    .filter({ hasText: 'Recovery screen' });
+  assert.equal(
+    await recoveryRow.getByText('Player ID', { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Show recovery credentials' })
+      .count(),
+    0,
+  );
+  const details = recoveryRow.locator('summary');
+  await details.focus();
+  await page.keyboard.press('Enter');
+  await recoveryRow.getByText(device.id, { exact: true }).waitFor();
+  await recoveryRow.getByText('149 ms', { exact: true }).waitFor();
+  for (const name of ['Android screen', 'Raspberry Pi without recovery']) {
+    const row = page.locator('.device-row').filter({ hasText: name });
+    await row.locator('summary').click();
+    await row.getByText('Player ID', { exact: true }).waitFor();
+    assert.equal(await row.locator('.device-recovery').count(), 0);
+  }
   assert.equal(await page.locator('.recovery-details').count(), 0);
   await page.getByRole('button', { name: 'Show recovery credentials' }).click();
   await page.getByText(recovery.password, { exact: true }).waitFor();
@@ -276,9 +331,20 @@ try {
     await page.getByText(recovery.password, { exact: true }).count(),
     0,
   );
+  await page.getByRole('button', { name: 'Show recovery credentials' }).click();
+  await page.getByText(recovery.password, { exact: true }).waitFor();
+  await details.click();
+  await page
+    .getByText(recovery.password, { exact: true })
+    .waitFor({ state: 'detached' });
+  await details.click();
+  await page
+    .getByRole('button', { name: 'Show recovery credentials' })
+    .waitFor();
+  assert.equal(await page.locator('.recovery-details').count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    'Screen setup browser checks passed: real import/allocation/export, re-download, and 1280/390/320px layouts.',
+    'Screen setup browser checks passed: real import/allocation/export, re-download, capability-gated recovery, keyboard-accessible Details, credential hiding, and 1280/390/320px layouts.',
   );
 } finally {
   close();

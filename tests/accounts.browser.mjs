@@ -41,6 +41,37 @@ try {
   await page.getByLabel('Password', { exact: true }).fill('browser8');
   await page.getByRole('button', { name: 'Create administrator' }).click();
   await page.getByRole('button', { name: 'Users & Groups' }).click();
+  const accountTabs = page.getByRole('tablist', { name: 'Account settings' });
+  await accountTabs.getByRole('tab', { name: 'Groups', exact: true }).focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(
+    await accountTabs
+      .getByRole('tab', { name: 'Users', exact: true })
+      .getAttribute('aria-selected'),
+    'true',
+  );
+  await page.keyboard.press('End');
+  assert.equal(
+    await accountTabs
+      .getByRole('tab', { name: 'My password', exact: true })
+      .getAttribute('aria-selected'),
+    'true',
+  );
+  await page.keyboard.press('Home');
+  assert.equal(await accountTabs.locator('[tabindex="0"]').count(), 1);
+  const activeTab = accountTabs.getByRole('tab', {
+    name: 'Groups',
+    exact: true,
+  });
+  assert.equal(await activeTab.getAttribute('aria-selected'), 'true');
+  assert.equal(
+    await page.getByRole('tabpanel').getAttribute('id'),
+    await activeTab.getAttribute('aria-controls'),
+  );
+  assert.equal(
+    await page.getByLabel('Join a group', { exact: true }).count(),
+    0,
+  );
   await page.getByLabel('New group', { exact: true }).fill('Campus displays');
   await page.getByRole('button', { name: 'Create group', exact: true }).click();
   await page.getByRole('heading', { name: 'Campus displays' }).waitFor();
@@ -120,7 +151,7 @@ try {
     .getByLabel('Groups', { exact: true })
     .selectOption({ label: 'Campus displays' });
   await page.getByRole('button', { name: 'Grant group access' }).click();
-  await page.getByRole('button', { name: 'Remove access' }).waitFor();
+  await page.getByRole('button', { name: /^Remove access/ }).waitFor();
   await page
     .getByLabel('Users', { exact: true })
     .selectOption({ label: 'Jordan Taylor (jordan)' });

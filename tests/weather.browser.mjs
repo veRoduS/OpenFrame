@@ -178,17 +178,18 @@ try {
     await page.locator('.canvas-holder [data-weather-icon]').count(),
     6,
   );
-  for (const width of [1280, 390, 320]) {
+  for (const width of [1280, 767, 430, 390, 375, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    assert.ok(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth,
-      ),
-    );
     await page.screenshot({
       path: `work/weather-editor-${width}.png`,
       fullPage: true,
     });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      `no horizontal page overflow at ${width}px`,
+    );
     const text = page.locator('.slide-layer > span').first();
     assert.ok(
       await text.evaluate(
@@ -197,7 +198,29 @@ try {
           element.scrollWidth <= element.parentElement.clientWidth + 1,
       ),
     );
-    if (width < 500) {
+    if (width < 768) {
+      assert.ok(
+        (await page.getByLabel('Slide name', { exact: true }).boundingBox())
+          .width >=
+          width - 80,
+        `slide title has its own row at ${width}px`,
+      );
+      const navigation = page.getByRole('navigation', {
+        name: 'Editor panels',
+      });
+      await navigation
+        .getByRole('button', { name: 'Layers', exact: true })
+        .click();
+      await page
+        .getByRole('button', { name: 'Add text', exact: true })
+        .waitFor();
+      assert.equal(
+        await page.getByLabel('Latitude', { exact: true }).isVisible(),
+        false,
+      );
+      await navigation
+        .getByRole('button', { name: 'Properties', exact: true })
+        .click();
       await page
         .getByLabel('Latitude', { exact: true })
         .scrollIntoViewIfNeeded();
@@ -205,14 +228,82 @@ try {
         (await page.getByLabel('Latitude', { exact: true }).boundingBox())
           .width >= 100,
       );
+      const canvas = await page.locator('.canvas-holder').boundingBox();
+      assert.ok(
+        canvas.y > 0 && canvas.y + canvas.height < 900,
+        'canvas stays visible when scrolling through properties',
+      );
+      await page.getByLabel('Weather display').selectOption('current');
+      await page.getByLabel('Temperature unit').selectOption('C');
+      await page
+        .locator('.canvas-holder')
+        .getByText(/22\u00b0C/)
+        .waitFor();
+      await page.getByLabel('Temperature unit').selectOption('F');
+      await page.getByLabel('Weather display').selectOption('six-hour');
+      await navigation
+        .getByRole('button', { name: 'Canvas', exact: true })
+        .click();
+      assert.equal(
+        await page.getByLabel('Latitude', { exact: true }).isVisible(),
+        false,
+      );
+      await page.locator('.canvas-holder .slide-layer').first().click();
+      assert.equal(
+        await navigation
+          .getByRole('button', { name: 'Canvas', exact: true })
+          .getAttribute('aria-pressed'),
+        'true',
+        'selecting a layer preserves the expanded canvas for dragging',
+      );
+      await navigation
+        .getByRole('button', { name: 'Properties', exact: true })
+        .click();
       await page.screenshot({ path: `work/weather-properties-${width}.png` });
     }
   }
+  await page.setViewportSize({ width: 390, height: 480 });
+  await page.getByLabel('US ZIP code', { exact: true }).fill('60601');
+  const shortViewportCanvas = await page
+    .locator('.canvas-holder')
+    .boundingBox();
+  const shortViewportInput = await page
+    .getByLabel('US ZIP code', { exact: true })
+    .boundingBox();
+  assert.ok(
+    shortViewportCanvas.y > 0 &&
+      shortViewportCanvas.y + shortViewportCanvas.height < 480,
+  );
+  assert.ok(
+    shortViewportInput.y > shortViewportCanvas.y + shortViewportCanvas.height &&
+      shortViewportInput.y + shortViewportInput.height <= 480,
+    'properties remain reachable alongside the canvas in a short viewport',
+  );
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.getByLabel('Weather display').selectOption('current');
   await page
     .locator('.canvas-holder')
     .getByText(/Current weather/)
     .waitFor();
+  await page.route('**/api/slides/*', (route) =>
+    route.request().method() === 'PUT'
+      ? route.fulfill({
+          status: 503,
+          json: { error: 'Please try saving again.' },
+        })
+      : route.continue(),
+  );
+  await page.getByRole('button', { name: 'Save slide', exact: true }).click();
+  const saveError = page
+    .getByRole('alert')
+    .getByText('Please try saving again.', { exact: true });
+  await saveError.waitFor();
+  const saveErrorBounds = await saveError.boundingBox();
+  assert.ok(
+    saveErrorBounds.y > 0 && saveErrorBounds.y + saveErrorBounds.height < 900,
+    'save failures remain visible above the mobile inspector',
+  );
+  await page.unroute('**/api/slides/*');
   await page.getByRole('button', { name: 'Save slide', exact: true }).click();
   await page.getByText('All changes saved', { exact: true }).waitFor();
   const library = await (

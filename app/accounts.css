@@ -1,0 +1,322 @@
+.accounts,
+.user-access-tabs {
+  min-width: 0;
+}
+
+.account-tabs[data-slot='tabs-list'] {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 0 12px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.account-tabs [data-slot='tabs-trigger'] {
+  flex: 0 1 auto;
+  min-height: 40px;
+  padding: 8px 14px;
+  color: var(--of-text-muted, #586b5f);
+  box-shadow: none;
+}
+
+.account-tabs [data-slot='tabs-trigger']:hover {
+  background: #edf2ee;
+}
+
+.account-tabs [data-slot='tabs-trigger'][aria-selected='true'] {
+  background: #e1ece5;
+  color: #175535;
+  box-shadow: inset 0 -2px #26764f;
+}
+
+.account-tabs [data-slot='tabs-trigger']:focus-visible {
+  outline: 2px solid #26764f;
+  outline-offset: 2px;
+}
+
+.group-directory .group-drag-tools {
+  gap: 8px;
+}
+
+.group-admin-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--of-text-muted, #586b5f);
+}
+
+.group-directory .account-group-forms {
+  display: block;
+  padding-bottom: 4px;
+}
+
+.group-tree {
+  border-top: 1px solid #dbe1dd;
+}
+
+.group-tree .group-section {
+  border-top: 0;
+  border-bottom: 1px solid #dbe1dd;
+  border-left: 2px solid #dbe1dd;
+  min-width: 0;
+}
+
+.group-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 12px 5px 6px;
+}
+
+.group-summary h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  flex: 1;
+}
+
+.group-summary .group-drag-handle {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 4px;
+  text-align: left;
+  white-space: normal;
+}
+
+.group-drag-handle span {
+  overflow-wrap: anywhere;
+}
+
+.group-drag-handle svg {
+  flex-shrink: 0;
+}
+
+.group-drag-handle[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.group-summary .group-drag-handle:hover {
+  background: #edf2ee;
+}
+
+.group-count {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--of-text-muted, #586b5f);
+}
+
+.group-details {
+  padding: 12px 16px 4px;
+  border-top: 1px solid #dbe1dd;
+  background: #f5f8f5;
+}
+
+.group-details-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.group-details-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.group-details > .account-inline-form > form {
+  flex: 2;
+}
+
+.group-details .account-row:last-child {
+  border-bottom: 0;
+}
+
+.group-details .badge,
+.user-membership-row .badge {
+  white-space: normal;
+}
+
+.of-modal.user-access-modal {
+  display: flex;
+  flex-direction: column;
+  height: min(720px, calc(100dvh - 32px));
+  overflow: hidden;
+}
+
+.user-access-modal > [data-slot='dialog-title'],
+.user-access-modal > [data-slot='dialog-description'],
+.user-access-modal > .inline-error {
+  flex-shrink: 0;
+}
+
+.user-access-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.user-access-tabs > .account-tabs {
+  flex-shrink: 0;
+  padding-bottom: 8px;
+}
+
+.user-access-tabs .user-access-panel {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 4px 0 0;
+  scrollbar-gutter: stable;
+}
+
+.user-access-panel > label {
+  max-width: 360px;
+}
+
+.user-access-panel h3,
+.user-access-panel h4 {
+  margin: 0 0 8px;
+}
+
+.user-access-panel .muted {
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.user-account-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.user-account-summary span {
+  color: var(--of-text-muted, #586b5f);
+}
+
+.user-access-modal .user-membership-row {
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+.user-membership-row > div:first-child {
+  flex: 1;
+}
+
+.user-membership-row > select {
+  flex: 0 1 185px;
+  min-width: 0;
+}
+
+.user-membership-row .add-membership-button {
+  flex-shrink: 0;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+}
+
+.user-membership-row .account-actions {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.user-membership-row .account-actions span {
+  width: 100%;
+  color: var(--of-text-muted, #586b5f);
+  font-size: 13px;
+}
+
+.user-content-filters {
+  position: sticky;
+  top: -16px;
+  z-index: 1;
+  padding: 16px 0;
+  margin-top: -16px;
+  background: #fff;
+  border-bottom: 1px solid #dbe1dd;
+}
+
+.user-access-modal .user-content-section {
+  margin-top: 20px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.user-access-modal .direct-access-toggle {
+  flex-direction: row;
+  white-space: normal;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.user-access-modal .direct-access-toggle input {
+  flex-shrink: 0;
+}
+
+@media (max-width: 700px) {
+  .account-tabs [data-slot='tabs-trigger'] {
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  .group-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 3px 8px 8px 4px;
+  }
+
+  .group-count {
+    padding-left: 30px;
+  }
+
+  .group-details {
+    padding: 12px 10px 4px;
+  }
+
+  .group-details > .account-inline-form,
+  .group-details > .account-inline-form > form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .group-details .account-inline-form label {
+    min-width: 0;
+  }
+
+  .user-access-tabs .account-tabs > button {
+    flex: 1;
+  }
+
+  .user-access-panel .user-membership-row {
+    flex-wrap: wrap;
+  }
+
+  .user-membership-row > select {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .user-membership-row .account-actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+
+  .user-content-filters .account-inline-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  .user-access-modal .direct-access-toggle {
+    min-height: 44px;
+  }
+}

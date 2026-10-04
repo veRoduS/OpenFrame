@@ -1,0 +1,71 @@
+.device-diagnostics {
+  margin: 16px 0 0 42px;
+  border-top: 1px solid #d8e0da;
+}
+
+.device-diagnostics > summary {
+  width: fit-content;
+  min-height: 44px;
+  padding: 12px 4px;
+  color: #315c43;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.device-diagnostics > summary:focus-visible {
+  outline: 2px solid #1e6847;
+  outline-offset: 2px;
+}
+
+.device-diagnostics-content {
+  padding: 4px 0 8px;
+  min-width: 0;
+}
+
+.device-diagnostics-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 14px 24px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.device-diagnostics-list > div {
+  min-width: 0;
+}
+
+.device-diagnostics-list dt {
+  color: #57675c;
+  margin-bottom: 4px;
+}
+
+.device-diagnostics-list dd {
+  margin: 0;
+  color: #263d2e;
+  overflow-wrap: anywhere;
+}
+
+.device-diagnostics-list code {
+  user-select: all;
+}
+
+@media (max-width: 767px) {
+  .device-diagnostics {
+    margin-left: 0;
+  }
+
+  .device-diagnostics-list {
+    grid-template-columns: minmax(0, 1fr);
+    font-size: 14px;
+  }
+
+  .device-diagnostics .recovery-heading {
+    flex-wrap: wrap;
+  }
+
+  .device-diagnostics .recovery-heading > span {
+    flex: 1;
+  }
+}

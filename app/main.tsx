@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Landing from './landing';
 import './globals.css';
+import './ui-foundations.css';
 const App = React.lazy(() => import('./page'));
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

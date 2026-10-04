@@ -94,6 +94,8 @@ try {
   const section = page.locator('.group-section').filter({
     has: page.getByRole('heading', { name: 'Group A', exact: true }),
   });
+  assert.equal(await page.locator('.group-details').count(), 0);
+  await section.getByRole('button', { name: 'Group A', exact: true }).click();
   await section
     .getByLabel('Add user to Group A', { exact: true })
     .selectOption(robin.user.id);
@@ -137,13 +139,14 @@ try {
       response.url().endsWith(`/api/groups/${other.id}`) &&
       response.request().method() === 'PATCH',
   );
+  await page.getByRole('button', { name: 'Group B', exact: true }).click();
   await page
-    .getByLabel('Parent group for Group B', { exact: true })
+    .getByLabel('Group location for Group B', { exact: true })
     .selectOption('');
   assert.equal((await movedOut).status(), 200);
   await page.waitForFunction(
     () =>
-      !document.querySelector('[aria-label="Parent group for Group B"]')
+      !document.querySelector('[aria-label="Group location for Group B"]')
         .disabled,
   );
   assert.equal(
@@ -151,13 +154,15 @@ try {
     null,
   );
   await page.setViewportSize({ width: 1280, height: 900 });
+  await section.getByRole('button', { name: 'Group A', exact: true }).click();
   await section
     .getByLabel('Add user to Group A', { exact: true })
     .selectOption(created.user.id);
   await section.getByRole('button', { name: 'Add user', exact: true }).click();
   await section.getByText('Jordan Taylor', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Group 1', exact: true }).click();
   await page
-    .getByLabel('Parent group for Group 1', { exact: true })
+    .getByLabel('Group location for Group 1', { exact: true })
     .selectOption(other.id);
   await page
     .getByText('Group moved. Inherited access has been updated.', {
@@ -169,11 +174,11 @@ try {
     other.id,
   );
   await page
-    .getByLabel('Parent group for Group 1', { exact: true })
+    .getByLabel('Group location for Group 1', { exact: true })
     .selectOption(parent.id);
   await page.waitForFunction(
     () =>
-      !document.querySelector('[aria-label="Parent group for Group 1"]')
+      !document.querySelector('[aria-label="Group location for Group 1"]')
         .disabled,
   );
   await page.getByRole('tab', { name: 'Users', exact: true }).click();
@@ -181,19 +186,27 @@ try {
     .getByRole('button', { name: 'Jordan Taylor', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
+  await dialog.getByRole('tab', { name: 'Groups', exact: true }).click();
+  await dialog.getByText('Has inherited access', { exact: true }).waitFor();
   assert.equal(
     await dialog.getByLabel('Membership in Group B', { exact: true }).count(),
     0,
   );
   await dialog
-    .getByRole('button', { name: 'Add Jordan Taylor to Group B', exact: true })
+    .getByRole('button', {
+      name: 'Add direct membership for Jordan Taylor to Group B',
+      exact: true,
+    })
     .click();
   await dialog
     .getByText('Add Jordan Taylor to Group B?', { exact: true })
     .waitFor();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   await dialog
-    .getByRole('button', { name: 'Add Jordan Taylor to Group B', exact: true })
+    .getByRole('button', {
+      name: 'Add direct membership for Jordan Taylor to Group B',
+      exact: true,
+    })
     .click();
   await dialog
     .getByRole('button', { name: 'Confirm add', exact: true })
@@ -212,10 +225,15 @@ try {
     .getByLabel('Membership in Group B', { exact: true })
     .selectOption('');
   await dialog
-    .getByRole('button', { name: 'Add Jordan Taylor to Group B', exact: true })
+    .getByRole('button', {
+      name: 'Add direct membership for Jordan Taylor to Group B',
+      exact: true,
+    })
     .waitFor();
+  await dialog.getByRole('tab', { name: 'Content', exact: true }).click();
   await dialog.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
   await dialog.getByText('Through groups: Group 1', { exact: false }).waitFor();
+  await dialog.getByRole('tab', { name: 'Account', exact: true }).click();
   await dialog
     .getByLabel('Account role', { exact: true })
     .selectOption('admin');
@@ -227,6 +245,7 @@ try {
   await page.waitForFunction(
     () => !document.querySelector('[aria-label="Account role"]').disabled,
   );
+  await dialog.getByRole('tab', { name: 'Groups', exact: true }).click();
   assert.equal(
     await dialog.getByLabel('Membership in Group A', { exact: true }).count(),
     0,
@@ -236,13 +255,16 @@ try {
       .getByText('Group admin · Unrestricted', { exact: true })
       .count()) >= 3,
   );
+  await dialog.getByRole('tab', { name: 'Content', exact: true }).click();
   assert.equal(
     await dialog
       .getByLabel('Direct access to Nested welcome', { exact: true })
       .isChecked(),
     true,
   );
+  await dialog.getByRole('tab', { name: 'Account', exact: true }).click();
   await dialog.getByLabel('Account role', { exact: true }).selectOption('user');
+  await dialog.getByRole('tab', { name: 'Content', exact: true }).click();
   await page.waitForFunction(
     () =>
       !document.querySelector('[aria-label="Direct access to Nested welcome"]')
