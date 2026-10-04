@@ -84,7 +84,7 @@ The command builds and verifies the signed APK, writes local files under `output
 
 Use `pnpm build:android --local` to keep a development build local, adding `--sdk` when using the documented SDK-only fallback. If upload fails, the local files remain available; fix the cause and run `pnpm publish:android` to retry those exact files without rebuilding. Source work can be committed locally without being pushed.
 
-`.github/workflows/publish-android.yml` runs after an approved source push changes `player/version.json` on `main`, or by manual dispatch. It checks versions, compatibility, and tests, then builds and publishes a player version that has not already been archived. A server-only version change does not trigger it. The job uses the `android-releases` GitHub environment and a `GITHUB_TOKEN` with `contents: write` for the publication branch.
+`.github/workflows/publish-android.yml` runs after an approved source push changes `player/version.json` or the publisher workflow on `main`, or by manual dispatch. It checks versions, compatibility, and tests, then builds and publishes a player version that has not already been archived. A server-only version change does not trigger it. The job uses the `android-releases` GitHub environment and a `GITHUB_TOKEN` with `contents: write` for the publication branch.
 
 Configure these environment or repository secrets using the **existing** Android release key:
 
@@ -95,7 +95,7 @@ Configure these environment or repository secrets using the **existing** Android
 | `ANDROID_KEY_ALIAS` | Existing signing alias |
 | `ANDROID_KEY_PASSWORD` | Signing-key password |
 
-The workflow also accepts the existing `OPENFRAME_ANDROID_KEYSTORE`, `OPENFRAME_ANDROID_STORE_PASSWORD`, `OPENFRAME_ANDROID_KEY_ALIAS`, and `OPENFRAME_ANDROID_KEY_PASSWORD` secret names as aliases, with `ANDROID_*` names taking precedence. The GitHub `OPENFRAME_ANDROID_KEYSTORE` secret must contain base64-encoded file contents, not a local keystore path.
+The workflow also accepts the existing `OPENFRAME_ANDROID_KEYSTORE`, `OPENFRAME_ANDROID_STORE_PASSWORD`, `OPENFRAME_ANDROID_KEY_ALIAS`, and `OPENFRAME_ANDROID_KEY_PASSWORD` secret names as aliases, with valid `ANDROID_*` names taking precedence. Keystore aliases are tried in order and accepted only when their decoded file opens with the configured store password and matches the pinned release signer; an invalid keystore alias does not hide a valid alternate. The GitHub `OPENFRAME_ANDROID_KEYSTORE` secret must contain base64-encoded file contents, not a local keystore path.
 
 The workflow decodes the key only into the runner's temporary directory and removes it at completion. Do not place keys or passwords in repository files or APK metadata. Missing signing secrets block the workflow; generating a replacement key would prevent existing installations from accepting updates. See [Android builds and updates](android-tv.md) for local signing variables, platform tests, and physical-device acceptance.
 
