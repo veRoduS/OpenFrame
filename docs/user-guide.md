@@ -22,6 +22,12 @@ Images are decoded, resized to at most 1920 pixels per dimension, and stored as 
 
 Admins can open **Settings** to upload WOFF2, WOFF, TTF, or OTF custom fonts (up to 10 MB each). Select a built-in or custom family under **Typography** in the slide editor. A font in use by a saved slide or published playlist cannot be removed. Published screens download the font with the playlist and keep it available offline.
 
+## Finding slides, playlists, and screens
+
+Each library page has name search, an indented **Group** filter, and a **Status** filter. Combine them to narrow a large workspace. Selecting a parent group includes resources shared directly with it or any descendant group; selecting a child narrows to that branch. Group filters follow the resource’s Manage Access sharing, rather than its playlist assignment or creator’s membership. **No visible group** finds resources with no sharing to a group you can see. Filters only narrow resources you already have permission to access.
+
+Slides can be filtered by Live or Not live, playlists by Published or Draft, and screens by Online, Offline, or Awaiting approval. Screen summary counts follow the filtered results. **Showing X of Y** reports matches and the accessible total. **Clear filters** resets the current page; switching pages preserves each page’s selections until you reload. Online/Live uses the same recent-heartbeat indication as the existing dashboard.
+
 ## Slide properties
 
 Select a layer to edit it in the right sidebar. Controls are grouped into Content, Source image, or Widget settings; Position & size; Typography or Image display; and Arrange. Related numeric fields sit side by side. Expand **Crop adjustments** under Image display to reveal image zoom, focal position, and crop reset controls.

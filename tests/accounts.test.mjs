@@ -18,6 +18,58 @@ const slide = {
   layers: [],
 };
 
+void test('library filter metadata exposes only accessible resources and visible groups', async (t) => {
+  const { admin, user } = await fixture(t);
+  const alice = await user('filter-alice');
+  const parent = (await admin('/api/groups', 'POST', { name: 'Region' })).data;
+  const child = (
+    await admin('/api/groups', 'POST', { name: 'Store', parentId: parent.id })
+  ).data;
+  const hidden = (
+    await admin('/api/groups', 'POST', { name: 'Private region' })
+  ).data;
+  await admin(`/api/groups/${parent.id}/members/${alice.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const shared = (await admin('/api/slides', 'POST', slide)).data;
+  const privateSlide = (
+    await admin('/api/slides', 'POST', { ...slide, name: 'Hidden slide' })
+  ).data;
+  await admin(`/api/access/slide/${shared.id}`, 'POST', { groupId: child.id });
+  await admin(`/api/access/slide/${shared.id}`, 'POST', { groupId: hidden.id });
+  await admin(`/api/access/slide/${privateSlide.id}`, 'POST', {
+    groupId: hidden.id,
+  });
+  const library = (await alice.call('/api/library')).data;
+  assert.deepEqual(
+    new Set(library.groups.map((g) => g.id)),
+    new Set([parent.id, child.id]),
+  );
+  assert.equal(library.slides.length, 1);
+  assert.equal(library.slides[0].id, shared.id);
+  assert.deepEqual(library.slides[0].groupIds, [child.id]);
+  assert.ok(!JSON.stringify(library).includes(hidden.id));
+  const published = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Live summary',
+      items: [{ slideId: privateSlide.id, duration: 15 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${published.id}/publish`, 'POST')).status,
+    200,
+  );
+  const adminLibrary = (await admin('/api/library')).data;
+  assert.deepEqual(
+    adminLibrary.playlists.find((p) => p.id === published.id).publishedSlideIds,
+    [privateSlide.id],
+  );
+  assert.deepEqual(
+    new Set(adminLibrary.slides.find((s) => s.id === shared.id).groupIds),
+    new Set([child.id, hidden.id]),
+  );
+});
+
 void test('existing group tables gain a nullable parent without losing groups', () => {
   const db = new DatabaseSync(':memory:');
   db.exec(`

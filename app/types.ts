@@ -54,6 +54,7 @@ export type Layer = {
   };
 };
 export type Slide = {
+  groupIds?: string[];
   id: string;
   name: string;
   width: number;
@@ -63,6 +64,7 @@ export type Slide = {
   updatedAt?: string;
 };
 export type Playlist = {
+  groupIds?: string[];
   id: string;
   name: string;
   transition?: {
@@ -113,6 +115,7 @@ export type MediaFolder = {
   parentId?: string | null;
 };
 export type Device = {
+  groupIds?: string[];
   id: string;
   name: string;
   code: string;
@@ -136,6 +139,7 @@ export type Device = {
   command?: { type: string } | null;
 };
 export type Library = {
+  groups?: { id: string; name: string; parentId?: string | null }[];
   slides: Slide[];
   playlists: Playlist[];
   assets: Asset[];

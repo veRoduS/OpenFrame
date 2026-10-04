@@ -57,7 +57,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | POST | `/api/setup` | Legacy initialization; returns 409 on normally started servers |
 | POST | `/api/login` | Sign in; `{username,password}` (omitted username defaults to `admin` for compatibility) |
 | POST | `/api/logout` | Revoke current session |
-| GET | `/api/library` | Slides, playlist summaries, assets, folders, device status |
+| GET | `/api/library` | Slides, playlist summaries, assets, folders, device status, visible groups |
 | POST | `/api/slides` | Create slide |
 | PUT / DELETE | `/api/slides/:id` | Replace/delete slide; deletion blocked while used in drafts |
 | POST | `/api/assets` | Upload image as multipart field `file`, optional `folderId`; GIF animation is preserved in bounded animated WebP. From a slide picker, optional `shareWithSlideId` copies that slide's user/group grants to the new asset (slide owner or admin only) |
@@ -127,3 +127,5 @@ Stock layers use `type:"stocks"` and `stocks:{name?,symbols:["WMT","AAPL"]}`. On
 Admin-only `GET /api/settings/stocks` returns `{configured:boolean}`. Admin-only `PUT /api/settings/stocks` accepts `{token:"Finnhub API key"}` to replace the encrypted provider connection, or `{token:""}` to disconnect. The key is never serialized in public responses, manifests, or snapshots. This encrypted integration record uses the existing provisioning vault; back up the matching key and database together.
 
 Approved player sync responses include quote snapshots inside `manifest.stocks`; authenticated previews include `stocks` alongside `weather`. Quote updates do not change publication revisions. Publications using shapes, stocks, or vertical weather have `schemaVersion:3`; other newly published content remains schema 2. Player 0.10.11+ accepts schemas 1, 2, and 3. See [stock scheduling and provider limits](user-guide.md#stock-tracker).
+
+Library responses include `groups:[{id,name,parentId}]` scoped to groups visible to the caller. Slides, playlists, and devices include `groupIds` for their direct sharing grants to those visible groups; user grants and hidden group grants are excluded. These additive fields support client-side search/group/status filters and do not change authorization or player manifests.

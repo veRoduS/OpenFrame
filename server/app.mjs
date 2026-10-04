@@ -450,13 +450,33 @@ export function createApp({
     }
     res.json({ ok: true });
   });
-  app.get('/api/library', admin, (req, res) =>
+  app.get('/api/library', admin, (req, res) => {
+    const groups = db
+      .prepare(
+        'SELECT id,name,parentId FROM groups ORDER BY name COLLATE NOCASE',
+      )
+      .all()
+      .filter(
+        (group) =>
+          req.user.role === 'admin' || accounts.member(req.user, group.id),
+      );
+    const visibleGroups = new Set(groups.map((group) => group.id));
+    const withGroups = (kind, item) => ({
+      ...item,
+      groupIds: grants(kind, item.id)
+        .map((grant) => grant.groupId)
+        .filter((id) => visibleGroups.has(id)),
+    });
     res.json({
-      slides: list('slide'),
+      groups,
+      slides: list('slide').map((item) => withGroups('slide', item)),
       playlists: list('playlist').map(({ published, ...p }) => ({
-        ...p,
+        ...withGroups('playlist', p),
         publishedAt: published?.publishedAt || null,
-        publishedSlideIds: published?.items?.map((item) => item.slideId) || [],
+        publishedSlideIds:
+          published?.items
+            ?.map((item) => item.slide?.id ?? item.slideId)
+            .filter(Boolean) || [],
       })),
       assets: allRecords('asset')
         .filter((asset) => accounts.canViewAsset(req.user, asset.id))
@@ -465,9 +485,11 @@ export function createApp({
           readOnly: !accounts.can(req.user, 'asset', asset.id),
         })),
       folders: list('folder'),
-      devices: list('device').map(publicDevice),
-    }),
-  );
+      devices: list('device').map((item) =>
+        withGroups('device', publicDevice(item)),
+      ),
+    });
+  });
   function checkImages(slide, user) {
     for (const layer of slide.layers) {
       if (layer.type !== 'image') continue;

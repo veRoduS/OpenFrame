@@ -2,6 +2,11 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.15.3] - 2026-10-04
+
+- Add combined name, nested-group and status filters to slides, playlists and screens.
+- Correct published slide IDs in library summaries so Live badges and filters use actual published slides.
+
 ## [0.15.2] - 2026-10-04
 
 - Add media/user/group drag-and-drop, shapes, vertical weather and a shared Finnhub stock tracker; preserve separate admin identities on migration.

@@ -1,3 +1,9 @@
+import {
+  LibraryFilters,
+  matchesLibraryFilter,
+  clearLibraryFilter,
+  type LibraryFilter,
+} from './library-filters';
 import { StockSettings } from './stock-settings';
 import {
   useEffect,
@@ -222,6 +228,13 @@ export default function App() {
   const [library, setLibrary] = useState<Library>(emptyLibrary);
   const [fonts, setFonts] = useState<CustomFont[]>([]);
   const [view, setView] = useState<View>('slides');
+  const [filters, setFilters] = useState<
+    Record<'slides' | 'playlists' | 'devices', LibraryFilter>
+  >({
+    slides: { ...clearLibraryFilter },
+    playlists: { ...clearLibraryFilter },
+    devices: { ...clearLibraryFilter },
+  });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -361,6 +374,60 @@ export default function App() {
     setPairOpen(false);
     setPairCode('');
   }
+  const groups = library.groups || [];
+  const screenStatus = (device: Device) =>
+    !device.approved
+      ? 'pending'
+      : device.lastSeen && Date.now() - Date.parse(device.lastSeen) < 90000
+        ? 'online'
+        : 'offline';
+  const liveSlides = new Set(
+    library.playlists
+      .filter(
+        (p) =>
+          p.publishedAt &&
+          library.devices.some(
+            (d) => d.playlistId === p.id && screenStatus(d) === 'online',
+          ),
+      )
+      .flatMap((p) => p.publishedSlideIds || []),
+  );
+  const visibleSlides = library.slides.filter((item) =>
+    matchesLibraryFilter(
+      item,
+      filters.slides,
+      groups,
+      liveSlides.has(item.id) ? 'live' : 'not-live',
+    ),
+  );
+  const visiblePlaylists = library.playlists.filter((item) =>
+    matchesLibraryFilter(
+      item,
+      filters.playlists,
+      groups,
+      item.publishedAt ? 'published' : 'draft',
+    ),
+  );
+  const visibleDevices = library.devices.filter((item) =>
+    matchesLibraryFilter(item, filters.devices, groups, screenStatus(item)),
+  );
+  const filterBar = (
+    key: 'slides' | 'playlists' | 'devices',
+    shown: number,
+    statuses: { value: string; label: string }[],
+  ) => (
+    <LibraryFilters
+      filter={filters[key]}
+      onChange={(filter) =>
+        setFilters((current) => ({ ...current, [key]: filter }))
+      }
+      groups={groups}
+      statuses={statuses}
+      shown={shown}
+      total={library[key].length}
+      noun={viewInfo[key].title}
+    />
+  );
   return (
     <TooltipProvider delay={300}>
       {!auth ? (
@@ -659,29 +726,27 @@ export default function App() {
               )}
               {view === 'slides' && (
                 <>
+                  {filterBar('slides', visibleSlides.length, [
+                    { value: 'live', label: 'Live' },
+                    { value: 'not-live', label: 'Not live' },
+                  ])}
+                  {!!library.slides.length && !visibleSlides.length && (
+                    <p className="empty-filter-results">
+                      No results match these filters. Try another group or clear
+                      the filters.
+                    </p>
+                  )}
                   <div className="section-meta">
                     <span>{library.slides.length} slides</span>
                     <span>Draft library</span>
                   </div>
                   {library.slides.length ? (
                     <div className="slide-grid">
-                      {library.slides.map((slide) => (
+                      {visibleSlides.map((slide) => (
                         <article className="slide-card" key={slide.id}>
-                          {library.playlists.some(
-                            (playlist) =>
-                              !!playlist.publishedAt &&
-                              (playlist.publishedSlideIds || []).includes(
-                                slide.id,
-                              ) &&
-                              library.devices.some(
-                                (device) =>
-                                  device.approved &&
-                                  device.playlistId === playlist.id &&
-                                  !!device.lastSeen &&
-                                  Date.now() - Date.parse(device.lastSeen) <
-                                    90000,
-                              ),
-                          ) && <span className="slide-live-tag">Live</span>}
+                          {liveSlides.has(slide.id) && (
+                            <span className="slide-live-tag">Live</span>
+                          )}
                           <button
                             className="thumbnail-button"
                             onClick={() => setEditing(slide)}
@@ -763,13 +828,23 @@ export default function App() {
               )}
               {view === 'playlists' && (
                 <>
+                  {filterBar('playlists', visiblePlaylists.length, [
+                    { value: 'published', label: 'Published' },
+                    { value: 'draft', label: 'Draft' },
+                  ])}
+                  {!!library.playlists.length && !visiblePlaylists.length && (
+                    <p className="empty-filter-results">
+                      No results match these filters. Try another group or clear
+                      the filters.
+                    </p>
+                  )}
                   <div className="section-meta">
                     <span>{library.playlists.length} playlists</span>
                     <span>Changes go live when published</span>
                   </div>
                   {library.playlists.length ? (
                     <div className="playlist-list">
-                      {library.playlists.map((p) => (
+                      {visiblePlaylists.map((p) => (
                         <article className="playlist-row" key={p.id}>
                           <div className="playlist-thumb">
                             {library.slides.find(
@@ -863,11 +938,22 @@ export default function App() {
               )}
               {view === 'devices' && (
                 <>
+                  {filterBar('devices', visibleDevices.length, [
+                    { value: 'online', label: 'Online' },
+                    { value: 'offline', label: 'Offline' },
+                    { value: 'pending', label: 'Awaiting approval' },
+                  ])}
+                  {!!library.devices.length && !visibleDevices.length && (
+                    <p className="empty-filter-results">
+                      No results match these filters. Try another group or clear
+                      the filters.
+                    </p>
+                  )}
                   <div className="screen-summary">
                     <div>
                       <strong>
                         {
-                          library.devices.filter(
+                          visibleDevices.filter(
                             (d) =>
                               d.approved &&
                               d.lastSeen &&
@@ -883,7 +969,7 @@ export default function App() {
                     <div>
                       <strong>
                         {
-                          library.devices.filter(
+                          visibleDevices.filter(
                             (d) =>
                               d.approved &&
                               (!d.lastSeen ||
@@ -895,14 +981,14 @@ export default function App() {
                     </div>
                     <div>
                       <strong>
-                        {library.devices.filter((d) => !d.approved).length}
+                        {visibleDevices.filter((d) => !d.approved).length}
                       </strong>
                       <span>Awaiting approval</span>
                     </div>
                   </div>
                   {library.devices.length ? (
                     <div className="devices-list">
-                      {library.devices.map((d) => (
+                      {visibleDevices.map((d) => (
                         <DeviceRow
                           key={d.id}
                           device={d}

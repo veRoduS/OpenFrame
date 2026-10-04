@@ -92,3 +92,5 @@ Local commits may be as frequent as useful. Publishing source to GitHub remains 
 By contributing, you agree that your contribution is available under the project's MIT license. Include attribution/licenses for third-party code or assets; never submit media you do not have permission to redistribute.
 
 Run `node tests/widgets.browser.mjs` after building for shared editor/player shape styles, vertical weather fitting at multiple heights, encrypted stock connection controls, and quote changes without frame replacement. This uses injected/mock provider responses and an isolated database; it does not prove live Finnhub availability or account allowance. `tests/organization.browser.mjs` also covers single/multiple media drag/drop, user-to-group drag/drop, and admin-only group reparenting.
+
+After building, `node tests/library-filters.browser.mjs` checks combined name/group/status filters, parent/child branches, ungrouped resources, counts, empty results, independent page state, and 320px layout using an isolated database. Use the Playwright environment settings above. Filter metadata visibility is covered by the Node account tests.
