@@ -1,3 +1,4 @@
+import { renderShape } from './shape.js';
 import { widgets } from './widgets.js';
 import { layoutText } from './text-layout.js';
 import { imageStyle } from './image-layout.js';
@@ -130,6 +131,8 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
           images.push(image);
           box.append(image);
         }
+      } else if (layer.type === 'shape') {
+        renderShape(box, layer, slide);
       } else {
         const content = document.createElement('span');
         box.append(content);

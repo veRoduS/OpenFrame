@@ -1,3 +1,4 @@
+import { createStockCache, stockSymbols } from './stocks.mjs';
 import express from 'express';
 import { createAccounts } from './accounts.mjs';
 import { mountAndroidReleases } from './android-releases.mjs';
@@ -33,6 +34,8 @@ export function createApp({
   dataDir = process.env.DATA_DIR || './data',
   managedVpnTransport,
   weatherFetch,
+  stockFetch,
+  stockNow,
   zipFetch,
   androidReleaseDir,
   androidReleaseSource = process.env.ANDROID_RELEASE_SOURCE ||
@@ -196,6 +199,65 @@ export function createApp({
     get,
     put,
     remove,
+  });
+  const stockRecord = () =>
+    db
+      .prepare(
+        "SELECT body FROM records WHERE kind='integration' AND id='stock-provider'",
+      )
+      .get();
+  const stockToken = () => {
+    const row = stockRecord();
+    return row ? vault.decrypt(JSON.parse(row.body)).token : '';
+  };
+  const stocks = createStockCache({
+    db,
+    token: stockToken,
+    fetcher: stockFetch,
+    now: stockNow,
+  });
+  app.get('/api/settings/stocks', administrator, (req, res) =>
+    res.json({ configured: !!stockRecord() }),
+  );
+  app.put('/api/settings/stocks', administrator, (req, res) => {
+    const { token } = z
+      .object({
+        token: z.union([
+          z.literal(''),
+          z
+            .string()
+            .trim()
+            .regex(/^[A-Za-z0-9._-]{10,200}$/),
+        ]),
+      })
+      .parse(req.body);
+    if (!token)
+      db.prepare(
+        "DELETE FROM records WHERE kind='integration' AND id='stock-provider'",
+      ).run();
+    else {
+      const record = {
+        id: 'stock-provider',
+        encrypted: vault.encrypt({ token }, 'stock-provider'),
+      };
+      db.prepare('INSERT OR REPLACE INTO records VALUES (?,?,?)').run(
+        'integration',
+        record.id,
+        JSON.stringify(record),
+      );
+    }
+    stocks.reset();
+    res.json({ configured: !!token });
+  });
+  app.get('/api/stocks', admin, (req, res) => {
+    const symbols = stockSymbols.parse(
+      String(req.query.symbols || '').split(','),
+    );
+    res.json(
+      Object.fromEntries(
+        symbols.map((symbol) => [symbol, stocks.read(symbol)]),
+      ),
+    );
   });
   const recovery = mountRecovery(app, {
     admin,
@@ -677,7 +739,15 @@ export function createApp({
       slide: requireRecord('slide', item.slideId),
     }));
     return {
-      schemaVersion: 2,
+      schemaVersion: items.some((item) =>
+        item.slide.layers.some(
+          (layer) =>
+            ['shape', 'stocks'].includes(layer.type) ||
+            (layer.type === 'weather' && layer.weather?.layout === 'vertical'),
+        ),
+      )
+        ? 3
+        : 2,
       revision: randomUUID(),
       name: p.name,
       publishedAt: new Date().toISOString(),
@@ -723,7 +793,11 @@ export function createApp({
     manifest.revision = hash(
       JSON.stringify([manifest.items, manifest.assets, manifest.transition]),
     );
-    res.json({ ...manifest, weather: weather.forManifest(manifest) });
+    res.json({
+      ...manifest,
+      weather: weather.forManifest(manifest),
+      stocks: stocks.forManifest(manifest),
+    });
   });
   app.get('/api/weather/zip', admin, async (req, res) => {
     res.json(await zipLookup.lookup(req.query.zip));
@@ -1270,12 +1344,15 @@ export function createApp({
       rotation: device.rotation,
       command: device.command,
       weather: weather.forManifest(published),
-      manifest: published || {
-        schemaVersion: 2,
-        revision: 'empty',
-        name: 'No published playlist',
-        items: [],
-        assets: [],
+      manifest: {
+        ...(published || {
+          schemaVersion: 2,
+          revision: 'empty',
+          name: 'No published playlist',
+          items: [],
+          assets: [],
+        }),
+        stocks: stocks.forManifest(published),
       },
     });
   });
@@ -1308,6 +1385,7 @@ export function createApp({
     seedInitialAdmin: accounts.seedInitialAdmin,
     close: () => {
       weather.close();
+      stocks.close();
       zipLookup.close();
       managedVpn.close();
     },

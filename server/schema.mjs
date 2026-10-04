@@ -1,3 +1,4 @@
+import { stockSymbols } from './stocks.mjs';
 import { z } from 'zod';
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);
@@ -15,7 +16,15 @@ export const systemFontFamilies = [
 export const layerSchema = z
   .object({
     id,
-    type: z.enum(['text', 'image', 'clock', 'counter', 'weather']),
+    type: z.enum([
+      'text',
+      'image',
+      'clock',
+      'counter',
+      'weather',
+      'shape',
+      'stocks',
+    ]),
     x: z.number().min(0).max(100),
     y: z.number().min(0).max(100),
     width: z
@@ -45,6 +54,22 @@ export const layerSchema = z
     cropX: z.number().min(0).max(100).default(50),
     cropY: z.number().min(0).max(100).default(50),
     cropZoom: z.number().min(1).max(4).default(1),
+    stocks: z
+      .object({
+        name: z.string().trim().max(80).default('Stocks'),
+        symbols: stockSymbols,
+      })
+      .optional(),
+    shape: z
+      .object({
+        kind: z.enum(['rectangle', 'circle']).default('rectangle'),
+        fill: color.default('#17613d'),
+        fillEnabled: z.boolean().default(true),
+        outline: color.default('#202923'),
+        outlineWidth: z.number().min(0).max(100).default(4),
+        cornerRadius: z.number().min(0).max(1000).default(0),
+      })
+      .optional(),
     weather: z
       .object({
         name: z.string().trim().max(80).default('Weather'),
@@ -52,6 +77,7 @@ export const layerSchema = z
         longitude: z.number().min(-180).max(180).nullable(),
         unit: z.enum(['F', 'C']).default('F'),
         mode: z.enum(['current', 'six-hour']).default('current'),
+        layout: z.enum(['horizontal', 'vertical']).default('horizontal'),
         zip: z
           .string()
           .regex(/^\d{5}$/)
@@ -103,7 +129,9 @@ export const layerSchema = z
     'Only image layers can reference media',
   )
   .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter')
-  .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather');
+  .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather')
+  .refine((l) => l.type !== 'shape' || !!l.shape, 'Configure the shape')
+  .refine((l) => l.type !== 'stocks' || !!l.stocks, 'Configure stock symbols');
 export const slideSchema = z.object({
   name: z.string().trim().min(1).max(100),
   width: z.number().int().min(320).max(3840),

@@ -77,6 +77,11 @@ export function Accounts({
   library: Library;
   refresh: () => Promise<void>;
 }) {
+  const [dragged, setDragged] = useState<{
+    type: 'user' | 'group';
+    id: string;
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [tab, setTab] = useState('groups');
   const [groups, setGroups] = useState<Group[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -111,6 +116,42 @@ export function Accounts({
       setBusy(false);
     }
   }
+  function canDropGroup(target: string | null) {
+    if (!isAdmin || busy || !dragged) return false;
+    if (dragged.type === 'user')
+      return (
+        !!target &&
+        !groups
+          .find((group) => group.id === target)
+          ?.members.some((person) => person.id === dragged.id)
+      );
+    return (
+      (!target || !isWithin(groups, target, dragged.id)) &&
+      (groups.find((group) => group.id === dragged.id)?.parentId || null) !==
+        target
+    );
+  }
+  function dropInto(target: string | null) {
+    const item = dragged;
+    const valid = canDropGroup(target);
+    setDragged(null);
+    setDropTarget(null);
+    if (!item || !valid) return;
+    void run(async () => {
+      if (item.type === 'user')
+        await api(`/api/groups/${target}/members/${item.id}`, 'PUT', {
+          role: 'member',
+        });
+      else await api(`/api/groups/${item.id}`, 'PATCH', { parentId: target });
+      await reload();
+      await refresh();
+      setNotice(
+        item.type === 'user'
+          ? 'User added to group.'
+          : 'Group moved. Inherited access has been updated.',
+      );
+    });
+  }
   const resources: Record<string, { id: string; name: string }[]> = {
     device: library.devices,
     slide: library.slides,
@@ -142,6 +183,10 @@ export function Accounts({
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id as string)}
+              onDragEnter={() => {
+                if (isAdmin && dragged?.type === 'user' && id === 'groups')
+                  setTab('groups');
+              }}
             >
               <Glyph size={17} />
               {title as string}
@@ -258,7 +303,23 @@ export function Accounts({
           </form>
           <div className="account-list">
             {users.map((item) => (
-              <div className="account-row" key={item.id}>
+              <div
+                className="account-row"
+                key={item.id}
+                draggable={isAdmin && !busy && !item.disabled}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(
+                    'application/x-openframe-user',
+                    item.id,
+                  );
+                  event.dataTransfer.effectAllowed = 'copy';
+                  setDragged({ type: 'user', id: item.id });
+                }}
+                onDragEnd={() => {
+                  setDragged(null);
+                  setDropTarget(null);
+                }}
+              >
                 <div>
                   <button
                     className="user-name-button"
@@ -319,6 +380,62 @@ export function Accounts({
       )}
       {tab === 'groups' && (
         <section className="account-section">
+          {isAdmin && (
+            <div className="group-drag-tools">
+              <h3>Drag users into groups</h3>
+              <p className="muted">
+                Drag a user onto a group to add a membership. Drag a group
+                heading onto another group to move it inside.
+              </p>
+              <div className="user-drag-list">
+                {users
+                  .filter((entry) => !entry.disabled)
+                  .map((entry) => (
+                    <button
+                      key={entry.id}
+                      draggable={!busy}
+                      disabled={busy}
+                      aria-label={`Drag ${entry.name} to a group`}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(
+                          'application/x-openframe-user',
+                          entry.id,
+                        );
+                        event.dataTransfer.effectAllowed = 'copy';
+                        setDragged({ type: 'user', id: entry.id });
+                      }}
+                      onDragEnd={() => {
+                        setDragged(null);
+                        setDropTarget(null);
+                      }}
+                    >
+                      {entry.name}
+                    </button>
+                  ))}
+              </div>
+              <button
+                className={
+                  dropTarget === 'root' ? 'organization-drop-target' : ''
+                }
+                onDragOver={(event) => {
+                  if (dragged?.type === 'group' && canDropGroup(null)) {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDropTarget('root');
+                  }
+                }}
+                onDragLeave={() => setDropTarget(null)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  dropInto(null);
+                }}
+              >
+                Top-level groups · Drop a group here to move it out of its
+                parent
+              </button>
+            </div>
+          )}
+
           <div className="account-group-forms">
             <form
               className="account-inline-form"
@@ -394,7 +511,20 @@ export function Accounts({
           {!groups.length && <p className="account-empty">No groups yet.</p>}
           {orderedGroups.map(({ group, depth }) => (
             <section
-              className="group-section"
+              className={`group-section ${dropTarget === group.id ? 'organization-drop-target' : ''}`}
+              onDragOver={(event) => {
+                if (canDropGroup(group.id)) {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect =
+                    dragged?.type === 'user' ? 'copy' : 'move';
+                  setDropTarget(group.id);
+                }
+              }}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => {
+                event.preventDefault();
+                dropInto(group.id);
+              }}
               key={group.id}
               style={{
                 marginLeft: `${Math.min(depth, 4) * 18}px`,
@@ -403,7 +533,27 @@ export function Accounts({
               }}
             >
               <div className="account-row">
-                <h2>{group.name}</h2>
+                <h2>
+                  <button
+                    type="button"
+                    className="group-drag-handle"
+                    draggable={isAdmin && !busy}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(
+                        'application/x-openframe-group',
+                        group.id,
+                      );
+                      event.dataTransfer.effectAllowed = 'move';
+                      setDragged({ type: 'group', id: group.id });
+                    }}
+                    onDragEnd={() => {
+                      setDragged(null);
+                      setDropTarget(null);
+                    }}
+                  >
+                    {group.name}
+                  </button>
+                </h2>
                 {group.canManage && (
                   <button
                     disabled={busy}
@@ -432,7 +582,7 @@ export function Accounts({
                     <select
                       aria-label={`Parent group for ${group.name}`}
                       value={group.parentId || ''}
-                      disabled={busy}
+                      disabled={busy || !isAdmin}
                       onChange={(event) => {
                         const parentId = event.target.value || null;
                         void run(async () => {

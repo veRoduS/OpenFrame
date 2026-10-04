@@ -265,6 +265,7 @@ void test('weather schema and formatting cover units, missing data, stale and ex
 
 function mockElement() {
   return {
+    dataset: {},
     style: {},
     children: [],
     ownText: '',
@@ -304,6 +305,8 @@ void test('weather widgets prepare without networking or timers and subscribe on
     else delete globalThis.document;
   });
   const element = {
+    dataset: {},
+    style: {},
     textContent: '',
     replaceChildren(...children) {
       this.textContent = children.map((child) => child.textContent).join('');

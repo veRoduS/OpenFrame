@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -55,6 +56,23 @@ try {
     name: 'Jordan Taylor',
     username: 'jordan',
   });
+  const robin = await api('/api/users', 'POST', {
+    name: 'Robin Smith',
+    username: 'robin',
+  });
+  const mediaBuffer = await sharp({
+    create: { width: 8, height: 8, channels: 3, background: 'red' },
+  })
+    .png()
+    .toBuffer();
+  const images = [];
+  for (const name of ['first.png', 'second.png']) {
+    const uploaded = await page.request.post(base + '/api/assets', {
+      multipart: { file: { name, mimeType: 'image/png', buffer: mediaBuffer } },
+    });
+    assert.equal(uploaded.status(), 201);
+    images.push(await uploaded.json());
+  }
   const slide = await api('/api/slides', 'POST', {
     name: 'Nested welcome',
     width: 1920,
@@ -79,6 +97,49 @@ try {
   const section = page.locator('.group-section').filter({
     has: page.getByRole('heading', { name: 'Group A', exact: true }),
   });
+  await page
+    .getByRole('button', { name: 'Drag Robin Smith to a group', exact: true })
+    .dragTo(section);
+  await page.getByText('User added to group.', { exact: true }).waitFor();
+  assert.ok(
+    (await api('/api/groups'))
+      .find((g) => g.id === parent.id)
+      .members.some((u) => u.id === robin.user.id),
+  );
+  await page
+    .locator('.group-drag-handle')
+    .filter({ hasText: 'Group B' })
+    .dragTo(section);
+  await page
+    .getByText('Group moved. Inherited access has been updated.', {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    (await api('/api/groups')).find((g) => g.id === other.id).parentId,
+    parent.id,
+  );
+  await page.setViewportSize({ width: 1280, height: 1800 });
+  const movedOut = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/groups/${other.id}`) &&
+      response.request().method() === 'PATCH',
+  );
+  await page
+    .locator('.group-drag-handle')
+    .filter({ hasText: 'Group B' })
+    .dragTo(page.getByRole('button', { name: /Top-level groups/ }));
+  assert.equal((await movedOut).status(), 200);
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[aria-label="Parent group for Group B"]')
+        .disabled,
+  );
+  assert.equal(
+    (await api('/api/groups')).find((g) => g.id === other.id).parentId,
+    null,
+  );
+  await page.setViewportSize({ width: 1280, height: 900 });
   await section.getByRole('button', { name: 'Add user', exact: true }).click();
   await section.getByText('Jordan Taylor', { exact: true }).waitFor();
   await page
@@ -185,6 +246,31 @@ try {
   const nav = page.getByRole('navigation', { name: 'Media folders' });
   const folder = (name) =>
     nav.getByRole('button', { name: new RegExp(`^${name}`) });
+  await page
+    .getByRole('checkbox', { name: `Select ${images[0].name}`, exact: true })
+    .click();
+  await page
+    .getByRole('checkbox', { name: `Select ${images[1].name}`, exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: `Edit ${images[0].name}`, exact: true })
+    .dragTo(folder('Campus'));
+  await page.getByText('Moved 2 media files', { exact: true }).waitFor();
+  assert.ok(
+    (await api('/api/library')).assets.every(
+      (asset) => asset.folderId === folderB.id,
+    ),
+  );
+  await page
+    .getByRole('button', { name: `Edit ${images[0].name}`, exact: true })
+    .dragTo(nav.getByRole('button', { name: /^Unfiled/ }));
+  await page.getByText('Moved 1 media file', { exact: true }).waitFor();
+  assert.equal(
+    (await api('/api/library')).assets.find(
+      (asset) => asset.id === images[0].id,
+    ).folderId,
+    null,
+  );
   assert.equal(await folder('Summer').locator('span').innerText(), 'Summer');
   assert.ok(
     (await folder('Summer').evaluate((el) =>

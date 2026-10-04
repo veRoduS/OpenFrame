@@ -71,3 +71,21 @@ Screens shows the browser's playback phase, last preparation time, delayed-switc
 This removes the clear-then-load transition path, but is not a guarantee of zero dropped frames on every device. Two complex slides can still exceed a small device's memory or rendering capacity, and browser decoding/layout tests do not measure HDMI output or GPU composition. Start with a representative photo/widget loop and measure on your target Pi. See [docs/playback-testing.md](playback-testing.md) for the hardware acceptance checklist.
 
 Media folders appear as an indented tree. Drag a folder onto another folder to move it inside, or onto **All media** to move it back to the top level. Its subfolders and images remain inside it. On touch devices or with a keyboard, select **Edit folder** and choose **Parent folder** instead. Moves preserve existing access grants; moving a folder does not automatically share its contents with the destination audience.
+
+## Shapes and narrow weather panels
+
+Add **Rectangle** or **Circle** in the slide editor. Rectangles also make squares; start with a square and resize its width and height independently. Set **Fill color**, **Outline color**, and **Outline width**; turn off **Fill shape** for an outline-only shape. Rectangles have an adjustable **Corner radius**, clamped visually to fit the smaller side. Outlines stay within the layer's bounds. Shapes support the same move, resize, layer-order, undo, and lock controls as other layers.
+
+Choose **Weather layout > Vertical** for a narrow panel. **Fit right sidebar** places it in the rightmost 16% of the canvas at 80% height with auto-size enabled. Change height, width, and vertical alignment to make a shorter panel or fill a larger area. Current weather stacks its icon and temperature; the six-hour display stacks forecast rows. Both editor and player use the same layout and auto-size calculation.
+
+## Stock tracker
+
+As an admin, open **Settings > Stock quotes**, obtain one [Finnhub API key](https://finnhub.io/register), and select **Connect stock quotes**. The key is encrypted in the server's data directory and never returned to the browser or sent to players. Data availability and any market-data delay depend on your Finnhub account; no live provider account was used in development verification.
+
+Add **Stock tracker** in the editor and enter up to eight US symbols separated by commas, such as `WMT, AAPL`. OpenFrame shares one quote cache across screens and refreshes each watched symbol at most once every 15 minutes during scheduled US regular hours (09:30–16:00 America/New_York, weekdays, with daylight-saving handling). It may fetch an initial quote outside those hours. The schedule does not include an exchange holiday calendar; holiday calls may return the last trading quote. Prices show their actual quote timestamp, cached status, USD value, and change from the prior close. Provider failures retain the last usable quote. Quotes refresh with player sync rather than waiting for a new playlist publication; offline players retain their last saved snapshot.
+
+The server bounds the shared cache to 64 symbols, two concurrent provider requests, and 30 quote requests per minute. Eight active symbols normally require at most 208 scheduled quote requests over a full regular trading day, plus initial quotes. Check the provider's current plan allowance before connecting; a provider limit or outage can delay updates.
+
+**Player upgrade:** shapes, stock trackers, and vertical weather require player **0.10.11 or newer**, which accepts playlist schema 3. Upgrade affected players before publishing these layers. Playlists without these features remain schema 2. Updated players also accept schemas 1 and 2 from older servers. Server and player patches are local until published.
+
+Writable media can be dragged by its thumbnail onto a folder. Select several images first to move them together; drop onto **Unfiled** to remove their folder assignment. Shared read-only media cannot be moved. The **Move** button remains available for touch and keyboard use.

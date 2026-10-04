@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid';
 
 export type Layer = {
   id: string;
-  type: 'text' | 'image' | 'clock' | 'counter' | 'weather';
+  type: 'text' | 'image' | 'clock' | 'counter' | 'weather' | 'shape' | 'stocks';
   x: number;
   y: number;
   width: number;
@@ -25,12 +25,22 @@ export type Layer = {
   cropY?: number;
   cropZoom?: number;
   clock?: { showSeconds?: boolean; hour12?: boolean };
+  stocks?: { name: string; symbols: string[] };
+  shape?: {
+    kind: 'rectangle' | 'circle';
+    fill: string;
+    fillEnabled?: boolean;
+    outline: string;
+    outlineWidth: number;
+    cornerRadius: number;
+  };
   weather?: {
     name: string;
     latitude: number | null;
     longitude: number | null;
     unit: 'F' | 'C';
     mode?: 'current' | 'six-hour';
+    layout?: 'horizontal' | 'vertical';
     zip?: string;
   };
   counter?: {
@@ -97,7 +107,11 @@ export type Asset = {
   createdAt: string | null;
   readOnly?: boolean;
 };
-export type MediaFolder = { id: string; name: string; parentId?: string | null };
+export type MediaFolder = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+};
 export type Device = {
   id: string;
   name: string;
@@ -173,6 +187,28 @@ export function newLayer(type: Layer['type'], assetId?: string): Layer {
     cropX: 50,
     cropY: 50,
     cropZoom: 1,
+    ...(type === 'stocks'
+      ? {
+          width: 25,
+          height: 40,
+          autoSize: true,
+          stocks: { name: 'Stocks', symbols: ['WMT'] },
+        }
+      : {}),
+    ...(type === 'shape'
+      ? {
+          width: 30,
+          height: 30,
+          shape: {
+            kind: 'rectangle' as const,
+            fill: '#17613d',
+            fillEnabled: true,
+            outline: '#202923',
+            outlineWidth: 4,
+            cornerRadius: 0,
+          },
+        }
+      : {}),
     ...(type === 'weather'
       ? {
           width: 60,

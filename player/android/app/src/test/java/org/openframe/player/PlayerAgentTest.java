@@ -138,6 +138,20 @@ public class PlayerAgentTest {
                 .getJSONObject("slide").getJSONArray("layers").getJSONObject(0).getBoolean("removedMedia"));
     }
 
+    @Test public void acceptsSchemaThreeAndRetainsStockSnapshots() throws Exception {
+        response = new JSONObject().put("approved", true).put("rotation", 0).put("blank", false)
+                .put("manifest", new JSONObject().put("schemaVersion", 3).put("revision", "widgets")
+                        .put("name", "Widgets").put("items", new JSONArray()).put("assets", new JSONArray())
+                        .put("stocks", new JSONObject().put("WMT", new JSONObject().put("price", 105))));
+        PlayerAgent player = agent(); player.tick();
+        JSONObject manifest = new JSONObject(player.snapshot()).getJSONObject("manifest");
+        assertEquals(3, manifest.getInt("schemaVersion"));
+        assertEquals(105, manifest.getJSONObject("stocks").getJSONObject("WMT").getInt("price"));
+        response.getJSONObject("manifest").put("schemaVersion", 4);
+        player.tick();
+        assertEquals(3, new JSONObject(player.snapshot()).getJSONObject("manifest").getInt("schemaVersion"));
+    }
+
     @Test public void enrollmentAndSyncRejectUnexpectedSuccessStatuses() throws Exception {
         enrollmentStatus = 202;
         PlayerAgent player = agent(); player.tick();

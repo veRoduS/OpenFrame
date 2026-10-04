@@ -7,8 +7,10 @@ type Place = { name: string; latitude: number; longitude: number };
 export function WeatherOptions({
   config,
   onChange,
+  onFitSidebar,
 }: {
   config: Config;
+  onFitSidebar?: () => void;
   onChange: (patch: Partial<Config>) => void;
 }) {
   const [zip, setZip] = useState(config.zip || '');
@@ -109,9 +111,28 @@ export function WeatherOptions({
           </label>
         )}
       </div>
+      <label>
+        Weather layout
+        <select
+          aria-label="Weather layout"
+          value={config.layout || 'horizontal'}
+          onChange={(event) =>
+            onChange({ layout: event.target.value as Config['layout'] })
+          }
+        >
+          <option value="horizontal">Horizontal</option>
+          <option value="vertical">Vertical</option>
+        </select>
+      </label>
+      {onFitSidebar && (
+        <button type="button" onClick={onFitSidebar}>
+          Fit right sidebar
+        </button>
+      )}
       <label className="weather-mode">
         Weather display
         <select
+          aria-label="Weather display"
           value={config.mode || 'current'}
           onChange={(e) => onChange({ mode: e.target.value as Config['mode'] })}
         >

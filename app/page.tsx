@@ -1,3 +1,4 @@
+import { StockSettings } from './stock-settings';
 import {
   useEffect,
   useState,
@@ -46,6 +47,8 @@ import {
   Power,
   CheckCircle2,
   Circle,
+  Square,
+  TrendingUp,
   Settings,
   Bold,
   AlignLeft,
@@ -649,7 +652,10 @@ export default function App() {
                 />
               )}
               {view === 'settings' && auth.user?.role === 'admin' && (
-                <FontSettings fonts={fonts} refresh={refreshFonts} />
+                <div className="account-section">
+                  <StockSettings />
+                  <FontSettings fonts={fonts} refresh={refreshFonts} />
+                </div>
               )}
               {view === 'slides' && (
                 <>
@@ -1462,8 +1468,17 @@ function Editor({
       layers: slide.layers.map((l) => (l.id === selected ? next : l)),
     });
   }
-  function add(type: Layer['type'], assetId?: string) {
+  function add(
+    type: Layer['type'],
+    assetId?: string,
+    shapeKind?: 'circle' | 'rectangle',
+  ) {
     const layer = newLayer(type, assetId);
+    if (type === 'shape') {
+      layer.shape!.kind = shapeKind || 'rectangle';
+      layer.width = 25;
+      layer.height = Math.min(80, (25 * slide.width) / slide.height);
+    }
     const background = slide.background
       .slice(1)
       .match(/../g)!
@@ -1610,6 +1625,21 @@ function Editor({
             <IconButton label="Add text" onClick={() => add('text')}>
               <Type size={20} />
             </IconButton>
+            <IconButton label="Add stock tracker" onClick={() => add('stocks')}>
+              <TrendingUp size={20} />
+            </IconButton>
+            <IconButton
+              label="Add rectangle"
+              onClick={() => add('shape', undefined, 'rectangle')}
+            >
+              <Square size={20} />
+            </IconButton>
+            <IconButton
+              label="Add circle"
+              onClick={() => add('shape', undefined, 'circle')}
+            >
+              <Circle size={20} />
+            </IconButton>
             <IconButton label="Add image" onClick={() => setMedia('add')}>
               <ImagePlus size={20} />
             </IconButton>
@@ -1639,7 +1669,15 @@ function Editor({
                   setSelected(layer.id);
                 }}
               >
-                {layer.type === 'image' ? (
+                {layer.type === 'stocks' ? (
+                  <TrendingUp size={16} />
+                ) : layer.type === 'shape' ? (
+                  layer.shape?.kind === 'circle' ? (
+                    <Circle size={16} />
+                  ) : (
+                    <Square size={16} />
+                  )
+                ) : layer.type === 'image' ? (
                   <Images size={16} />
                 ) : layer.type === 'counter' ? (
                   <Timer size={16} />
@@ -1651,18 +1689,24 @@ function Editor({
                   <Type size={16} />
                 )}
                 <span>
-                  {layer.type === 'text'
-                    ? layer.text || 'Text'
-                    : layer.type === 'counter'
-                      ? 'Counter'
-                      : layer.type === 'weather'
-                        ? layer.weather?.name || 'Weather'
-                        : layer.type === 'clock'
-                          ? 'Clock'
-                          : layer.removedMedia
-                            ? 'Removed media'
-                            : assets.find((a) => a.id === layer.assetId)
-                                ?.name || 'Image'}
+                  {layer.type === 'stocks'
+                    ? layer.stocks?.name || 'Stocks'
+                    : layer.type === 'shape'
+                      ? layer.shape?.kind === 'circle'
+                        ? 'Circle'
+                        : 'Rectangle'
+                      : layer.type === 'text'
+                        ? layer.text || 'Text'
+                        : layer.type === 'counter'
+                          ? 'Counter'
+                          : layer.type === 'weather'
+                            ? layer.weather?.name || 'Weather'
+                            : layer.type === 'clock'
+                              ? 'Clock'
+                              : layer.removedMedia
+                                ? 'Removed media'
+                                : assets.find((a) => a.id === layer.assetId)
+                                    ?.name || 'Image'}
                 </span>
                 <small>{slide.layers.length - i}</small>
               </button>
@@ -1756,15 +1800,19 @@ function Editor({
             {current && (
               <div className="property-heading">
                 <strong>
-                  {current.type === 'text'
-                    ? 'Text'
-                    : current.type === 'counter'
-                      ? 'Counter widget'
-                      : current.type === 'weather'
-                        ? 'Weather widget'
-                        : current.type === 'clock'
-                          ? 'Clock widget'
-                          : 'Image'}
+                  {current.type === 'stocks'
+                    ? 'Stock tracker'
+                    : current.type === 'shape'
+                      ? 'Shape'
+                      : current.type === 'text'
+                        ? 'Text'
+                        : current.type === 'counter'
+                          ? 'Counter widget'
+                          : current.type === 'weather'
+                            ? 'Weather widget'
+                            : current.type === 'clock'
+                              ? 'Clock widget'
+                              : 'Image'}
                 </strong>
                 <IconButton
                   label="Delete layer"
@@ -1848,11 +1896,191 @@ function Editor({
                     </button>
                   </>
                 )}
+                {current.type === 'stocks' && current.stocks && (
+                  <>
+                    <label>
+                      Tracker title
+                      <input
+                        value={current.stocks.name}
+                        maxLength={80}
+                        onChange={(event) =>
+                          patchLayer({
+                            stocks: {
+                              ...current.stocks!,
+                              name: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Stock symbols
+                      <input
+                        aria-label="Stock symbols"
+                        key={current.id}
+                        defaultValue={current.stocks.symbols.join(', ')}
+                        maxLength={128}
+                        placeholder="WMT, AAPL"
+                        onBlur={(event) => {
+                          const symbols = [
+                            ...new Set(
+                              event.target.value
+                                .toUpperCase()
+                                .split(',')
+                                .map((value) => value.trim())
+                                .filter(Boolean),
+                            ),
+                          ];
+                          if (
+                            symbols.length &&
+                            symbols.length <= 8 &&
+                            symbols.every((symbol) =>
+                              /^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol),
+                            )
+                          )
+                            patchLayer({
+                              stocks: { ...current.stocks!, symbols },
+                            });
+                          else
+                            event.target.value =
+                              current.stocks!.symbols.join(', ');
+                        }}
+                      />
+                    </label>
+                    <p className="muted">
+                      Up to 8 US stock symbols. Quotes refresh every 15 minutes
+                      during scheduled trading hours. Connect quotes under
+                      Settings.
+                    </p>
+                  </>
+                )}
+                {current.type === 'shape' && current.shape && (
+                  <>
+                    <label>
+                      Shape
+                      <select
+                        aria-label="Shape"
+                        value={current.shape.kind}
+                        onChange={(event) =>
+                          patchLayer({
+                            shape: {
+                              ...current.shape!,
+                              kind: event.target.value as
+                                | 'circle'
+                                | 'rectangle',
+                            },
+                          })
+                        }
+                      >
+                        <option value="rectangle">Square / rectangle</option>
+                        <option value="circle">Circle</option>
+                      </select>
+                    </label>
+                    <div className="property-field-grid">
+                      <label>
+                        Fill color
+                        <input
+                          type="color"
+                          value={current.shape.fill}
+                          onChange={(event) =>
+                            patchLayer({
+                              shape: {
+                                ...current.shape!,
+                                fill: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Outline color
+                        <input
+                          type="color"
+                          value={current.shape.outline}
+                          onChange={(event) =>
+                            patchLayer({
+                              shape: {
+                                ...current.shape!,
+                                outline: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Outline width
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={current.shape.outlineWidth}
+                          onChange={(event) =>
+                            patchLayer({
+                              shape: {
+                                ...current.shape!,
+                                outlineWidth: Math.max(
+                                  0,
+                                  Math.min(100, Number(event.target.value)),
+                                ),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      {current.shape.kind === 'rectangle' && (
+                        <label>
+                          Corner radius
+                          <input
+                            type="number"
+                            min={0}
+                            max={1000}
+                            value={current.shape.cornerRadius}
+                            onChange={(event) =>
+                              patchLayer({
+                                shape: {
+                                  ...current.shape!,
+                                  cornerRadius: Math.max(
+                                    0,
+                                    Math.min(1000, Number(event.target.value)),
+                                  ),
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                    <label className="property-switch" htmlFor="fill-shape">
+                      Fill shape
+                      <Switch
+                        id="fill-shape"
+                        checked={current.shape.fillEnabled !== false}
+                        onCheckedChange={(fillEnabled) =>
+                          patchLayer({
+                            shape: { ...current.shape!, fillEnabled },
+                          })
+                        }
+                      />
+                    </label>
+                  </>
+                )}
                 {current.type === 'weather' && current.weather && (
                   <>
                     <WeatherOptions
                       key={current.id}
                       config={current.weather}
+                      onFitSidebar={() =>
+                        patchLayer({
+                          x: 84,
+                          y: 10,
+                          width: 16,
+                          height: 80,
+                          autoSize: true,
+                          align: 'center',
+                          verticalAlign: 'middle',
+                          weather: { ...current.weather!, layout: 'vertical' },
+                        })
+                      }
                       onChange={(patch) =>
                         patchLayer({
                           weather: { ...current.weather!, ...patch },
@@ -2124,241 +2352,255 @@ function Editor({
                   </label>
                 )}
               </PropertySection>
-              <PropertySection
-                title={
-                  current.type === 'image' ? 'Image display' : 'Typography'
-                }
-              >
-                {current.type !== 'image' ? (
-                  <>
-                    <label>
-                      Font family
-                      <select
-                        value={
-                          current.fontId
-                            ? `custom:${current.fontId}`
-                            : `system:${current.fontFamily || 'Arial'}`
-                        }
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          if (value.startsWith('custom:'))
-                            patchLayer({
-                              fontId: value.slice('custom:'.length),
-                            });
-                          else
-                            patchLayer({
-                              fontId: undefined,
-                              fontFamily: value.slice('system:'.length),
-                            });
-                        }}
-                      >
-                        <optgroup label="Built-in fonts">
-                          {systemFonts.map((family) => (
-                            <option key={family} value={`system:${family}`}>
-                              {family}
-                            </option>
-                          ))}
-                        </optgroup>
-                        {fonts.length > 0 && (
-                          <optgroup label="Custom fonts">
-                            {fonts.map((font) => (
-                              <option key={font.id} value={`custom:${font.id}`}>
-                                {font.family}
+              {current.type !== 'shape' && (
+                <PropertySection
+                  title={
+                    current.type === 'image' ? 'Image display' : 'Typography'
+                  }
+                >
+                  {current.type !== 'image' ? (
+                    <>
+                      <label>
+                        Font family
+                        <select
+                          value={
+                            current.fontId
+                              ? `custom:${current.fontId}`
+                              : `system:${current.fontFamily || 'Arial'}`
+                          }
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (value.startsWith('custom:'))
+                              patchLayer({
+                                fontId: value.slice('custom:'.length),
+                              });
+                            else
+                              patchLayer({
+                                fontId: undefined,
+                                fontFamily: value.slice('system:'.length),
+                              });
+                          }}
+                        >
+                          <optgroup label="Built-in fonts">
+                            {systemFonts.map((family) => (
+                              <option key={family} value={`system:${family}`}>
+                                {family}
                               </option>
                             ))}
                           </optgroup>
-                        )}
-                      </select>
-                    </label>
-                    <label className="property-switch" htmlFor="auto-size-text">
-                      Auto-size to box
-                      <Switch
-                        id="auto-size-text"
-                        checked={current.autoSize || false}
-                        onCheckedChange={(autoSize) => patchLayer({ autoSize })}
-                      />
-                    </label>
-                    <div className="property-field-grid">
-                      <label>
-                        Font size
-                        <input
-                          type="number"
-                          value={current.fontSize}
-                          disabled={current.autoSize}
-                          min={12}
-                          max={400}
-                          onChange={(e) => {
-                            if (e.target.value !== '')
-                              patchLayer({
-                                fontSize: Math.max(
-                                  12,
-                                  Math.min(400, Number(e.target.value)),
-                                ),
-                              });
-                          }}
-                        />
+                          {fonts.length > 0 && (
+                            <optgroup label="Custom fonts">
+                              {fonts.map((font) => (
+                                <option
+                                  key={font.id}
+                                  value={`custom:${font.id}`}
+                                >
+                                  {font.family}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </select>
                       </label>
-                      <label className="property-color-field">
-                        Text color
-                        <input
-                          type="color"
-                          value={current.color}
-                          onChange={(e) =>
-                            patchLayer({ color: e.target.value })
+                      <label
+                        className="property-switch"
+                        htmlFor="auto-size-text"
+                      >
+                        Auto-size to box
+                        <Switch
+                          id="auto-size-text"
+                          checked={current.autoSize || false}
+                          onCheckedChange={(autoSize) =>
+                            patchLayer({ autoSize })
                           }
                         />
                       </label>
-                    </div>
-                    <div className="property-control-row">
-                      <span>Style</span>
-                      <fieldset
-                        className="format-tools"
-                        aria-label="Text style"
-                      >
-                        <IconButton
-                          label="Bold"
-                          active={current.bold}
-                          onClick={() => patchLayer({ bold: !current.bold })}
-                        >
-                          <Bold size={18} />
-                        </IconButton>
-                        {(['left', 'center', 'right'] as const).map(
-                          (align, i) => (
-                            <IconButton
-                              key={align}
-                              label={`Align ${align}`}
-                              active={current.align === align}
-                              onClick={() => patchLayer({ align })}
-                            >
-                              {i === 0 ? (
-                                <AlignLeft size={18} />
-                              ) : i === 1 ? (
-                                <AlignCenter size={18} />
-                              ) : (
-                                <AlignRight size={18} />
-                              )}
-                            </IconButton>
-                          ),
-                        )}
-                      </fieldset>
-                    </div>
-                    <div className="property-control-row">
-                      <span>Vertical</span>
-                      <fieldset
-                        className="format-tools"
-                        aria-label="Vertical alignment"
-                      >
-                        {(['top', 'middle', 'bottom'] as const).map(
-                          (verticalAlign, i) => (
-                            <IconButton
-                              key={verticalAlign}
-                              label={`Align ${verticalAlign}`}
-                              active={
-                                (current.verticalAlign || 'top') ===
-                                verticalAlign
-                              }
-                              onClick={() => patchLayer({ verticalAlign })}
-                            >
-                              {i === 0 ? (
-                                <AlignVerticalJustifyStart size={18} />
-                              ) : i === 1 ? (
-                                <AlignVerticalJustifyCenter size={18} />
-                              ) : (
-                                <AlignVerticalJustifyEnd size={18} />
-                              )}
-                            </IconButton>
-                          ),
-                        )}
-                      </fieldset>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <label>
-                      Image fit
-                      <select
-                        value={current.fit}
-                        onChange={(e) =>
-                          patchLayer({ fit: e.target.value as Layer['fit'] })
-                        }
-                      >
-                        <option value="cover">Fill frame</option>
-                        <option value="contain">Fit image</option>
-                      </select>
-                    </label>
-                    {current.fit === 'cover' && (
-                      <details className="property-details" key={current.id}>
-                        <summary>Crop adjustments</summary>
-                        <div className="crop-controls">
-                          <button
-                            type="button"
-                            className={cropMode ? 'primary' : ''}
-                            aria-pressed={cropMode}
-                            onClick={() => setCropMode(!cropMode)}
-                          >
-                            <Crop size={17} />
-                            {cropMode ? 'Done cropping' : 'Adjust crop'}
-                          </button>
-                          <div className="slider-field">
-                            <span>Zoom</span>
-                            <Slider
-                              aria-label="Crop zoom"
-                              value={[current.cropZoom ?? 1]}
-                              min={1}
-                              max={4}
-                              step={0.05}
-                              onValueChange={(v) =>
+                      <div className="property-field-grid">
+                        <label>
+                          Font size
+                          <input
+                            type="number"
+                            value={current.fontSize}
+                            disabled={current.autoSize}
+                            min={12}
+                            max={400}
+                            onChange={(e) => {
+                              if (e.target.value !== '')
                                 patchLayer({
-                                  cropZoom: Array.isArray(v) ? v[0] : v,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="slider-field">
-                            <span>Horizontal position</span>
-                            <Slider
-                              aria-label="Crop horizontal position"
-                              value={[current.cropX ?? 50]}
-                              min={0}
-                              max={100}
-                              step={1}
-                              onValueChange={(v) =>
-                                patchLayer({
-                                  cropX: Array.isArray(v) ? v[0] : v,
-                                })
-                              }
-                            />
-                          </div>
-                          <div className="slider-field">
-                            <span>Vertical position</span>
-                            <Slider
-                              aria-label="Crop vertical position"
-                              value={[current.cropY ?? 50]}
-                              min={0}
-                              max={100}
-                              step={1}
-                              onValueChange={(v) =>
-                                patchLayer({
-                                  cropY: Array.isArray(v) ? v[0] : v,
-                                })
-                              }
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              patchLayer({ cropX: 50, cropY: 50, cropZoom: 1 })
+                                  fontSize: Math.max(
+                                    12,
+                                    Math.min(400, Number(e.target.value)),
+                                  ),
+                                });
+                            }}
+                          />
+                        </label>
+                        <label className="property-color-field">
+                          Text color
+                          <input
+                            type="color"
+                            value={current.color}
+                            onChange={(e) =>
+                              patchLayer({ color: e.target.value })
                             }
+                          />
+                        </label>
+                      </div>
+                      <div className="property-control-row">
+                        <span>Style</span>
+                        <fieldset
+                          className="format-tools"
+                          aria-label="Text style"
+                        >
+                          <IconButton
+                            label="Bold"
+                            active={current.bold}
+                            onClick={() => patchLayer({ bold: !current.bold })}
                           >
-                            <Undo2 size={16} />
-                            Reset crop
-                          </button>
-                        </div>
-                      </details>
-                    )}
-                  </>
-                )}
-              </PropertySection>
+                            <Bold size={18} />
+                          </IconButton>
+                          {(['left', 'center', 'right'] as const).map(
+                            (align, i) => (
+                              <IconButton
+                                key={align}
+                                label={`Align ${align}`}
+                                active={current.align === align}
+                                onClick={() => patchLayer({ align })}
+                              >
+                                {i === 0 ? (
+                                  <AlignLeft size={18} />
+                                ) : i === 1 ? (
+                                  <AlignCenter size={18} />
+                                ) : (
+                                  <AlignRight size={18} />
+                                )}
+                              </IconButton>
+                            ),
+                          )}
+                        </fieldset>
+                      </div>
+                      <div className="property-control-row">
+                        <span>Vertical</span>
+                        <fieldset
+                          className="format-tools"
+                          aria-label="Vertical alignment"
+                        >
+                          {(['top', 'middle', 'bottom'] as const).map(
+                            (verticalAlign, i) => (
+                              <IconButton
+                                key={verticalAlign}
+                                label={`Align ${verticalAlign}`}
+                                active={
+                                  (current.verticalAlign || 'top') ===
+                                  verticalAlign
+                                }
+                                onClick={() => patchLayer({ verticalAlign })}
+                              >
+                                {i === 0 ? (
+                                  <AlignVerticalJustifyStart size={18} />
+                                ) : i === 1 ? (
+                                  <AlignVerticalJustifyCenter size={18} />
+                                ) : (
+                                  <AlignVerticalJustifyEnd size={18} />
+                                )}
+                              </IconButton>
+                            ),
+                          )}
+                        </fieldset>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label>
+                        Image fit
+                        <select
+                          value={current.fit}
+                          onChange={(e) =>
+                            patchLayer({ fit: e.target.value as Layer['fit'] })
+                          }
+                        >
+                          <option value="cover">Fill frame</option>
+                          <option value="contain">Fit image</option>
+                        </select>
+                      </label>
+                      {current.fit === 'cover' && (
+                        <details className="property-details" key={current.id}>
+                          <summary>Crop adjustments</summary>
+                          <div className="crop-controls">
+                            <button
+                              type="button"
+                              className={cropMode ? 'primary' : ''}
+                              aria-pressed={cropMode}
+                              onClick={() => setCropMode(!cropMode)}
+                            >
+                              <Crop size={17} />
+                              {cropMode ? 'Done cropping' : 'Adjust crop'}
+                            </button>
+                            <div className="slider-field">
+                              <span>Zoom</span>
+                              <Slider
+                                aria-label="Crop zoom"
+                                value={[current.cropZoom ?? 1]}
+                                min={1}
+                                max={4}
+                                step={0.05}
+                                onValueChange={(v) =>
+                                  patchLayer({
+                                    cropZoom: Array.isArray(v) ? v[0] : v,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="slider-field">
+                              <span>Horizontal position</span>
+                              <Slider
+                                aria-label="Crop horizontal position"
+                                value={[current.cropX ?? 50]}
+                                min={0}
+                                max={100}
+                                step={1}
+                                onValueChange={(v) =>
+                                  patchLayer({
+                                    cropX: Array.isArray(v) ? v[0] : v,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="slider-field">
+                              <span>Vertical position</span>
+                              <Slider
+                                aria-label="Crop vertical position"
+                                value={[current.cropY ?? 50]}
+                                min={0}
+                                max={100}
+                                step={1}
+                                onValueChange={(v) =>
+                                  patchLayer({
+                                    cropY: Array.isArray(v) ? v[0] : v,
+                                  })
+                                }
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                patchLayer({
+                                  cropX: 50,
+                                  cropY: 50,
+                                  cropZoom: 1,
+                                })
+                              }
+                            >
+                              <Undo2 size={16} />
+                              Reset crop
+                            </button>
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  )}
+                </PropertySection>
+              )}
               <PropertySection title="Arrange">
                 <div className="format-tools">
                   <IconButton

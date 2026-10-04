@@ -2,6 +2,11 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.15.2] - 2026-10-04
+
+- Add media/user/group drag-and-drop, shapes, vertical weather and a shared Finnhub stock tracker; preserve separate admin identities on migration.
+- Playlists using shapes, stocks, or vertical weather require player 0.10.11 or newer; existing playlists retain schema 2.
+
 ## [0.15.1] - 2026-10-04
 
 - Add admin account and membership controls, inherited group access and moves, user access editing, and draggable indented media folders

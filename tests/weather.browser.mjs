@@ -94,6 +94,9 @@ try {
   );
   browser = await chromium.launch({
     headless: true,
+    ...(process.env.OPENFRAME_BROWSER_EXECUTABLE
+      ? { executablePath: process.env.OPENFRAME_BROWSER_EXECUTABLE }
+      : {}),
     ...(process.env.OPENFRAME_BROWSER_CHANNEL
       ? { channel: process.env.OPENFRAME_BROWSER_CHANNEL }
       : {}),

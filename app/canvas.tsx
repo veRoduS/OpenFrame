@@ -1,3 +1,5 @@
+import { renderStocks } from '../player/web/stocks.js';
+import { renderShape } from '../player/web/shape.js';
 import {
   useEffect,
   useLayoutEffect,
@@ -17,6 +19,68 @@ import {
   weatherView,
   renderWeather,
 } from '../player/web/weather.js';
+
+function ShapeContent({ layer, slide }: { layer: Layer; slide: Slide }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current) renderShape(ref.current, layer, slide);
+  }, [layer, slide]);
+  return (
+    <span
+      ref={ref}
+      style={{ display: 'block', width: '100%', height: '100%' }}
+    />
+  );
+}
+
+function StockContent({
+  layer,
+  scale,
+  active,
+}: {
+  layer: Layer;
+  scale: number;
+  active: boolean;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [quotes, setQuotes] = useState<Record<string, unknown>>({});
+  const key = layer.stocks?.symbols.join(',') || '';
+  useLayoutEffect(() => {
+    if (ref.current?.parentElement) {
+      renderStocks(ref.current, layer.stocks, quotes);
+      layoutText(ref.current.parentElement, ref.current, layer, scale);
+    }
+  }, [layer, quotes, scale]);
+  useEffect(() => {
+    if (!active || !key) return;
+    const abort = new AbortController();
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const response = await fetch(
+          `/api/stocks?symbols=${encodeURIComponent(key)}`,
+          {
+            cache: 'no-store',
+            signal: AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]),
+          },
+        );
+        if (response.ok && !stopped) setQuotes(await response.json());
+      } catch {
+        /* Keep the last quote while reconnecting. */
+      } finally {
+        if (!stopped) timer = setTimeout(poll, 15000);
+      }
+    }
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [key, active]);
+  return <span ref={ref} />;
+}
 
 function WeatherContent({
   layer,
@@ -304,6 +368,10 @@ export function SlideCanvas({
               src={assets.find((a) => a.id === layer.assetId)?.url}
               style={imageStyle(layer) as React.CSSProperties}
             />
+          ) : layer.type === 'stocks' ? (
+            <StockContent layer={layer} scale={scale} active={interactive} />
+          ) : layer.type === 'shape' ? (
+            <ShapeContent layer={layer} slide={slide} />
           ) : layer.type === 'weather' ? (
             <WeatherContent layer={layer} scale={scale} active={interactive} />
           ) : (
@@ -328,7 +396,14 @@ export function SlideCanvas({
             (l) =>
               l.id === selected &&
               l.lockMode !== 'full' &&
-              ['image', 'clock', 'counter', 'weather'].includes(l.type),
+              [
+                'image',
+                'clock',
+                'counter',
+                'weather',
+                'shape',
+                'stocks',
+              ].includes(l.type),
           )
           .map((layer) =>
             (layer.lockMode === 'movement'

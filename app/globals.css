@@ -2565,3 +2565,36 @@ input[type='color'] {
 .folder-navigation button[draggable='true']:active {
   cursor: grabbing;
 }
+
+.organization-drop-target {
+  background: #e1ece5;
+  outline: 2px solid #17613d;
+  outline-offset: -2px;
+}
+.group-drag-tools {
+  display: grid;
+  gap: 12px;
+}
+.user-drag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.user-drag-list button[draggable='true'],
+.group-section h2[draggable='true'],
+.account-row[draggable='true'],
+.media-entry[draggable='true'] {
+  cursor: grab;
+}
+
+.group-drag-handle {
+  border: 0;
+  padding: 8px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.group-drag-handle[draggable='true'],
+.media-image-button[draggable='true'] {
+  cursor: grab;
+}

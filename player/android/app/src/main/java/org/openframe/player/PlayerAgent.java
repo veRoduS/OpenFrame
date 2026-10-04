@@ -142,7 +142,7 @@ final class PlayerAgent {
         if (response.getBoolean("approved")) {
             JSONObject manifest = response.getJSONObject("manifest");
             int schemaVersion = manifest.getInt("schemaVersion");
-            if (schemaVersion != 1 && schemaVersion != 2) throw new IOException("Unsupported playlist schema");
+            if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3) throw new IOException("Unsupported playlist schema");
             nextRevision = manifest.getString("revision");
             JSONArray assets = manifest.getJSONArray("assets");
             boolean verify = !nextRevision.equals(verifiedRevision) || execute;

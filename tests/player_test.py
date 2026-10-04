@@ -45,6 +45,20 @@ class PlayerTests(unittest.TestCase):
         self.assertEqual(self.agent.state['manifest']['schemaVersion'], 2)
         self.assertEqual(self.agent.state['manifest']['items'][0]['slide']['layers'][0]['removedMedia'], True)
 
+    def test_schema_three_retains_shapes_and_stock_quotes_and_rejects_unknown_schema(self):
+        response = self.response('widgets')
+        response['manifest']['schemaVersion'] = 3
+        response['manifest']['stocks'] = {'WMT': {'price': 105, 'status': 'ready'}}
+        response['manifest']['items'] = [{'slide': {'layers': [{'type': 'shape', 'shape': {'kind': 'circle'}}, {'type': 'stocks', 'stocks': {'symbols': ['WMT']}}]}}]
+        with patch.object(self.agent, 'request', return_value=response):
+            self.agent.sync()
+        self.assertEqual(self.agent.state['manifest']['stocks']['WMT']['price'], 105)
+        response['manifest']['schemaVersion'] = 4
+        with patch.object(self.agent, 'request', return_value=response):
+            with self.assertRaises(ValueError):
+                self.agent.sync()
+        self.assertEqual(json.loads((self.agent.cache / 'state.json').read_text())['manifest']['schemaVersion'], 3)
+
     def test_weather_persists_offline_and_retains_last_snapshot_for_assigned_locations(self):
         weather = {'41.8781,-87.6298': {'status': 'ready', 'fetchedAt': '2026-09-16T12:00:00Z', 'periods': [{'temperatureF': 72}]}}
         with patch.object(self.agent, 'request', return_value={**self.response(), 'weather': weather}):
@@ -237,7 +251,7 @@ class PlayerTests(unittest.TestCase):
         thread.start()
         try:
             base = 'http://127.0.0.1:' + str(server.server_port)
-            for filename in ('text-layout.js', 'counter.js', 'image-layout.js', 'playback.js', 'frame.js', 'widgets.js'):
+            for filename in ('text-layout.js', 'counter.js', 'image-layout.js', 'shape.js', 'stocks.js', 'playback.js', 'frame.js', 'widgets.js'):
                 with module.urllib.request.urlopen(base + '/' + filename) as response:
                     self.assertEqual(response.headers.get('Content-Type'), 'text/javascript')
                     self.assertTrue(response.read())

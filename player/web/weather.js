@@ -63,6 +63,7 @@ export function weatherView(config, snapshot, now = Date.now()) {
   const unit = config?.unit === 'C' ? 'C' : 'F';
   const base = {
     name,
+    layout: config?.layout === 'vertical' ? 'vertical' : 'horizontal',
     source: 'National Weather Service',
     cells: [],
     detail: '',
@@ -231,28 +232,43 @@ export function renderWeather(element, view) {
   };
   const content = span('');
   const six = view.mode === 'six-hour';
+  const vertical = view.layout === 'vertical';
+  element.dataset.weatherLayout = vertical ? 'vertical' : 'horizontal';
+  element.style.textAlign = vertical ? 'center' : '';
   Object.assign(content.style, {
     display: six ? 'grid' : 'block',
-    gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
-    gap: '0.16em',
+    gridTemplateColumns: vertical
+      ? 'minmax(0, 1fr)'
+      : 'repeat(6, minmax(0, 1fr))',
+    gap: vertical ? '0.28em' : '0.16em',
     marginBottom: '0.25em',
   });
   for (const cell of view.cells) {
-    const box = span('', { minWidth: '0', fontSize: six ? '0.58em' : '1em' });
+    const box = span('', {
+      minWidth: '0',
+      fontSize: six ? (vertical ? '0.66em' : '0.58em') : '1em',
+    });
     if (cell.label)
       box.append(
         span(cell.label, { fontSize: '0.6em', marginBottom: '0.3em' }),
       );
     const main = span('', {
       display: 'flex',
-      flexDirection: six ? 'column' : 'row',
+      flexDirection: vertical
+        ? six
+          ? 'row'
+          : 'column'
+        : six
+          ? 'column'
+          : 'row',
       alignItems: 'center',
       gap: '0.15em',
-      justifyContent: six
-        ? 'center'
-        : { left: 'flex-start', center: 'center', right: 'flex-end' }[
-            element.parentElement?.style.textAlign
-          ] || 'flex-start',
+      justifyContent:
+        six || vertical
+          ? 'center'
+          : { left: 'flex-start', center: 'center', right: 'flex-end' }[
+              element.parentElement?.style.textAlign
+            ] || 'flex-start',
     });
     main.append(
       icon(cell.icon),
@@ -261,7 +277,7 @@ export function renderWeather(element, view) {
     box.append(
       main,
       span(cell.description, {
-        fontSize: '0.48em',
+        fontSize: vertical && six ? '0.52em' : '0.48em',
         marginTop: '0.25em',
       }),
     );

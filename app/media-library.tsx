@@ -92,6 +92,7 @@ export function MediaLibrary({
   onManageAccess?: (asset: Asset) => void;
   shareWithSlideId?: string;
 }) {
+  const [draggedAssets, setDraggedAssets] = useState<string[]>([]);
   const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [folder, setFolder] = useState('all');
@@ -139,6 +140,20 @@ export function MediaLibrary({
     isWithin(folders, candidateId, ancestorId);
   const folderRows = orderedTree(folders);
   const sortedFolders = folderRows.map(({ item }) => item);
+  const canDropMedia = () => !busy && !onPick && draggedAssets.length > 0;
+  function dropMedia(target: string | null) {
+    const ids = draggedAssets;
+    const valid = canDropMedia();
+    setDraggedAssets([]);
+    setDropTarget(null);
+    if (!valid) return;
+    run(async () => {
+      await api('/api/assets/batch', 'POST', { ids, folderId: target });
+      await onRefresh();
+      setSelected(new Set());
+      setNotice(`Moved ${ids.length} media file${ids.length === 1 ? '' : 's'}`);
+    });
+  }
   function canDrop(target: string | null) {
     return (
       !busy &&
@@ -385,7 +400,19 @@ export function MediaLibrary({
             <small>{assets.length}</small>
           </button>
           <button
-            className={folder === 'unfiled' ? 'chosen' : ''}
+            className={`${folder === 'unfiled' ? 'chosen' : ''} ${dropTarget === 'unfiled' ? 'folder-drop-target' : ''}`}
+            onDragOver={(event) => {
+              if (canDropMedia()) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTarget('unfiled');
+              }
+            }}
+            onDragLeave={() => setDropTarget(null)}
+            onDrop={(event) => {
+              event.preventDefault();
+              dropMedia(null);
+            }}
             onClick={() => chooseFolder('unfiled')}
           >
             <Folder size={16} />
@@ -405,6 +432,7 @@ export function MediaLibrary({
                   f.id,
                 );
                 event.dataTransfer.effectAllowed = 'move';
+                setDraggedAssets([]);
                 setDraggedFolder(f.id);
               }}
               onDragEnd={() => {
@@ -412,7 +440,7 @@ export function MediaLibrary({
                 setDropTarget(null);
               }}
               onDragOver={(event) => {
-                if (canDrop(f.id)) {
+                if (canDrop(f.id) || canDropMedia()) {
                   event.preventDefault();
                   event.dataTransfer.dropEffect = 'move';
                   setDropTarget(f.id);
@@ -421,7 +449,8 @@ export function MediaLibrary({
               onDragLeave={() => setDropTarget(null)}
               onDrop={(event) => {
                 event.preventDefault();
-                dropFolder(f.id);
+                if (draggedAssets.length) dropMedia(f.id);
+                else dropFolder(f.id);
               }}
               onClick={() => chooseFolder(f.id)}
             >
@@ -559,6 +588,21 @@ export function MediaLibrary({
                     />
                   )}
                   <button
+                    draggable={!busy && !onPick && !a.readOnly}
+                    onDragStart={(event) => {
+                      const ids = selected.has(a.id) ? selection : [a.id];
+                      event.dataTransfer.setData(
+                        'application/x-openframe-media',
+                        JSON.stringify(ids),
+                      );
+                      event.dataTransfer.effectAllowed = 'move';
+                      setDraggedFolder(null);
+                      setDraggedAssets(ids);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedAssets([]);
+                      setDropTarget(null);
+                    }}
                     className="media-image-button"
                     aria-label={
                       onPick
@@ -569,7 +613,12 @@ export function MediaLibrary({
                     }
                     onClick={() => (onPick ? onPick(a) : open('asset', a))}
                   >
-                    <img loading="lazy" src={a.url} alt={a.name} />
+                    <img
+                      draggable={false}
+                      loading="lazy"
+                      src={a.url}
+                      alt={a.name}
+                    />
                   </button>
                   <div className="media-entry-info">
                     <button

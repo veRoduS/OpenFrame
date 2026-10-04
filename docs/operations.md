@@ -31,6 +31,8 @@ Do not run multiple server containers against one SQLite volume. This is a singl
 
 Compose reads `.env`. Direct Node startup requires shell environment variables. The [Cloudflare deployment](remote-players.md) uses its own `.env.cloudflare` and `OPENFRAME_PUBLIC_URL` instead. Use its full `--env-file .env.cloudflare -f compose.cloudflare.yaml` arguments wherever this page shows `docker compose`; do not merge the two Compose files. Keep the same Compose project name/directory when replacing or upgrading a deployment so the volume name stays consistent.
 
+Stock quotes are optional. An admin configures one Finnhub key under **Settings > Stock quotes**; the server needs outbound HTTPS to `finnhub.io`. The key is encrypted using `provisioning.key`, so preserve that file with the database when backing up or moving an installation. Players receive cached quotes, never the key. See [stock tracker setup](user-guide.md) for polling limits and provider considerations.
+
 ## Public URL and reverse proxies
 
 For any HTTPS reverse proxy, tunnel, ingress, or load balancer (for example Nginx, Caddy, Traefik, or Cloudflare), configure these variables on the **OpenFrame container**, not just the proxy:
@@ -59,7 +61,7 @@ docker compose cp openframe:/data/. ./backups/before-upgrade/
 docker compose start openframe
 ```
 
-3. Verify the backup contains `openframe.sqlite` and `media/` plus any SQLite sidecars present. After using the screen setup builder it must also contain **`provisioning.key`**, required to decrypt saved configurations. Encrypt/copy it to separate storage. Record the source version/tag and Compose project name. Back up environment files, tunnel secrets, and manually provisioned per-player VPN/configuration separately with restricted access; those are not inside `/data`. Configurations imported/generated through the builder are encrypted in this database, with the key alongside it.
+3. Verify the backup contains `openframe.sqlite` and `media/` plus any SQLite sidecars present. After using the screen setup builder or configuring stock quotes it must also contain **`provisioning.key`**, required to decrypt saved configurations. Encrypt/copy it to separate storage. Record the source version/tag and Compose project name. Back up environment files, tunnel secrets, and manually provisioned per-player VPN/configuration separately with restricted access; those are not inside `/data`. Configurations imported/generated through the builder are encrypted in this database, with the key alongside it.
 4. Rehearse restoration on an isolated machine/project. A backup that has never been restored is unverified.
 
 If the copy fails, retain the original volume and diagnose it; restarting restores service but does not mean the backup succeeded. Do not copy a running local Node database either: stop that process first, copy all of `DATA_DIR`, then restart.

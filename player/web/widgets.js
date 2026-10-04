@@ -1,3 +1,4 @@
+import { renderStocks, getStockSnapshots, subscribeStocks } from './stocks.js';
 import { counterText, nextCounterDelay } from './counter.js';
 import { createClockFormatter, nextClockDelay } from './clock.js';
 import {
@@ -72,6 +73,17 @@ registerWidget('weather', (element, layer, { onChange = () => {} } = {}) =>
     onChange,
     subscribeWeather,
     (element, value) => renderWeather(element, JSON.parse(value)),
+  ),
+);
+
+registerWidget('stocks', (element, layer, { onChange = () => {} } = {}) =>
+  liveText(
+    element,
+    () => JSON.stringify(getStockSnapshots()),
+    () => 60000,
+    onChange,
+    subscribeStocks,
+    (node, value) => renderStocks(node, layer.stocks, JSON.parse(value)),
   ),
 );
 

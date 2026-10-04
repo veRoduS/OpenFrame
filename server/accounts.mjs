@@ -542,6 +542,8 @@ export function createAccounts(db) {
           'Choose a name or parent',
         )
         .parse(req.body);
+      if (input.parentId !== undefined && req.user.role !== 'admin')
+        throw fail(403, 'Only an admin can move groups');
       const parentId =
         input.parentId === undefined ? group.parentId : input.parentId;
       if (

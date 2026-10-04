@@ -1226,3 +1226,54 @@ void test('folder moves reject cycles across hidden ancestors and preserve desce
     saved,
   );
 });
+
+void test('migration preserves separate existing admin and superadmin accounts, passwords, ownership, and sessions', async (t) => {
+  const { db, admin, user } = await fixture(t);
+  const second = await user('superadmin');
+  db.prepare("UPDATE users SET role='superadmin' WHERE id=?").run(
+    second.user.id,
+  );
+  const before = db.prepare('SELECT * FROM users ORDER BY id').all();
+  const sessions = db
+    .prepare('SELECT * FROM user_sessions ORDER BY token')
+    .all();
+  const item = (await admin('/api/slides', 'POST', slide)).data;
+  const owner = db
+    .prepare("SELECT * FROM resource_access WHERE kind='slide' AND id=?")
+    .get(item.id);
+  createAccounts(db);
+  const after = db.prepare('SELECT * FROM users ORDER BY id').all();
+  assert.equal(after.length, 2);
+  assert.deepEqual(
+    after.map((entry) => ({ ...entry })),
+    before.map((entry) => ({ ...entry, role: 'admin' })),
+  );
+  assert.deepEqual(
+    db.prepare('SELECT * FROM user_sessions ORDER BY token').all(),
+    sessions,
+  );
+  assert.deepEqual(
+    db
+      .prepare("SELECT * FROM resource_access WHERE kind='slide' AND id=?")
+      .get(item.id),
+    owner,
+  );
+  assert.equal((await admin('/api/users')).status, 200);
+  assert.equal((await second.call('/api/users')).status, 200);
+});
+void test('group moves require a global admin even when the caller manages the group', async (t) => {
+  const { user } = await fixture(t);
+  const manager = await user('manager');
+  const parent = (await manager.call('/api/groups', 'POST', { name: 'Parent' }))
+    .data;
+  const child = (await manager.call('/api/groups', 'POST', { name: 'Child' }))
+    .data;
+  assert.equal(
+    (
+      await manager.call(`/api/groups/${child.id}`, 'PATCH', {
+        parentId: parent.id,
+      })
+    ).status,
+    403,
+  );
+});
