@@ -57,6 +57,7 @@ public final class PlayerActivity extends Activity {
     private TextView updateNotice;
     private boolean displayBlank;
     private AlertDialog updateProgress;
+    private TextView deviceSleepStatus;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -135,6 +136,12 @@ public final class PlayerActivity extends Activity {
         layout.addView(connect);
         layout.addView(error);
         layout.addView(text("During playback, press Back or Menu for settings. Approve the displayed code under Screens on your server.", 16));
+        deviceSleepStatus = text(deviceSleepSummary(), 16);
+        layout.addView(deviceSleepStatus);
+        Button sleepSettings = new Button(this);
+        sleepSettings.setText("Prevent device sleep");
+        sleepSettings.setOnClickListener(view -> showDeviceSleepSettings());
+        layout.addView(sleepSettings);
         scroll.addView(layout);
         setContentView(scroll);
         server.requestFocus();
@@ -142,6 +149,7 @@ public final class PlayerActivity extends Activity {
 
     @SuppressLint("SetJavaScriptEnabled")
     private void startPlayer(String server, String name) {
+        deviceSleepStatus = null;
         stopUpdates();
         activeServer = server;
         stopPolling();
@@ -441,6 +449,8 @@ public final class PlayerActivity extends Activity {
     }
     @Override protected void onResume() {
         super.onResume();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        if (deviceSleepStatus != null) deviceSleepStatus.setText(deviceSleepSummary());
         resumed = true;
         if (web != null) { web.onResume(); web.resumeTimers(); }
         startPolling();
@@ -470,12 +480,40 @@ public final class PlayerActivity extends Activity {
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
         boolean automatic = automaticUpdatesEnabled();
         new AlertDialog.Builder(this).setTitle("OpenFrame Player")
-                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Exit player"}, (dialog, which) -> {
+                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Prevent device sleep", "Exit player"}, (dialog, which) -> {
                     if (which == 1) setup();
                     if (which == 2) checkUpdates(true);
                     if (which == 3) chooseAutomaticUpdates();
                     if (which == 4) chooseUpdateSource();
-                    if (which == 5) finish();
+                    if (which == 5) showDeviceSleepSettings();
+                    if (which == 6) finish();
+                }).show();
+    }
+    private String deviceSleepSummary() {
+        // Some TV firmware has a separate inactivity shutdown timer that ignores
+        // KEEP_SCREEN_ON. Read it without requesting permission to change it.
+        // A missing/unreadable setting is unknown, not proof that sleep is disabled.
+        try {
+            int timeout = Settings.Secure.getInt(getContentResolver(), "attentive_timeout");
+            if (timeout <= 0) return "Android's inactivity shutdown timer is disabled. OpenFrame keeps the display awake while open; other device power settings may still apply.";
+            long minutes = ((long) timeout + 59999) / 60000;
+            return "This device has an inactivity shutdown timer of about " + minutes + " minute" + (minutes == 1 ? "" : "s") + ". It can interrupt playback even while OpenFrame is open.";
+        } catch (Settings.SettingNotFoundException | SecurityException ignored) {
+            return "OpenFrame keeps the display awake while open. Check device power settings for a separate inactivity shutdown timer; this device does not expose its timeout to OpenFrame.";
+        }
+    }
+    private void showDeviceSleepSettings() {
+        new AlertDialog.Builder(this).setTitle("Prevent device sleep")
+                .setMessage(deviceSleepSummary() + "\n\nOpen device settings and look for System → Power & Energy, Energy saver, or Sleep. For continuous playback, choose Never for inactivity shutdown or turning off the display, if available. Menu names vary by device.\n\nPress Back to return to OpenFrame. No developer options are needed when your device provides this setting. If there is no Never option, contact your device administrator for continuous playback setup.")
+                .setNegativeButton("Back", null)
+                .setPositiveButton("Open device settings", (dialog, which) -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_SETTINGS));
+                    } catch (android.content.ActivityNotFoundException | SecurityException ex) {
+                        new AlertDialog.Builder(this).setTitle("Open settings from Home")
+                                .setMessage("This device does not let OpenFrame open its settings. Press Home on your remote, open device settings, and check Power & Energy or Sleep. Then reopen OpenFrame.")
+                                .setPositiveButton("OK", null).show();
+                    }
                 }).show();
     }
     private void chooseAutomaticUpdates() {

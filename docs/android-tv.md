@@ -134,6 +134,16 @@ The app supports pairing, 15-second sync polling while open, image/slide playbac
 
 This is a foreground signage app. It keeps the display awake while open and pauses polling/timers when backgrounded. It does not automatically launch after power-on, replace the Android home launcher, lock the device into kiosk mode, configure Wi-Fi/VPN, create a recovery hotspot, or install updates silently. Reopen it after reboot, or use a separately configured device-management/launcher solution. Remote reboot is acknowledged with an unsupported-operation status; restart the box through Android settings.
 
+## Preventing device sleep
+
+Player 0.10.9 adds **Prevent device sleep** to connection setup and the **Back/Menu** menu. It reads Android's separate `attentive_timeout` setting when accessible and explains how to open the device's normal power settings. Choose **Open device settings**, then look for **System → Power & Energy**, **Energy saver**, or **Sleep** and select **Never** for inactivity shutdown/display shutdown when offered. Return with Back. Setup refreshes its status when returning. Menu names and available options depend on firmware; OpenFrame opens the general settings screen rather than relying on a manufacturer-specific shortcut.
+
+OpenFrame already sets `FLAG_KEEP_SCREEN_ON` and reapplies it on resume. Android TV can also have an inattentiveness timer that ignores app wake locks; background battery exemptions do not disable that timer. If the timeout is missing or unreadable, the app reports it as unknown, not safe. Even a disabled Android timer does not prove that a manufacturer's additional sleep settings are disabled. Test the actual stick beyond its configured timeout before unattended use.
+
+This helper uses no new permissions, developer options, ADB, accessibility service, or artificial remote input. It guides a user through a one-time normal settings change; it cannot silently change protected device settings or guarantee that a particular model offers **Never**. Fully automatic fleet setup needs a managed-device deployment with supported administrator power policies (or hardware/firmware that supports continuous playback), separately from ordinary Play Store installation. Do not describe the helper as a complete sleep-prevention fix or physical Onn validation.
+
+For administrator diagnostics only, an authorized ADB connection can disable Android's specific inattentiveness timer with `adb shell settings --user current put secure attentive_timeout -1`. That is not required by the normal in-app setup flow and does not address every manufacturer-specific policy.
+
 ## Physical acceptance checklist
 
 Before unattended use, record the box model, Android firmware, and WebView version, then verify:
@@ -145,5 +155,6 @@ Before unattended use, record the box model, Android firmware, and WebView versi
 - Installing a newer APK signed with the same key without losing pairing/cache.
 - Downloading from the homepage on a stick without USB; automatic/manual update detection from default GitHub and explicit **This server** sources; GitHub updates with an older content server; installer permission grant and return; install/cancel flows; rejecting another signing key or interrupted download; reopening after a successful update.
 - Back/Menu behavior, resuming after Home, screen sleep behavior, power-cycle startup procedure, storage pressure, and a 24-hour playback run.
+- **Prevent device sleep** from setup and playback, readable/unreadable timer status, opening normal settings and returning without losing pairing/cache, and continuous playback beyond the stick's previous shutdown-warning interval.
 
 Host-side unit tests and APK validation do not establish physical TV compatibility or long-run performance. See the [validation record](validation.md).
