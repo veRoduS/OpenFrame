@@ -38,7 +38,7 @@ Changing dimensions while movement is locked limits the layer to the space avail
 
 ## Organize media
 
-Media supports nested named folders, image tags, filename/tag search, tag filtering, and grid/list views. Choose a parent folder when creating or renaming a folder; folder paths appear in the browser and folder selectors. Folders must have no images or subfolders before deletion. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls. Upload GIFs for animated playback; OpenFrame converts them to animated WebP while keeping the frame timing and loop.
+Media supports nested named folders, image tags, filename/tag search, tag filtering, and grid/list views. Choose a folder location when creating or renaming a folder; folder paths appear in the browser and folder selectors. Folders must have no images or subfolders before deletion. Sort by name, upload date, or file size in either direction. The editor's image picker includes the same folder and search controls. Upload GIFs for animated playback; OpenFrame converts them to animated WebP while keeping the frame timing and loop.
 
 When uploading from a slide's image picker, select **Share uploaded images with this slide’s audience** to give the new images the same user and group access as that slide. This is useful when adding media to a shared slide; otherwise the media owner can share it later in Media.
 
@@ -76,7 +76,7 @@ Screens shows the browser's playback phase, last preparation time, delayed-switc
 
 This removes the clear-then-load transition path, but is not a guarantee of zero dropped frames on every device. Two complex slides can still exceed a small device's memory or rendering capacity, and browser decoding/layout tests do not measure HDMI output or GPU composition. Start with a representative photo/widget loop and measure on your target Pi. See [docs/playback-testing.md](playback-testing.md) for the hardware acceptance checklist.
 
-Media folders appear as an indented tree. Drag a folder onto another folder to move it inside, or onto **All media** to move it back to the top level. Its subfolders and images remain inside it. On touch devices or with a keyboard, select **Edit folder** and choose **Parent folder** instead. Moves preserve existing access grants; moving a folder does not automatically share its contents with the destination audience.
+Media folders appear as an indented tree. Drag a folder onto another folder to move it inside, or onto **All media** to move it back to the top level. Its subfolders and images remain inside it. On touch devices or with a keyboard, select **Edit folder** and choose **Folder location** instead. Moves preserve existing access grants; moving a folder does not automatically share its contents with the destination audience.
 
 ## Shapes and narrow weather panels
 
@@ -95,3 +95,5 @@ The server bounds the shared cache to 64 symbols, two concurrent provider reques
 **Player upgrade:** shapes, stock trackers, and vertical weather require player **0.10.11 or newer**, which accepts playlist schema 3. Upgrade affected players before publishing these layers. Playlists without these features remain schema 2. Updated players also accept schemas 1 and 2 from older servers. Server and player patches are local until published.
 
 Writable media can be dragged by its thumbnail onto a folder. Select several images first to move them together; drop onto **Unfiled** to remove their folder assignment. Shared read-only media cannot be moved. The **Move** button remains available for touch and keyboard use.
+
+On **Slides**, use the icon-only view controls to choose **List view**, **Small grid**, **Medium grid**, or **Large grid**. Hover or focus a control for its label. The selected view is remembered in this browser and keeps the same search, group, and status filters.

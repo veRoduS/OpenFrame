@@ -744,12 +744,13 @@ export function MediaLibrary({
             )}
             {(mode === 'folder' || mode === 'rename-folder') && (
               <label>
-                Parent folder
+                Folder location
                 <select
+                  aria-label="Folder location"
                   value={parentDestination}
                   onChange={(e) => setParentDestination(e.target.value)}
                 >
-                  <option value="">No parent</option>
+                  <option value="">Top level</option>
                   {sortedFolders
                     .filter(
                       (f) =>

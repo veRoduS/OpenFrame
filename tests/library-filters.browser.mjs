@@ -129,6 +129,88 @@ try {
   await page
     .locator('[data-slot=tooltip-content]')
     .waitFor({ state: 'hidden' });
+  const viewControls = page.getByRole('group', {
+    name: 'Slide view',
+    exact: true,
+  });
+  const widths = {};
+  for (const [layout, label] of [
+    ['small', 'Small grid'],
+    ['medium', 'Medium grid'],
+    ['large', 'Large grid'],
+    ['list', 'List view'],
+  ]) {
+    await viewControls
+      .getByRole('button', { name: label, exact: true })
+      .click();
+    await page.locator(`.slide-grid[data-layout="${layout}"]`).waitFor();
+    assert.equal(
+      await viewControls
+        .getByRole('button', { name: label, exact: true })
+        .getAttribute('aria-pressed'),
+      'true',
+    );
+    assert.equal(
+      (
+        await viewControls
+          .getByRole('button', { name: label, exact: true })
+          .innerText()
+      ).trim(),
+      '',
+    );
+    assert.equal(await page.locator('.slide-card').count(), 4);
+    widths[layout] = await page
+      .locator('.slide-card')
+      .first()
+      .evaluate((node) => node.getBoundingClientRect().width);
+  }
+  assert.ok(
+    widths.small < widths.medium && widths.medium < widths.large,
+    JSON.stringify(widths),
+  );
+  assert.equal(
+    await page
+      .locator('.slide-grid')
+      .evaluate(
+        (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
+      ),
+    1,
+  );
+  await page.reload();
+  await page.locator('.slide-grid[data-layout="list"]').waitFor();
+  mkdirSync(path.join(root, 'work'), { recursive: true });
+  await page.screenshot({
+    path: path.join(root, 'work/slides-list-desktop.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 320, height: 844 });
+  for (const label of [
+    'List view',
+    'Small grid',
+    'Medium grid',
+    'Large grid',
+  ]) {
+    await viewControls
+      .getByRole('button', { name: label, exact: true })
+      .click();
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      label,
+    );
+  }
+  await viewControls
+    .getByRole('button', { name: 'List view', exact: true })
+    .click();
+  await page.screenshot({
+    path: path.join(root, 'work/slides-list-mobile.png'),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await viewControls
+    .getByRole('button', { name: 'Medium grid', exact: true })
+    .click();
   for (const [noun, selector] of [
     ['Slides', '.slide-card'],
     ['Playlists', '.playlist-row'],

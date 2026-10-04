@@ -351,26 +351,6 @@ export function Accounts({
               <p className="muted">
                 Drag a group heading onto another group to move it inside.
               </p>
-              <button
-                className={
-                  dropTarget === 'root' ? 'organization-drop-target' : ''
-                }
-                onDragOver={(event) => {
-                  if (dragged?.type === 'group' && canDropGroup(null)) {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = 'move';
-                    setDropTarget('root');
-                  }
-                }}
-                onDragLeave={() => setDropTarget(null)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  dropInto(null);
-                }}
-              >
-                Top-level groups · Drop a group here to move it out of its
-                parent
-              </button>
             </div>
           )}
 

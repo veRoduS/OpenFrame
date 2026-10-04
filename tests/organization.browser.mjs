@@ -128,15 +128,18 @@ try {
     parent.id,
   );
   await page.setViewportSize({ width: 1280, height: 1800 });
+  assert.equal(
+    await page.getByRole('button', { name: /Top-level groups/ }).count(),
+    0,
+  );
   const movedOut = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/groups/${other.id}`) &&
       response.request().method() === 'PATCH',
   );
   await page
-    .locator('.group-drag-handle')
-    .filter({ hasText: 'Group B' })
-    .dragTo(page.getByRole('button', { name: /Top-level groups/ }));
+    .getByLabel('Parent group for Group B', { exact: true })
+    .selectOption('');
   assert.equal((await movedOut).status(), 200);
   await page.waitForFunction(
     () =>
@@ -300,6 +303,21 @@ try {
   assert.equal(options[rootIndex + 1], '\u00a0\u00a0\u00a0\u00a0↳ Group 1');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /^Media/ }).click();
+  await page.getByRole('button', { name: 'New folder', exact: true }).click();
+  const folderDialog = page.getByRole('dialog');
+  await folderDialog.getByLabel('Folder location', { exact: true }).waitFor();
+  assert.equal(
+    await folderDialog
+      .getByRole('option', { name: 'Top level', exact: true })
+      .count(),
+    1,
+  );
+  assert.equal(
+    await folderDialog.getByLabel('Parent folder', { exact: true }).count(),
+    0,
+  );
+  await page.keyboard.press('Escape');
+  await folderDialog.waitFor({ state: 'detached' });
   const nav = page.getByRole('navigation', { name: 'Media folders' });
   const folder = (name) =>
     nav.getByRole('button', { name: new RegExp(`^${name}`) });

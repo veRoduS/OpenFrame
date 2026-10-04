@@ -29,6 +29,9 @@ import {
   Users,
   FileCog,
   LayoutTemplate,
+  List,
+  Grid2X2,
+  Grid3X3,
   ListVideo,
   Images,
   Plus,
@@ -229,6 +232,30 @@ export default function App() {
   const [library, setLibrary] = useState<Library>(emptyLibrary);
   const [fonts, setFonts] = useState<CustomFont[]>([]);
   const [view, setView] = useState<View>('slides');
+  const [slideLayout, setSlideLayout] = useState<
+    'list' | 'small' | 'medium' | 'large'
+  >(() => {
+    try {
+      const saved = localStorage.getItem('openframe.slides.layout');
+      if (
+        saved === 'list' ||
+        saved === 'small' ||
+        saved === 'medium' ||
+        saved === 'large'
+      )
+        return saved;
+    } catch {
+      /* Storage can be unavailable in private browser sessions. */
+    }
+    return 'medium';
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('openframe.slides.layout', slideLayout);
+    } catch {
+      /* View selection still works without browser storage. */
+    }
+  }, [slideLayout]);
   const [filters, setFilters] = useState<
     Record<'slides' | 'playlists' | 'devices', LibraryFilter>
   >({
@@ -747,9 +774,31 @@ export default function App() {
                   )}
                   <div className="section-meta">
                     <span>{library.slides.length} slides</span>
+                    <fieldset
+                      className="slide-view-controls"
+                      aria-label="Slide view"
+                    >
+                      {(
+                        [
+                          ['list', 'List view', List],
+                          ['small', 'Small grid', Grid3X3],
+                          ['medium', 'Medium grid', Grid2X2],
+                          ['large', 'Large grid', Square],
+                        ] as const
+                      ).map(([layout, label, Icon]) => (
+                        <IconButton
+                          key={layout}
+                          label={label}
+                          active={slideLayout === layout}
+                          onClick={() => setSlideLayout(layout)}
+                        >
+                          <Icon size={18} />
+                        </IconButton>
+                      ))}
+                    </fieldset>
                   </div>
                   {library.slides.length ? (
-                    <div className="slide-grid">
+                    <div className="slide-grid" data-layout={slideLayout}>
                       {visibleSlides.map((slide) => (
                         <article className="slide-card" key={slide.id}>
                           {liveSlides.has(slide.id) && (
