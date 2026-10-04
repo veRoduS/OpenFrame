@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.17.4] - 2026-10-04
+
+- Add slide name and modified-time sorting across list and grid layouts
+
 ## [0.17.3] - 2026-10-04
 
 - Remove Sharing & assignments from Users & Groups

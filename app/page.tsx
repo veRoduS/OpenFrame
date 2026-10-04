@@ -251,6 +251,25 @@ export default function App() {
     }
     return 'medium';
   });
+  const [slideSort, setSlideSort] = useState<'name' | 'oldest' | 'newest'>(
+    () => {
+      try {
+        const saved = localStorage.getItem('openframe.slides.sort');
+        if (saved === 'name' || saved === 'oldest' || saved === 'newest')
+          return saved;
+      } catch {
+        /* Sorting still works without browser storage. */
+      }
+      return 'name';
+    },
+  );
+  useEffect(() => {
+    try {
+      localStorage.setItem('openframe.slides.sort', slideSort);
+    } catch {
+      /* Sorting still works without browser storage. */
+    }
+  }, [slideSort]);
   useEffect(() => {
     try {
       localStorage.setItem('openframe.slides.layout', slideLayout);
@@ -430,14 +449,26 @@ export default function App() {
       )
       .flatMap((p) => p.publishedSlideIds || []),
   );
-  const visibleSlides = library.slides.filter((item) =>
-    matchesLibraryFilter(
-      item,
-      filters.slides,
-      groups,
-      liveSlides.has(item.id) ? 'live' : 'not-live',
-    ),
-  );
+  const visibleSlides = library.slides
+    .filter((item) =>
+      matchesLibraryFilter(
+        item,
+        filters.slides,
+        groups,
+        liveSlides.has(item.id) ? 'live' : 'not-live',
+      ),
+    )
+    .sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+      if (slideSort === 'name') return byName;
+      const byTime =
+        (Date.parse(a.updatedAt || '') || 0) -
+        (Date.parse(b.updatedAt || '') || 0);
+      return (slideSort === 'oldest' ? byTime : -byTime) || byName;
+    });
   const visiblePlaylists = library.playlists.filter((item) =>
     matchesLibraryFilter(
       item,
@@ -787,30 +818,50 @@ export default function App() {
                       the filters.
                     </p>
                   )}
-                  <div className="section-meta">
+                  <div className="section-meta slide-library-meta">
                     <span>{library.slides.length} slides</span>
-                    <fieldset
-                      className="slide-view-controls"
-                      aria-label="Slide view"
-                    >
-                      {(
-                        [
-                          ['list', 'List view', List],
-                          ['small', 'Small grid', Grid3X3],
-                          ['medium', 'Medium grid', Grid2X2],
-                          ['large', 'Large grid', Square],
-                        ] as const
-                      ).map(([layout, label, Icon]) => (
-                        <IconButton
-                          key={layout}
-                          label={label}
-                          active={slideLayout === layout}
-                          onClick={() => setSlideLayout(layout)}
+                    <div className="slide-library-tools">
+                      <label className="slide-sort-control">
+                        Sort by
+                        <select
+                          aria-label="Sort slides"
+                          value={slideSort}
+                          onChange={(event) =>
+                            setSlideSort(event.target.value as typeof slideSort)
+                          }
                         >
-                          <Icon size={18} />
-                        </IconButton>
-                      ))}
-                    </fieldset>
+                          <option value="name">Slide name A–Z</option>
+                          <option value="oldest">
+                            Modified time (oldest first)
+                          </option>
+                          <option value="newest">
+                            Modified time (newest first)
+                          </option>
+                        </select>
+                      </label>
+                      <fieldset
+                        className="slide-view-controls"
+                        aria-label="Slide view"
+                      >
+                        {(
+                          [
+                            ['list', 'List view', List],
+                            ['small', 'Small grid', Grid3X3],
+                            ['medium', 'Medium grid', Grid2X2],
+                            ['large', 'Large grid', Square],
+                          ] as const
+                        ).map(([layout, label, Icon]) => (
+                          <IconButton
+                            key={layout}
+                            label={label}
+                            active={slideLayout === layout}
+                            onClick={() => setSlideLayout(layout)}
+                          >
+                            <Icon size={18} />
+                          </IconButton>
+                        ))}
+                      </fieldset>
+                    </div>
                   </div>
                   {library.slides.length ? (
                     <div className="slide-grid" data-layout={slideLayout}>

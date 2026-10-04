@@ -96,4 +96,4 @@ The server bounds the shared cache to 64 symbols, two concurrent provider reques
 
 Writable media can be dragged by its thumbnail onto a folder. Select several images first to move them together; drop onto **Unfiled** to remove their folder assignment. Shared read-only media cannot be moved. The **Move** button remains available for touch and keyboard use.
 
-On **Slides**, use the icon-only view controls to choose **List view**, **Small grid**, **Medium grid**, or **Large grid**. Hover or focus a control for its label. The selected view is remembered in this browser and keeps the same search, group, and status filters.
+On **Slides**, use the icon-only view controls to choose **List view**, **Small grid**, **Medium grid**, or **Large grid**. Hover or focus a control for its label. Use **Sort by** to order slides by **Slide name A–Z**, **Modified time (oldest first)**, or **Modified time (newest first)**. The selected view and sort order are remembered in this browser and keep the same search, group, and status filters.

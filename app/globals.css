@@ -2776,3 +2776,30 @@ input[type='color'] {
     padding: 10px 8px;
   }
 }
+
+.slide-library-meta {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.slide-library-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  max-width: 100%;
+}
+.slide-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.slide-sort-control select {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+  padding: 8px;
+}

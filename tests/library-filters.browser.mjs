@@ -129,6 +129,58 @@ try {
   await page
     .locator('[data-slot=tooltip-content]')
     .waitFor({ state: 'hidden' });
+  async function expectSlideOrder(expected) {
+    await page.waitForFunction(
+      (names) =>
+        JSON.stringify(
+          [
+            ...document.querySelectorAll('.slide-card .title-button strong'),
+          ].map((node) => node.textContent),
+        ) === JSON.stringify(names),
+      expected,
+    );
+  }
+  await expectSlideOrder([
+    'Personal',
+    'Safety North',
+    'Safety South',
+    'Seasonal',
+  ]);
+  await page.getByLabel('Sort slides', { exact: true }).selectOption('oldest');
+  await expectSlideOrder([
+    'Safety North',
+    'Safety South',
+    'Seasonal',
+    'Personal',
+  ]);
+  await page.getByLabel('Sort slides', { exact: true }).selectOption('newest');
+  await expectSlideOrder([
+    'Personal',
+    'Seasonal',
+    'Safety South',
+    'Safety North',
+  ]);
+  const north = library.slides.find((slide) => slide.name === 'Safety North');
+  await api(`/api/slides/${north.id}`, 'PUT', north);
+  await page.reload();
+  await page.locator('.slide-grid').waitFor();
+  assert.equal(
+    await page.getByLabel('Sort slides', { exact: true }).inputValue(),
+    'newest',
+  );
+  await expectSlideOrder([
+    'Safety North',
+    'Personal',
+    'Seasonal',
+    'Safety South',
+  ]);
+  await page.getByLabel('Sort slides', { exact: true }).selectOption('name');
+  await expectSlideOrder([
+    'Personal',
+    'Safety North',
+    'Safety South',
+    'Seasonal',
+  ]);
   const viewControls = page.getByRole('group', {
     name: 'Slide view',
     exact: true,
