@@ -405,15 +405,20 @@ export function createAccounts(db) {
       ),
     );
     app.post('/api/users', administrator, (req, res) => {
+      const generatedPassword = randomBytes(9).toString('base64url');
       const user = createUser({
         ...req.body,
-        password: undefined,
+        password: generatedPassword,
         role: 'user',
       });
-      res.status(201).json({
-        user: publicUser(user),
-        invitation: invite({ userId: user.id }),
-      });
+      res
+        .set('Cache-Control', 'no-store')
+        .status(201)
+        .json({
+          user: publicUser(user),
+          password: generatedPassword,
+          invitation: invite({ userId: user.id }),
+        });
     });
     app.post('/api/users/:id/invitation', administrator, (req, res) => {
       const user = userById(req.params.id);

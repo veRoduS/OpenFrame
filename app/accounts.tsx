@@ -68,6 +68,95 @@ async function copyText(value: string) {
     throw new Error('Copy is unavailable. Select and copy the link instead.');
 }
 
+export function PasswordSettings({ user }: { user: User }) {
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await action();
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      {error && (
+        <p className="inline-error" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && <output className="account-notice">{notice}</output>}
+      <section className="account-section">
+        <h2>Change password</h2>
+        <p className="muted">
+          {user.name} · {user.username}
+        </p>
+        <form
+          className="account-form"
+          onSubmit={(e) => {
+            const form = e.currentTarget;
+            const data = fields(e);
+            void run(async () => {
+              if (data.password !== data.confirm)
+                throw new Error('New passwords do not match');
+              await api('/api/account/password', 'POST', {
+                currentPassword: data.currentPassword,
+                password: data.password,
+              });
+              form.reset();
+              setNotice(
+                'Password changed. Other sessions have been signed out.',
+              );
+            });
+          }}
+        >
+          <label>
+            Current password
+            <input
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <label>
+            New password
+            <input
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={minimumPasswordLength}
+              maxLength={maximumPasswordLength}
+              required
+            />
+          </label>
+          <label>
+            Confirm new password
+            <input
+              name="confirm"
+              type="password"
+              autoComplete="new-password"
+              minLength={minimumPasswordLength}
+              maxLength={maximumPasswordLength}
+              required
+            />
+          </label>
+          <button className="primary" disabled={busy}>
+            <KeyRound size={16} />
+            Change password
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 export function Accounts({
   user,
   library,
@@ -88,6 +177,11 @@ export function Accounts({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [credentials, setCredentials] = useState<{
+    name: string;
+    username: string;
+    password: string;
+  } | null>(null);
   const [invitation, setInvitation] = useState<{
     value: string;
     group: boolean;
@@ -181,69 +275,7 @@ export function Accounts({
         </div>
       )}
       {notice && <output className="account-notice">{notice}</output>}
-      {tab === 'password' && (
-        <section className="account-section">
-          <h2>Change password</h2>
-          <p className="muted">
-            {user.name} · {user.username}
-          </p>
-          <form
-            className="account-form"
-            onSubmit={(e) => {
-              const form = e.currentTarget;
-              const data = fields(e);
-              void run(async () => {
-                if (data.password !== data.confirm)
-                  throw new Error('New passwords do not match');
-                await api('/api/account/password', 'POST', {
-                  currentPassword: data.currentPassword,
-                  password: data.password,
-                });
-                form.reset();
-                setNotice(
-                  'Password changed. Other sessions have been signed out.',
-                );
-              });
-            }}
-          >
-            <label>
-              Current password
-              <input
-                name="currentPassword"
-                type="password"
-                autoComplete="current-password"
-                required
-              />
-            </label>
-            <label>
-              New password
-              <input
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                minLength={minimumPasswordLength}
-                maxLength={maximumPasswordLength}
-                required
-              />
-            </label>
-            <label>
-              Confirm new password
-              <input
-                name="confirm"
-                type="password"
-                autoComplete="new-password"
-                minLength={minimumPasswordLength}
-                maxLength={maximumPasswordLength}
-                required
-              />
-            </label>
-            <button className="primary" disabled={busy}>
-              <KeyRound size={16} />
-              Change password
-            </button>
-          </form>
-        </section>
-      )}
+      {tab === 'password' && <PasswordSettings user={user} />}
       {tab === 'users' && isAdmin && (
         <section className="account-section">
           <h2>Users</h2>
@@ -253,12 +285,16 @@ export function Accounts({
               const form = e.currentTarget;
               const data = fields(e);
               void run(async () => {
-                const result = await api<{ invitation: string }>(
+                const result = await api<{ user: User; password: string }>(
                   '/api/users',
                   'POST',
                   data,
                 );
-                setInvitation({ value: result.invitation, group: false });
+                setCredentials({
+                  name: result.user.name,
+                  username: result.user.username,
+                  password: result.password,
+                });
                 form.reset();
                 await reload();
               });
@@ -279,7 +315,7 @@ export function Accounts({
             </label>
             <button className="primary" disabled={busy}>
               <Plus size={16} />
-              Invite user
+              Add user
             </button>
           </form>
           <div className="account-list">
@@ -691,6 +727,56 @@ export function Accounts({
           )}
         </section>
       )}
+      <Dialog
+        open={!!credentials}
+        onOpenChange={(open) => !open && setCredentials(null)}
+      >
+        <DialogContent className="of-modal">
+          <DialogTitle>User created</DialogTitle>
+          <DialogDescription>
+            {credentials?.name} can sign in now. This password is shown once.
+            Share these credentials privately.
+          </DialogDescription>
+          <label>
+            Username
+            <input
+              readOnly
+              value={credentials?.username || ''}
+              onFocus={(event) => event.target.select()}
+            />
+          </label>
+          <label>
+            Generated password
+            <input
+              aria-label="Generated password"
+              readOnly
+              autoComplete="off"
+              spellCheck={false}
+              value={credentials?.password || ''}
+              onFocus={(event) => event.target.select()}
+            />
+          </label>
+          <div className="account-actions">
+            <button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  if (credentials) {
+                    await copyText(credentials.password);
+                    setNotice('Password copied.');
+                  }
+                })
+              }
+            >
+              <Copy size={16} />
+              Copy password
+            </button>
+            <button className="primary" onClick={() => setCredentials(null)}>
+              Done
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!invitation}
         onOpenChange={(v) => {

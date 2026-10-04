@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | POST | `/api/activate` | Accept one-use password invitation `{token,password}`; signs in |
 | POST | `/api/account/password` | `{currentPassword,password}`; invalidates other sessions and invitations |
-| GET / POST | `/api/users` | Admin list/create; create `{username,name}` returns `{user,invitation}` |
+| GET / POST | `/api/users` | Admin list/create; create `{username,name}` returns `{user,password,invitation}` with a cryptographically random 12-character password for immediate sign-in; response is `no-store`, password appears only in this response, legacy one-use invitation remains supported |
 | POST | `/api/users/:id/invitation` | Admin replacement password invitation; returns `{invitation}` |
 | PATCH | `/api/users/:id` | Admin role/status update with `{role?:"user"|"admin",disabled?:boolean}`; self-demotion/disable and last-admin removal protected |
 | GET | `/api/users/:id/access` | Admin overview of direct grants, ownership, group sources, effective and read-only access |

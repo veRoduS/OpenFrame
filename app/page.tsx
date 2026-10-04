@@ -16,7 +16,7 @@ import {
   minimumPasswordLength,
   maximumPasswordLength,
 } from '../server/password-policy.mjs';
-import { Accounts, type Auth } from './accounts';
+import { Accounts, PasswordSettings, type Auth } from './accounts';
 import {
   ManageAccessButton,
   ResourceAccessDialog,
@@ -52,6 +52,7 @@ import {
   ArrowUp,
   ArrowDown,
   LogOut,
+  KeyRound,
   Check,
   RefreshCw,
   Power,
@@ -220,6 +221,7 @@ const viewInfo = {
   devices: { title: 'Screens', icon: Monitor },
   media: { title: 'Media', icon: Images },
   accounts: { title: 'Users & Groups', icon: Users },
+  password: { title: 'My password', icon: KeyRound },
   settings: { title: 'Settings', icon: Settings },
 };
 type View = keyof typeof viewInfo;
@@ -256,6 +258,14 @@ export default function App() {
       /* View selection still works without browser storage. */
     }
   }, [slideLayout]);
+  useEffect(() => {
+    if (
+      auth?.authenticated &&
+      auth.user?.role !== 'admin' &&
+      (view === 'accounts' || view === 'settings')
+    )
+      setView('slides');
+  }, [auth, view]);
   const [filters, setFilters] = useState<
     Record<'slides' | 'playlists' | 'devices', LibraryFilter>
   >({
@@ -603,9 +613,11 @@ export default function App() {
               <div className="nav-caption">WORKSPACE</div>
               <SidebarMenu>
                 {(Object.entries(viewInfo) as [View, typeof viewInfo.slides][])
-                  .filter(
-                    ([key]) =>
-                      key !== 'settings' || auth.user?.role === 'admin',
+                  .filter(([key]) =>
+                    key === 'password'
+                      ? auth.user?.role !== 'admin'
+                      : (key !== 'settings' && key !== 'accounts') ||
+                        auth.user?.role === 'admin',
                   )
                   .map(([key, item]) => (
                     <SidebarMenuItem key={key}>
@@ -618,7 +630,9 @@ export default function App() {
                         <item.icon size={18} />
                         <span>{item.title}</span>
                         <span className="nav-count">
-                          {key === 'accounts' || key === 'settings'
+                          {key === 'accounts' ||
+                          key === 'settings' ||
+                          key === 'password'
                             ? ''
                             : key === 'media'
                               ? library.assets.length
@@ -683,7 +697,9 @@ export default function App() {
                             ? 'PEOPLE & ACCESS'
                             : view === 'settings'
                               ? 'WORKSPACE CONFIGURATION'
-                              : 'IMAGE LIBRARY'}
+                              : view === 'password'
+                                ? 'MY ACCOUNT'
+                                : 'IMAGE LIBRARY'}
                   </span>
                   <h1>{viewInfo[view].title}</h1>
                 </div>
@@ -747,12 +763,15 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {view === 'accounts' && auth.user && (
+              {view === 'accounts' && auth.user?.role === 'admin' && (
                 <Accounts
                   user={auth.user}
                   library={library}
                   refresh={refresh}
                 />
+              )}
+              {view === 'password' && auth.user && (
+                <PasswordSettings user={auth.user} />
               )}
               {view === 'settings' && auth.user?.role === 'admin' && (
                 <div className="account-section">

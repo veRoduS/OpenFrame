@@ -47,11 +47,21 @@ try {
   await page.getByRole('tab', { name: 'Users', exact: true }).click();
   await page.getByLabel('Full name').fill('Jordan Taylor');
   await page.getByLabel('Username', { exact: true }).fill('jordan');
-  await page.getByRole('button', { name: 'Invite user', exact: true }).click();
+  await page.getByRole('button', { name: 'Add user', exact: true }).click();
   await page.getByRole('dialog').waitFor();
-  const invitation = await page.getByLabel('Set-password link').inputValue();
-  assert.ok(invitation.includes('#activate='));
-  await page.keyboard.press('Escape');
+  const credentials = page.getByRole('dialog');
+  await credentials
+    .getByRole('heading', { name: 'User created', exact: true })
+    .waitFor();
+  const generatedPassword = await credentials
+    .getByLabel('Generated password', { exact: true })
+    .inputValue();
+  assert.match(generatedPassword, /^[A-Za-z0-9_-]{12}$/);
+  assert.equal(
+    await credentials.getByLabel('Username', { exact: true }).inputValue(),
+    'jordan',
+  );
+  await credentials.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   await page.getByText('Jordan Taylor', { exact: true }).waitFor();
   mkdirSync(path.join(root, 'work'), { recursive: true });
@@ -61,9 +71,10 @@ try {
   });
   await page.getByRole('tab', { name: 'Groups', exact: true }).click();
   await page.getByRole('button', { name: 'Invite member' }).click();
-  const code = await page
-    .getByLabel('Invitation code', { exact: true })
-    .inputValue();
+  assert.ok(
+    (await page.getByLabel('Invitation code', { exact: true }).inputValue())
+      .length > 0,
+  );
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -124,11 +135,22 @@ try {
   const member = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });
-  await member.goto(invitation);
-  await member.getByLabel('Password', { exact: true }).fill('member12');
-  await member.getByLabel('Confirm password').fill('member12');
-  await member.getByRole('button', { name: 'Set password & sign in' }).click();
-  await member.getByRole('button', { name: 'Users & Groups' }).click();
+  await member.goto(`${base}/login`);
+  await member.getByLabel('Username', { exact: true }).fill('jordan');
+  await member.getByLabel('Password', { exact: true }).fill(generatedPassword);
+  await member.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await member.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
+  assert.equal(
+    await member
+      .getByRole('button', { name: 'Users & Groups', exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    await member.getByRole('button', { name: 'Settings', exact: true }).count(),
+    0,
+  );
+  assert.equal((await member.request.get(`${base}/api/users`)).status(), 403);
   assert.equal(
     await member
       .getByRole('button', { name: 'Create group', exact: true })
@@ -136,21 +158,18 @@ try {
     0,
   );
   assert.ok((await member.locator('.logged-in-user').innerText()).length > 0);
-  assert.equal(
-    await member.getByRole('tab', { name: 'Users', exact: true }).count(),
-    0,
-  );
-  await member.getByLabel('Join a group', { exact: true }).fill(code);
-  await member.getByRole('button', { name: 'Join', exact: true }).click();
-  await member.getByRole('heading', { name: 'Campus displays' }).waitFor();
   const shared = await member.request.get(`${base}/api/library`);
   assert.equal((await shared.json()).slides[0].name, 'Campus welcome');
   assert.equal(
     await member.getByRole('button', { name: 'Invite member' }).count(),
     0,
   );
-  await member.getByRole('tab', { name: 'My password' }).click();
-  await member.getByLabel('Current password', { exact: true }).fill('member12');
+  await member
+    .getByRole('button', { name: 'My password', exact: true })
+    .click();
+  await member
+    .getByLabel('Current password', { exact: true })
+    .fill(generatedPassword);
   await member.getByLabel('New password', { exact: true }).fill('changed8');
   await member.getByLabel('Confirm new password').fill('changed8');
   await member
@@ -161,7 +180,7 @@ try {
     .waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    'Accounts browser checks passed: invitations, groups, passwords, desktop and mobile.',
+    'Accounts browser checks passed: generated credentials, immediate login, admin-only navigation, password resets and self-service password changes.',
   );
 } finally {
   await browser?.close();

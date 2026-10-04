@@ -1448,3 +1448,85 @@ void test('library access tags include groups and users granted access outside t
     false,
   );
 });
+
+void test('admin-created users receive unique 12-character passwords and can sign in immediately', async (t) => {
+  const { admin, client, db } = await fixture(t);
+  const created = await admin('/api/users', 'POST', {
+    username: 'generated-user',
+    name: 'Generated User',
+    role: 'admin',
+    password: 'caller-password-is-ignored',
+  });
+  assert.equal(created.status, 201);
+  assert.match(created.data.password, /^[A-Za-z0-9_-]{12}$/);
+  assert.equal(created.data.user.role, 'user');
+  assert.equal('password' in created.data.user, false);
+  assert.notEqual(
+    db
+      .prepare('SELECT password FROM users WHERE id=?')
+      .get(created.data.user.id).password,
+    created.data.password,
+  );
+  const other = await admin('/api/users', 'POST', {
+    username: 'generated-other',
+    name: 'Other User',
+  });
+  assert.match(other.data.password, /^[A-Za-z0-9_-]{12}$/);
+  assert.notEqual(other.data.password, created.data.password);
+  const signedIn = client();
+  assert.equal(
+    (
+      await signedIn('/api/login', 'POST', {
+        username: created.data.user.username,
+        password: created.data.password,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await signedIn('/api/auth')).data.user.id,
+    created.data.user.id,
+  );
+  assert.equal('password' in (await signedIn('/api/auth')).data.user, false);
+  assert.equal((await signedIn('/api/users')).status, 403);
+  assert.equal(
+    (
+      await signedIn('/api/users', 'POST', {
+        username: 'forbidden-user',
+        name: 'Forbidden',
+      })
+    ).status,
+    403,
+  );
+  const listed = (await admin('/api/users')).data;
+  assert.ok(listed.every((person) => !('password' in person)));
+  assert.ok(!JSON.stringify(listed).includes(created.data.password));
+  assert.equal(
+    (
+      await signedIn('/api/account/password', 'POST', {
+        currentPassword: created.data.password,
+        password: 'my-new-personal-password',
+      })
+    ).status,
+    200,
+  );
+  const afterChange = client();
+  assert.equal(
+    (
+      await afterChange('/api/login', 'POST', {
+        username: created.data.user.username,
+        password: created.data.password,
+      })
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await afterChange('/api/login', 'POST', {
+        username: created.data.user.username,
+        password: 'my-new-personal-password',
+      })
+    ).status,
+    200,
+  );
+});

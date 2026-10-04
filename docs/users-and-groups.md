@@ -1,6 +1,6 @@
 # Users and groups
 
-Open **Users & Groups** in the sidebar. Each person signs in with their own username and password.
+Admins open **Users & Groups** in the sidebar. This page is visible only to admins. Each person signs in with their own username and password. Regular users have a separate **My password** page.
 
 Select **Log in** on the public homepage, or bookmark `/dashboard` for the management workspace. Existing `/app` links still work. A valid session opens the workspace directly without asking for a password again.
 
@@ -16,15 +16,15 @@ Each fresh installation automatically creates `admin` with its own cryptographic
 
 The password is printed only at creation; only its salted hash is saved to SQLite. Protect startup logs, which may retain that initial password. Restarts and upgrades never regenerate existing credentials or add an extra seeded account. A genuinely empty data volume creates a new independent installation; copying an existing volume copies its accounts. If the initial log is lost, use the local recovery command below with an unused username.
 
-## Invite a user
+## Add a user
 
-1. As an admin, select **Users**, enter the person's name and a unique username, then select **Invite user**.
-2. Send the displayed password link privately. It expires after 24 hours and works once.
-3. The recipient opens the link and sets a password of 8-256 characters. No email service is required.
+1. As an admin, select **Users**, enter the person's name and a unique username, then select **Add user**.
+2. The pop-up displays the username and a cryptographically random 12-character password. Copy and share these credentials privately; the password is shown once and only its salted hash is stored.
+3. The user can sign in immediately and change their password on **My password**. No email service is required.
 
 Use **Password invitation** to issue a replacement or reset link. Issuing it replaces earlier invitations; accepting it changes the password and signs out existing sessions. **Disable** immediately blocks a user's sessions and invitations. A group's last active admin must be replaced before being disabled.
 
-Every user can change their password under **My password**, using their current password. Other sessions are signed out. Passwords are stored as salted scrypt hashes; invitation and session tokens are stored as hashes. There is no MFA or automated email recovery.
+Admins can change their password under **Users & Groups > My password**; regular users use **My password** in the sidebar. Both require the current password. Other sessions are signed out. Passwords are stored as salted scrypt hashes; invitation and session tokens are stored as hashes. There is no MFA or automated email recovery.
 
 ## Groups
 
