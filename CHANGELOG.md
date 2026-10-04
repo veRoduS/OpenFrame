@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.15.0] - 2026-10-04
+
+- Show live playlist badges on slides, support nested media folders, and preserve existing screen settings when renaming.
+- Allow referenced media deletion with removed-media placeholders, and support nested groups with independent permissions.
+- Published removed-media placeholders require player 0.10.8 or newer; update older players before deleting published media.
+- Include player 0.10.9's Android device sleep setup guidance; server and player versions remain independent. Physical Onn sleep behavior still requires validation.
+
 ## [0.14.2] - 2026-10-03
 
 - Add live playlist badges, nested media folders, and repair screen renaming
