@@ -53,7 +53,14 @@ export type Layer = {
     showUnit: boolean;
   };
 };
+export type AccessTag = {
+  type: 'group' | 'user';
+  id: string;
+  name: string;
+  username?: string;
+};
 export type Slide = {
+  accessTags?: AccessTag[];
   groupIds?: string[];
   id: string;
   name: string;
@@ -64,6 +71,7 @@ export type Slide = {
   updatedAt?: string;
 };
 export type Playlist = {
+  accessTags?: AccessTag[];
   groupIds?: string[];
   id: string;
   name: string;
@@ -98,6 +106,7 @@ export function playlistDuration(playlist: Playlist) {
   );
 }
 export type Asset = {
+  accessTags?: AccessTag[];
   id: string;
   name: string;
   url: string;
@@ -110,11 +119,13 @@ export type Asset = {
   readOnly?: boolean;
 };
 export type MediaFolder = {
+  accessTags?: AccessTag[];
   id: string;
   name: string;
   parentId?: string | null;
 };
 export type Device = {
+  accessTags?: AccessTag[];
   groupIds?: string[];
   id: string;
   name: string;

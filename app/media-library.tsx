@@ -656,6 +656,7 @@ export function MediaLibrary({
                   {!onPick && onManageAccess && !a.readOnly && (
                     <ManageAccessButton
                       resourceName={a.name}
+                      tags={a.accessTags}
                       onClick={() => onManageAccess(a)}
                     />
                   )}

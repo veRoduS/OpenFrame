@@ -445,7 +445,9 @@ small {
   font-size: 11px;
   font-weight: 700;
   line-height: 1.3;
-  pointer-events: none;
+  cursor: help;
+  border: 0;
+  min-height: 0;
 }
 .thumbnail-button {
   padding: 0;
@@ -613,8 +615,11 @@ small {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.slide-card > .manage-access-button,
-.media-browser-grid .media-entry > .manage-access-button {
+.slide-card > .resource-access-summary .manage-access-button,
+.media-browser-grid
+  .media-entry
+  > .resource-access-summary
+  .manage-access-button {
   width: 100%;
   justify-content: space-between;
   padding: 10px 14px;
@@ -623,12 +628,18 @@ small {
   border-radius: 0;
   background: #f6f9f7;
 }
-.slide-card > .manage-access-button:hover,
-.media-browser-grid .media-entry > .manage-access-button:hover {
+.slide-card > .resource-access-summary .manage-access-button:hover,
+.media-browser-grid
+  .media-entry
+  > .resource-access-summary
+  .manage-access-button:hover {
   background: #e9f1ec;
 }
-.slide-card > .manage-access-button:focus-visible,
-.media-browser-grid .media-entry > .manage-access-button:focus-visible {
+.slide-card > .resource-access-summary .manage-access-button:focus-visible,
+.media-browser-grid
+  .media-entry
+  > .resource-access-summary
+  .manage-access-button:focus-visible {
   outline-offset: -3px;
 }
 .playlist-row .row-actions,
@@ -2330,7 +2341,10 @@ input[type='color'] {
   display: flex;
   flex-direction: column;
 }
-.media-browser-grid .media-entry > .manage-access-button {
+.media-browser-grid
+  .media-entry
+  > .resource-access-summary
+  .manage-access-button {
   margin-top: auto;
 }
 .media-entry {
@@ -2421,7 +2435,7 @@ input[type='color'] {
   border-bottom: 1px solid #dce4df;
   border-radius: 0;
 }
-.media-browser-list .media-entry:has(> .manage-access-button) {
+.media-browser-list .media-entry:has(> .resource-access-summary) {
   grid-template-columns: 35px 90px minmax(0, 1fr) auto;
 }
 .media-browser-list .media-entry.is-selected {
@@ -2516,10 +2530,10 @@ input[type='color'] {
     grid-template-columns: 28px 65px minmax(0, 1fr);
     gap: 5px;
   }
-  .media-browser-list .media-entry:has(> .manage-access-button) {
+  .media-browser-list .media-entry:has(> .resource-access-summary) {
     grid-template-columns: 28px 65px minmax(0, 1fr);
   }
-  .media-browser-list .media-entry > .manage-access-button {
+  .media-browser-list .media-entry > .resource-access-summary {
     grid-column: 3;
     justify-self: start;
     margin: 4px 10px 0;
@@ -2575,14 +2589,6 @@ input[type='color'] {
   display: grid;
   gap: 12px;
 }
-.user-drag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.user-drag-list button[draggable='true'],
-.group-section h2[draggable='true'],
-.account-row[draggable='true'],
 .media-entry[draggable='true'] {
   cursor: grab;
 }
@@ -2624,4 +2630,93 @@ input[type='color'] {
 .empty-filter-results {
   padding: 24px;
   text-align: center;
+}
+
+.logged-in-user,
+.sidebar-version {
+  display: block;
+}
+.logged-in-user {
+  font-size: 13px;
+  color: #315d44;
+  overflow-wrap: anywhere;
+}
+.sidebar-version {
+  margin-top: 4px;
+}
+.resource-access-summary {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.access-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 260px;
+}
+.access-tag {
+  padding: 3px 7px;
+  border-radius: 12px;
+  background: #e8f1eb;
+  color: #315d44;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.access-tag.user {
+  background: #edf0fa;
+  color: #42548c;
+}
+.slide-card > .resource-access-summary,
+.media-browser-grid .media-entry > .resource-access-summary {
+  width: 100%;
+}
+.slide-card .access-tags,
+.media-browser-grid .access-tags {
+  padding: 0 12px 10px;
+  max-width: none;
+}
+.playlist-row .row-actions {
+  display: grid;
+  grid-template-columns: 38px 38px minmax(120px, 240px) 38px;
+  align-items: start;
+  gap: 6px;
+}
+.playlist-row .row-actions > button {
+  width: 38px;
+  min-height: 38px;
+  padding: 8px;
+}
+.access-grant-forms {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+.access-grant-forms .account-form {
+  margin: 0;
+}
+.user-content-section {
+  margin-top: 20px;
+  border-top: 1px solid #e1e8e3;
+  padding-top: 12px;
+}
+.user-content-section h4 {
+  color: #315d44;
+  margin: 0 0 8px;
+}
+.live-playlist-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+@media (max-width: 600px) {
+  .playlist-row .row-actions {
+    width: 100%;
+    grid-template-columns: 38px 38px minmax(0, 1fr) 38px;
+  }
+}
+
+.live-playlist-tooltip {
+  flex-direction: column;
+  align-items: flex-start;
 }

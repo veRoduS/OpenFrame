@@ -461,12 +461,51 @@ export function createApp({
           req.user.role === 'admin' || accounts.member(req.user, group.id),
       );
     const visibleGroups = new Set(groups.map((group) => group.id));
-    const withGroups = (kind, item) => ({
-      ...item,
-      groupIds: grants(kind, item.id)
-        .map((grant) => grant.groupId)
-        .filter((id) => visibleGroups.has(id)),
-    });
+    const withGroups = (kind, item) => {
+      const audience = grants(kind, item.id);
+      const sharedGroups = audience.filter((grant) => grant.groupId);
+      return {
+        ...item,
+        groupIds: sharedGroups
+          .map((grant) => grant.groupId)
+          .filter((id) => visibleGroups.has(id)),
+        accessTags: [
+          ...sharedGroups
+            .filter((grant) => visibleGroups.has(grant.groupId))
+            .map((grant) => ({
+              type: 'group',
+              id: grant.groupId,
+              name: groups.find((group) => group.id === grant.groupId).name,
+            })),
+          ...audience
+            .filter((grant) => grant.userId)
+            .flatMap((grant) => {
+              const person = db
+                .prepare(
+                  'SELECT id,name,username,role,disabled FROM users WHERE id=?',
+                )
+                .get(grant.userId);
+              if (
+                !person ||
+                person.disabled ||
+                person.role === 'admin' ||
+                sharedGroups.some((group) =>
+                  accounts.member(person, group.groupId),
+                )
+              )
+                return [];
+              return [
+                {
+                  type: 'user',
+                  id: person.id,
+                  name: person.name,
+                  username: person.username,
+                },
+              ];
+            }),
+        ],
+      };
+    };
     res.json({
       groups,
       slides: list('slide').map((item) => withGroups('slide', item)),
@@ -481,10 +520,10 @@ export function createApp({
       assets: allRecords('asset')
         .filter((asset) => accounts.canViewAsset(req.user, asset.id))
         .map((asset) => ({
-          ...publicAsset(asset),
+          ...withGroups('asset', publicAsset(asset)),
           readOnly: !accounts.can(req.user, 'asset', asset.id),
         })),
-      folders: list('folder'),
+      folders: list('folder').map((item) => withGroups('folder', item)),
       devices: list('device').map((item) =>
         withGroups('device', publicDevice(item)),
       ),

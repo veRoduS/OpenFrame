@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Shield, X } from 'lucide-react';
-import { api } from './types';
+import { api, type AccessTag } from './types';
 import { orderedTree, indentedName } from './hierarchy';
 import type { User } from './accounts';
 import {
@@ -134,54 +134,69 @@ export function ResourceAccessDialog({
           </div>
         ))}
         {access?.canShare ? (
-          <form
-            className="account-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const target = new FormData(event.currentTarget).get(
-                'target',
-              ) as string;
-              const [type, id] = target.split(':');
-              void run(() =>
-                share({
-                  userId: type === 'user' ? id : '',
-                  groupId: type === 'group' ? id : '',
-                }),
-              );
-              event.currentTarget.reset();
-            }}
-          >
-            <label>
-              Share with
-              <select
-                aria-label="Share with"
-                name="target"
-                required
-                defaultValue=""
+          <div className="access-grant-forms">
+            {(
+              ['group', ...(user.role === 'admin' ? ['user'] : [])] as const
+            ).map((type) => (
+              <form
+                className="account-form"
+                key={type}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const id = new FormData(event.currentTarget).get(
+                    'target',
+                  ) as string;
+                  const form = event.currentTarget;
+                  void run(async () => {
+                    await share({
+                      userId: type === 'user' ? id : '',
+                      groupId: type === 'group' ? id : '',
+                    });
+                    form.reset();
+                  });
+                }}
               >
-                <option value="" disabled>
-                  Select a group{user.role === 'admin' ? ' or user' : ''}
-                </option>
-                {orderedTree(groups).map(({ item: group, depth }) => (
-                  <option key={group.id} value={`group:${group.id}`}>
-                    {indentedName(group.name, depth)} (group)
-                  </option>
-                ))}
-                {user.role === 'admin' &&
-                  users
-                    .filter((u) => !u.disabled)
-                    .map((entry) => (
-                      <option key={entry.id} value={`user:${entry.id}`}>
-                        {entry.name} ({entry.username})
-                      </option>
-                    ))}
-              </select>
-            </label>
-            <button className="primary" disabled={busy}>
-              <Shield size={16} />
-              Grant access
-            </button>
-          </form>
+                <label>
+                  {type === 'group' ? 'Groups' : 'Users'}
+                  <select
+                    aria-label={type === 'group' ? 'Groups' : 'Users'}
+                    name="target"
+                    required
+                    defaultValue=""
+                    disabled={busy}
+                  >
+                    <option value="" disabled>
+                      Select a {type}
+                    </option>
+                    {type === 'group'
+                      ? orderedTree(groups).map(({ item: group, depth }) => (
+                          <option key={group.id} value={group.id}>
+                            {indentedName(group.name, depth)}
+                          </option>
+                        ))
+                      : users
+                          .filter(
+                            (entry) =>
+                              !entry.disabled && entry.role !== 'admin',
+                          )
+                          .map((entry) => (
+                            <option key={entry.id} value={entry.id}>
+                              {entry.name} ({entry.username})
+                            </option>
+                          ))}
+                  </select>
+                </label>
+                <button className="primary" disabled={busy}>
+                  <Shield size={16} />
+                  Grant {type} access
+                </button>
+              </form>
+            ))}
+            <p className="muted">
+              Admins always have unrestricted access. Group access includes
+              every subgroup.
+            </p>
+          </div>
         ) : access ? (
           <p>Only the owner or admin can change sharing.</p>
         ) : null}
@@ -192,20 +207,45 @@ export function ResourceAccessDialog({
 
 export function ManageAccessButton({
   resourceName,
+  tags = [],
   onClick,
 }: {
   resourceName: string;
+  tags?: AccessTag[];
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className="manage-access-button"
-      aria-label={`Manage access to ${resourceName}`}
-      onClick={onClick}
-    >
-      <span>Manage access</span>
-      <ChevronRight size={15} aria-hidden="true" />
-    </button>
+    <div className="resource-access-summary">
+      <button
+        type="button"
+        className="manage-access-button"
+        aria-label={`Manage access to ${resourceName}`}
+        onClick={onClick}
+      >
+        <span>Manage access</span>
+        <ChevronRight size={15} aria-hidden="true" />
+      </button>
+      {tags.length > 0 && (
+        <div
+          className="access-tags"
+          aria-label={`Current access to ${resourceName}`}
+        >
+          {tags.map((tag) => (
+            <span
+              key={`${tag.type}:${tag.id}`}
+              className={`access-tag ${tag.type}`}
+              title={
+                tag.type === 'group'
+                  ? 'Group access includes subgroups'
+                  : `Direct user access${tag.username ? `: ${tag.username}` : ''}`
+              }
+            >
+              {tag.type === 'user' ? 'User: ' : ''}
+              {tag.name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

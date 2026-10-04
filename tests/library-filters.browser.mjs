@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
@@ -111,6 +111,24 @@ try {
   );
   await page.goto(base + '/dashboard');
   await page.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
+  const liveCard = page.locator('.slide-card').filter({
+    has: page.getByText('Safety North', { exact: true }),
+  });
+  await liveCard
+    .getByRole('button', {
+      name: 'Live playlists for Safety North',
+      exact: true,
+    })
+    .hover();
+  await page.getByText('Live in playlists', { exact: true }).waitFor();
+  await page
+    .locator('[data-slot=tooltip-content]')
+    .getByText('Safety North', { exact: true })
+    .waitFor();
+  await page.mouse.move(0, 0);
+  await page
+    .locator('[data-slot=tooltip-content]')
+    .waitFor({ state: 'hidden' });
   for (const [noun, selector] of [
     ['Slides', '.slide-card'],
     ['Playlists', '.playlist-row'],
@@ -183,7 +201,16 @@ try {
     await page.getByLabel('Group', { exact: true }).inputValue(),
     child.id,
   );
+  mkdirSync(path.join(root, 'work'), { recursive: true });
+  await page.screenshot({
+    path: path.join(root, 'work/access-playlists-desktop.png'),
+    fullPage: true,
+  });
   await page.setViewportSize({ width: 320, height: 844 });
+  await page.screenshot({
+    path: path.join(root, 'work/access-playlists-mobile.png'),
+    fullPage: true,
+  });
   assert.ok(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

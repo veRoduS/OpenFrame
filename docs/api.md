@@ -16,11 +16,11 @@
 | POST | `/api/users/:id/invitation` | Admin replacement password invitation; returns `{invitation}` |
 | PATCH | `/api/users/:id` | Admin role/status update with `{role?:"user"|"admin",disabled?:boolean}`; self-demotion/disable and last-admin removal protected |
 | GET | `/api/users/:id/access` | Admin overview of direct grants, ownership, group sources, effective and read-only access |
-| GET / POST | `/api/groups` | List accessible groups including descendants with direct members; create `{name,parentId?:string|null}` as group admin |
+| GET / POST | `/api/groups` | List accessible groups including descendants with direct members and implicit global admins (`accountRole` distinguishes account role from group `role`); global admin creates `{name,parentId?:string|null}` |
 | PATCH | `/api/groups/:id` | Group admin renames; global admin reparents `{name?:string,parentId?:string|null}`; cycle and administrator checks |
 | POST | `/api/groups/:id/invitation` | Group admin creates one-use join token; returns `{invitation}` |
 | POST | `/api/groups/join` | Signed-in user accepts `{token}` |
-| PUT | `/api/groups/:id/members/:userId` | Global admin adds existing users; group admin updates direct members with `{role:"admin"|"member"|"remove"}`; last active group admin protected |
+| PUT | `/api/groups/:id/members/:userId` | Global admin adds existing users; group admin updates direct members with `{role:"admin"|"member"|"remove"}`; last active direct group admin protected; global admin group access is implicit and cannot be changed |
 | GET | `/api/access/:kind/:id` | Returns `{canShare,grants:[{userId,groupId}]}` for an accessible item |
 | POST | `/api/access/:kind/:id` | Owner/admin grants `{groupId}` or admin grants `{userId}`; add `remove:true` to revoke |
 
@@ -128,4 +128,4 @@ Admin-only `GET /api/settings/stocks` returns `{configured:boolean}`. Admin-only
 
 Approved player sync responses include quote snapshots inside `manifest.stocks`; authenticated previews include `stocks` alongside `weather`. Quote updates do not change publication revisions. Publications using shapes, stocks, or vertical weather have `schemaVersion:3`; other newly published content remains schema 2. Player 0.10.11+ accepts schemas 1, 2, and 3. See [stock scheduling and provider limits](user-guide.md#stock-tracker).
 
-Library responses include `groups:[{id,name,parentId}]` scoped to groups visible to the caller. Slides, playlists, and devices include `groupIds` for their direct sharing grants to those visible groups; user grants and hidden group grants are excluded. These additive fields support client-side search/group/status filters and do not change authorization or player manifests.
+Library responses include `groups:[{id,name,parentId}]` scoped to groups visible to the caller. Slides, playlists, and devices include `groupIds` for their direct sharing grants to those visible groups; user grants and hidden group grants are excluded. Resources also include `accessTags:[{type:"group"|"user",id,name,username?}]`: visible group grants and active non-admin direct user grants not already covered by a granted group (including inherited membership). Only display identity fields are exposed. These additive fields support client-side filters and access summaries and do not change player manifests.

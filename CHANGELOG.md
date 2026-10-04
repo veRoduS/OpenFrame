@@ -2,6 +2,14 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.16.1] - 2026-10-04
+
+- Restrict group creation to global admins. Show admins as unrestricted group administrators, protect their group access, and preserve explicit memberships when account roles change.
+- Show the signed-in name beside the sidebar version and sign-out control. Split sharing into Groups and Users menus and display tags for group grants and individual users assigned outside those groups.
+- Keep admin group dragging and the Add existing user dropdown; remove user dragging. Use a confirmed + button for missing memberships and organize individual content access under Slides, Playlists, Screens, Media, and Folders.
+- Align playlist actions, remove the playlist publication reminder and slide draft-library text, and show active published playlists when hovering or focusing a slide's Live badge.
+- Keep player 0.10.11 compatible; player manifests and APKs are unchanged.
+
 ## [0.16.0] - 2026-10-04
 
 - Publish admin/group controls, media drag-and-drop, shapes, vertical weather, stocks and workspace filters

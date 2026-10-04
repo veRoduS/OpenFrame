@@ -35,7 +35,7 @@ type Group = {
   name: string;
   parentId: string | null;
   canManage: boolean;
-  members: (User & { role: string })[];
+  members: (User & { role: string; accountRole?: string })[];
 };
 type Resource = { kind: string; id: string; name: string };
 const fields = (event: SyntheticEvent<HTMLFormElement>) => {
@@ -78,7 +78,7 @@ export function Accounts({
   refresh: () => Promise<void>;
 }) {
   const [dragged, setDragged] = useState<{
-    type: 'user' | 'group';
+    type: 'group';
     id: string;
   } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -118,13 +118,6 @@ export function Accounts({
   }
   function canDropGroup(target: string | null) {
     if (!isAdmin || busy || !dragged) return false;
-    if (dragged.type === 'user')
-      return (
-        !!target &&
-        !groups
-          .find((group) => group.id === target)
-          ?.members.some((person) => person.id === dragged.id)
-      );
     return (
       (!target || !isWithin(groups, target, dragged.id)) &&
       (groups.find((group) => group.id === dragged.id)?.parentId || null) !==
@@ -138,18 +131,10 @@ export function Accounts({
     setDropTarget(null);
     if (!item || !valid) return;
     void run(async () => {
-      if (item.type === 'user')
-        await api(`/api/groups/${target}/members/${item.id}`, 'PUT', {
-          role: 'member',
-        });
-      else await api(`/api/groups/${item.id}`, 'PATCH', { parentId: target });
+      await api(`/api/groups/${item.id}`, 'PATCH', { parentId: target });
       await reload();
       await refresh();
-      setNotice(
-        item.type === 'user'
-          ? 'User added to group.'
-          : 'Group moved. Inherited access has been updated.',
-      );
+      setNotice('Group moved. Inherited access has been updated.');
     });
   }
   const resources: Record<string, { id: string; name: string }[]> = {
@@ -183,10 +168,6 @@ export function Accounts({
               role="tab"
               aria-selected={tab === id}
               onClick={() => setTab(id as string)}
-              onDragEnter={() => {
-                if (isAdmin && dragged?.type === 'user' && id === 'groups')
-                  setTab('groups');
-              }}
             >
               <Glyph size={17} />
               {title as string}
@@ -303,23 +284,7 @@ export function Accounts({
           </form>
           <div className="account-list">
             {users.map((item) => (
-              <div
-                className="account-row"
-                key={item.id}
-                draggable={isAdmin && !busy && !item.disabled}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData(
-                    'application/x-openframe-user',
-                    item.id,
-                  );
-                  event.dataTransfer.effectAllowed = 'copy';
-                  setDragged({ type: 'user', id: item.id });
-                }}
-                onDragEnd={() => {
-                  setDragged(null);
-                  setDropTarget(null);
-                }}
-              >
+              <div className="account-row" key={item.id}>
                 <div>
                   <button
                     className="user-name-button"
@@ -382,37 +347,10 @@ export function Accounts({
         <section className="account-section">
           {isAdmin && (
             <div className="group-drag-tools">
-              <h3>Drag users into groups</h3>
+              <h3>Organize groups</h3>
               <p className="muted">
-                Drag a user onto a group to add a membership. Drag a group
-                heading onto another group to move it inside.
+                Drag a group heading onto another group to move it inside.
               </p>
-              <div className="user-drag-list">
-                {users
-                  .filter((entry) => !entry.disabled)
-                  .map((entry) => (
-                    <button
-                      key={entry.id}
-                      draggable={!busy}
-                      disabled={busy}
-                      aria-label={`Drag ${entry.name} to a group`}
-                      onDragStart={(event) => {
-                        event.dataTransfer.setData(
-                          'application/x-openframe-user',
-                          entry.id,
-                        );
-                        event.dataTransfer.effectAllowed = 'copy';
-                        setDragged({ type: 'user', id: entry.id });
-                      }}
-                      onDragEnd={() => {
-                        setDragged(null);
-                        setDropTarget(null);
-                      }}
-                    >
-                      {entry.name}
-                    </button>
-                  ))}
-              </div>
               <button
                 className={
                   dropTarget === 'root' ? 'organization-drop-target' : ''
@@ -437,48 +375,50 @@ export function Accounts({
           )}
 
           <div className="account-group-forms">
-            <form
-              className="account-inline-form"
-              onSubmit={(e) => {
-                const form = e.currentTarget;
-                const data = fields(e);
-                void run(async () => {
-                  await api('/api/groups', 'POST', {
-                    name: data.name,
-                    parentId: data.parentId || null,
+            {isAdmin && (
+              <form
+                className="account-inline-form"
+                onSubmit={(e) => {
+                  const form = e.currentTarget;
+                  const data = fields(e);
+                  void run(async () => {
+                    await api('/api/groups', 'POST', {
+                      name: data.name,
+                      parentId: data.parentId || null,
+                    });
+                    form.reset();
+                    await reload();
                   });
-                  form.reset();
-                  await reload();
-                });
-              }}
-            >
-              <label>
-                New group
-                <input
-                  name="name"
-                  required
-                  maxLength={100}
-                  placeholder="Group name"
-                />
-              </label>
-              <label>
-                Parent group
-                <select name="parentId" defaultValue="">
-                  <option value="">No parent (top level)</option>
-                  {orderedGroups
-                    .filter(({ group }) => group.canManage)
-                    .map(({ group, depth }) => (
-                      <option key={group.id} value={group.id}>
-                        {indentedName(group.name, depth)}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <button disabled={busy}>
-                <Plus size={16} />
-                Create group
-              </button>
-            </form>
+                }}
+              >
+                <label>
+                  New group
+                  <input
+                    name="name"
+                    required
+                    maxLength={100}
+                    placeholder="Group name"
+                  />
+                </label>
+                <label>
+                  Parent group
+                  <select name="parentId" defaultValue="">
+                    <option value="">No parent (top level)</option>
+                    {orderedGroups
+                      .filter(({ group }) => group.canManage)
+                      .map(({ group, depth }) => (
+                        <option key={group.id} value={group.id}>
+                          {indentedName(group.name, depth)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button disabled={busy}>
+                  <Plus size={16} />
+                  Create group
+                </button>
+              </form>
+            )}
             <form
               className="account-inline-form"
               onSubmit={(e) => {
@@ -515,8 +455,7 @@ export function Accounts({
               onDragOver={(event) => {
                 if (canDropGroup(group.id)) {
                   event.preventDefault();
-                  event.dataTransfer.dropEffect =
-                    dragged?.type === 'user' ? 'copy' : 'move';
+                  event.dataTransfer.dropEffect = 'move';
                   setDropTarget(group.id);
                 }
               }}
@@ -667,7 +606,11 @@ export function Accounts({
                     <strong>{person.name}</strong>
                     <span>{person.username}</span>
                   </div>
-                  {group.canManage ? (
+                  {person.accountRole === 'admin' ? (
+                    <span className="badge green">
+                      Group admin · Admin account
+                    </span>
+                  ) : group.canManage ? (
                     <div className="account-actions">
                       <select
                         aria-label={`Role for ${person.username}`}
@@ -860,12 +803,14 @@ function UserAccessDialog({
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
+  const [confirmGroup, setConfirmGroup] = useState<string | null>(null);
   useEffect(() => {
     setAccount(selected);
     setError('');
     setResources([]);
     setQuery('');
     setKind('all');
+    setConfirmGroup(null);
     if (!selected) return;
     let current = true;
     api<UserResource[]>(`/api/users/${selected.id}/access`)
@@ -958,25 +903,68 @@ function UserAccessDialog({
                     {group.name}
                     {inherited ? ' · Inherited' : ''}
                   </span>
-                  <select
-                    aria-label={`Membership in ${group.name}`}
-                    value={direct?.role || ''}
-                    disabled={busy || !!account.disabled}
-                    onChange={(event) => {
-                      const role = event.target.value || 'remove';
-                      void change(async () => {
-                        await api(
-                          `/api/groups/${group.id}/members/${account.id}`,
-                          'PUT',
-                          { role },
-                        );
-                      });
-                    }}
-                  >
-                    <option value="">No direct membership</option>
-                    <option value="member">Member</option>
-                    <option value="admin">Group admin</option>
-                  </select>
+                  {account.role === 'admin' ? (
+                    <span className="badge green">
+                      Group admin · Unrestricted
+                    </span>
+                  ) : !direct ? (
+                    confirmGroup === group.id ? (
+                      <div className="account-actions">
+                        <span>
+                          Add {account.name} to {group.name}?
+                        </span>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void change(async () => {
+                              await api(
+                                `/api/groups/${group.id}/members/${account.id}`,
+                                'PUT',
+                                { role: 'member' },
+                              );
+                              setConfirmGroup(null);
+                            })
+                          }
+                        >
+                          Confirm add
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() => setConfirmGroup(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        aria-label={`Add ${account.name} to ${group.name}`}
+                        disabled={busy || !!account.disabled}
+                        onClick={() => setConfirmGroup(group.id)}
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )
+                  ) : (
+                    <select
+                      aria-label={`Membership in ${group.name}`}
+                      value={direct?.role || ''}
+                      disabled={busy || !!account.disabled}
+                      onChange={(event) => {
+                        const role = event.target.value || 'remove';
+                        void change(async () => {
+                          await api(
+                            `/api/groups/${group.id}/members/${account.id}`,
+                            'PUT',
+                            { role },
+                          );
+                        });
+                      }}
+                    >
+                      <option value="">Remove direct membership</option>
+                      <option value="member">Member</option>
+                      <option value="admin">Group admin</option>
+                    </select>
+                  )}
                 </div>
               );
             })}
@@ -1002,70 +990,92 @@ function UserAccessDialog({
                 />
               </label>
             </div>
-            {resources
-              .filter(
-                (item) =>
-                  (kind === 'all' || item.kind === kind) &&
-                  item.name.toLowerCase().includes(query.toLowerCase()),
-              )
-              .map((item) => (
-                <div className="account-row" key={`${item.kind}:${item.id}`}>
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.kind} ·{' '}
-                      {account.role === 'admin'
-                        ? 'Admin access'
-                        : item.owner
-                          ? 'Owner'
-                          : item.viaGroups.length
-                            ? `Through groups: ${item.viaGroups.join(', ')}`
-                            : item.readOnly
-                              ? 'Visible through shared content (read-only)'
-                              : item.direct
-                                ? 'Direct access'
-                                : 'No access'}
-                    </span>
-                  </div>
-                  <label className="direct-access-toggle">
-                    <input
-                      type="checkbox"
-                      aria-label={`Direct access to ${item.name}`}
-                      checked={item.direct}
-                      disabled={
-                        busy ||
-                        !!account.disabled ||
-                        account.role === 'admin' ||
-                        item.owner
-                      }
-                      onChange={(event) => {
-                        const remove = !event.target.checked;
-                        const previous = resources;
-                        setResources((items) =>
-                          items.map((entry) =>
-                            entry.kind === item.kind && entry.id === item.id
-                              ? { ...entry, direct: !remove }
-                              : entry,
-                          ),
-                        );
-                        void change(async () => {
-                          try {
-                            await api(
-                              `/api/access/${item.kind}/${item.id}`,
-                              'POST',
-                              { userId: account.id, remove },
-                            );
-                          } catch (error) {
-                            setResources(previous);
-                            throw error;
-                          }
-                        });
-                      }}
-                    />
-                    Direct access
-                  </label>
-                </div>
-              ))}
+            {(['slide', 'playlist', 'device', 'asset', 'folder'] as const)
+              .filter((type) => kind === 'all' || kind === type)
+              .map((type) => {
+                const matches = resources.filter(
+                  (item) =>
+                    item.kind === type &&
+                    item.name.toLowerCase().includes(query.toLowerCase()),
+                );
+                if (!matches.length) return null;
+                const titles = {
+                  slide: 'Slides',
+                  playlist: 'Playlists',
+                  device: 'Screens',
+                  asset: 'Media',
+                  folder: 'Folders',
+                };
+                return (
+                  <section className="user-content-section" key={type}>
+                    <h4>{titles[type]}</h4>
+                    {matches.map((item) => (
+                      <div
+                        className="account-row"
+                        key={`${item.kind}:${item.id}`}
+                      >
+                        <div>
+                          <strong>{item.name}</strong>
+                          <span>
+                            {item.kind} ·{' '}
+                            {account.role === 'admin'
+                              ? 'Admin access'
+                              : item.owner
+                                ? 'Owner'
+                                : item.viaGroups.length
+                                  ? `Through groups: ${item.viaGroups.join(', ')}`
+                                  : item.readOnly
+                                    ? 'Visible through shared content (read-only)'
+                                    : item.direct
+                                      ? 'Direct access'
+                                      : 'No access'}
+                          </span>
+                        </div>
+                        <label className="direct-access-toggle">
+                          <input
+                            type="checkbox"
+                            aria-label={`Direct access to ${item.name}`}
+                            checked={account.role === 'admin' || item.direct}
+                            disabled={
+                              busy ||
+                              !!account.disabled ||
+                              account.role === 'admin' ||
+                              item.owner
+                            }
+                            onChange={(event) => {
+                              const remove = !event.target.checked;
+                              const previous = resources;
+                              setResources((items) =>
+                                items.map((entry) =>
+                                  entry.kind === item.kind &&
+                                  entry.id === item.id
+                                    ? { ...entry, direct: !remove }
+                                    : entry,
+                                ),
+                              );
+                              void change(async () => {
+                                try {
+                                  await api(
+                                    `/api/access/${item.kind}/${item.id}`,
+                                    'POST',
+                                    { userId: account.id, remove },
+                                  );
+                                } catch (error) {
+                                  setResources(previous);
+                                  throw error;
+                                }
+                              });
+                            }}
+                          />
+                          {account.role === 'admin'
+                            ? 'Unrestricted admin access'
+                            : 'Direct access'}
+                        </label>
+                      </div>
+                    ))}
+                  </section>
+                );
+              })}
           </>
         )}
       </DialogContent>

@@ -242,9 +242,10 @@ void test('published media is read-only for shared playlists and screens until t
     (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
     200,
   );
-  const group = (
-    await recipient.call('/api/groups', 'POST', { name: 'Viewers' })
-  ).data;
+  const group = (await admin('/api/groups', 'POST', { name: 'Viewers' })).data;
+  await admin(`/api/groups/${group.id}/members/${recipient.user.id}`, 'PUT', {
+    role: 'admin',
+  });
   for (const target of [{ userId: recipient.user.id }, { groupId: group.id }]) {
     assert.equal(
       (await admin(`/api/access/playlist/${playlist.id}`, 'POST', target))
@@ -630,9 +631,11 @@ void test('group invitations, sharing, admin transfer and removal enforce member
   const { admin, user } = await fixture(t);
   const alice = await user('alice');
   const bob = await user('bob');
-  const group = (
-    await alice.call('/api/groups', 'POST', { name: 'Lobby team' })
-  ).data;
+  const group = (await admin('/api/groups', 'POST', { name: 'Lobby team' }))
+    .data;
+  await admin(`/api/groups/${group.id}/members/${alice.user.id}`, 'PUT', {
+    role: 'admin',
+  });
   const item = (await alice.call('/api/slides', 'POST', slide)).data;
   assert.equal(
     (
@@ -721,14 +724,16 @@ void test('group invitations, sharing, admin transfer and removal enforce member
 });
 
 void test('child membership cannot access parent content', async (t) => {
-  const { user } = await fixture(t);
+  const { admin, user } = await fixture(t);
   const alice = await user('alice');
   const bob = await user('bob');
   const outsider = await user('outsider');
-  const parent = (await alice.call('/api/groups', 'POST', { name: 'Company' }))
-    .data;
+  const parent = (await admin('/api/groups', 'POST', { name: 'Company' })).data;
+  await admin(`/api/groups/${parent.id}/members/${alice.user.id}`, 'PUT', {
+    role: 'admin',
+  });
   const child = (
-    await alice.call('/api/groups', 'POST', {
+    await admin('/api/groups', 'POST', {
       name: 'Warehouse',
       parentId: parent.id,
     })
@@ -1109,8 +1114,10 @@ void test('admins manage existing memberships, account roles, and user access wi
   const { admin, user } = await fixture(t);
   const alice = await user('alice');
   const bob = await user('bob');
-  const group = (await alice.call('/api/groups', 'POST', { name: 'Team' }))
-    .data;
+  const group = (await admin('/api/groups', 'POST', { name: 'Team' })).data;
+  await admin(`/api/groups/${group.id}/members/${alice.user.id}`, 'PUT', {
+    role: 'admin',
+  });
   assert.equal(
     (
       await alice.call(
@@ -1314,12 +1321,14 @@ void test('migration preserves separate existing admin and superadmin accounts, 
   assert.equal((await second.call('/api/users')).status, 200);
 });
 void test('group moves require a global admin even when the caller manages the group', async (t) => {
-  const { user } = await fixture(t);
+  const { admin, user } = await fixture(t);
   const manager = await user('manager');
-  const parent = (await manager.call('/api/groups', 'POST', { name: 'Parent' }))
-    .data;
-  const child = (await manager.call('/api/groups', 'POST', { name: 'Child' }))
-    .data;
+  const parent = (await admin('/api/groups', 'POST', { name: 'Parent' })).data;
+  const child = (await admin('/api/groups', 'POST', { name: 'Child' })).data;
+  for (const group of [parent, child])
+    await admin(`/api/groups/${group.id}/members/${manager.user.id}`, 'PUT', {
+      role: 'admin',
+    });
   assert.equal(
     (
       await manager.call(`/api/groups/${child.id}`, 'PATCH', {
@@ -1327,5 +1336,115 @@ void test('group moves require a global admin even when the caller manages the g
       })
     ).status,
     403,
+  );
+});
+
+void test('only global admins create groups; admin group access is implicit and irrevocable', async (t) => {
+  const { admin, user } = await fixture(t);
+  const manager = await user('group-manager');
+  assert.equal(
+    (await manager.call('/api/groups', 'POST', { name: 'Forbidden root' }))
+      .status,
+    403,
+  );
+  const root = (await admin('/api/groups', 'POST', { name: 'Root' })).data;
+  const child = (
+    await admin('/api/groups', 'POST', { name: 'Child', parentId: root.id })
+  ).data;
+  await admin(`/api/groups/${root.id}/members/${manager.user.id}`, 'PUT', {
+    role: 'admin',
+  });
+  assert.equal(
+    (
+      await manager.call('/api/groups', 'POST', {
+        name: 'Forbidden child',
+        parentId: root.id,
+      })
+    ).status,
+    403,
+  );
+  await admin(`/api/users/${manager.user.id}`, 'PATCH', { role: 'admin' });
+  for (const group of (await admin('/api/groups')).data) {
+    const membership = group.members.find(
+      (person) => person.id === manager.user.id,
+    );
+    assert.equal(membership.role, 'admin');
+    assert.equal(membership.accountRole, 'admin');
+    for (const role of ['member', 'remove'])
+      assert.equal(
+        (
+          await admin(
+            `/api/groups/${group.id}/members/${manager.user.id}`,
+            'PUT',
+            { role },
+          )
+        ).status,
+        409,
+      );
+  }
+  const privateItem = (await admin('/api/slides', 'POST', slide)).data;
+  assert.equal(
+    (await manager.call('/api/library')).data.slides.some(
+      (item) => item.id === privateItem.id,
+    ),
+    true,
+  );
+  await admin(`/api/access/slide/${privateItem.id}`, 'POST', {
+    userId: manager.user.id,
+    remove: true,
+  });
+  const effective = (
+    await admin(`/api/users/${manager.user.id}/access`)
+  ).data.find((item) => item.id === privateItem.id);
+  assert.equal(effective.direct, false);
+  assert.equal(effective.effective, true);
+  // Demotion removes implicit group administration without creating a membership.
+  await admin(`/api/users/${manager.user.id}`, 'PATCH', { role: 'user' });
+  assert.equal(
+    (await admin('/api/groups')).data
+      .find((group) => group.id === child.id)
+      .members.some((person) => person.id === manager.user.id),
+    false,
+  );
+});
+
+void test('library access tags include groups and users granted access outside those groups', async (t) => {
+  const { admin, user } = await fixture(t);
+  const member = await user('tag-member');
+  const direct = await user('tag-direct');
+  const parent = (await admin('/api/groups', 'POST', { name: 'Region' })).data;
+  const child = (
+    await admin('/api/groups', 'POST', { name: 'Store', parentId: parent.id })
+  ).data;
+  await admin(`/api/groups/${parent.id}/members/${member.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const item = (await admin('/api/slides', 'POST', slide)).data;
+  for (const grant of [
+    { groupId: child.id },
+    { userId: member.user.id },
+    { userId: direct.user.id },
+  ]) {
+    assert.equal(
+      (await admin(`/api/access/slide/${item.id}`, 'POST', grant)).status,
+      200,
+    );
+  }
+  const tags = (await admin('/api/library')).data.slides.find(
+    (entry) => entry.id === item.id,
+  ).accessTags;
+  assert.deepEqual(
+    tags.map((tag) => tag.id),
+    [child.id, direct.user.id],
+  );
+  assert.equal(tags[0].type, 'group');
+  assert.equal(tags[1].username, 'tag-direct');
+  assert.equal(tags[1].type, 'user');
+  assert.ok(!JSON.stringify(tags).includes('password'));
+  assert.equal(
+    (await direct.call('/api/library')).data.slides[0].accessTags.some(
+      (tag) => tag.id === child.id,
+    ),
+    false,
   );
 });

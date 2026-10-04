@@ -35,6 +35,7 @@ import {
   ArrowLeft,
   Play,
   Save,
+  Pencil,
   Trash2,
   Copy,
   Type,
@@ -604,7 +605,15 @@ export default function App() {
             <SidebarFooter>
               <div className="nav-bottom">
                 <span>
-                  OpenFrame <small>{version}</small>
+                  <strong
+                    className="logged-in-user"
+                    title={auth.user?.username}
+                  >
+                    {auth.user?.name || auth.user?.username}
+                  </strong>
+                  <span className="sidebar-version">
+                    OpenFrame <small>{version}</small>
+                  </span>
                 </span>
                 <IconButton
                   label="Sign out"
@@ -738,14 +747,46 @@ export default function App() {
                   )}
                   <div className="section-meta">
                     <span>{library.slides.length} slides</span>
-                    <span>Draft library</span>
                   </div>
                   {library.slides.length ? (
                     <div className="slide-grid">
                       {visibleSlides.map((slide) => (
                         <article className="slide-card" key={slide.id}>
                           {liveSlides.has(slide.id) && (
-                            <span className="slide-live-tag">Live</span>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    aria-label={`Live playlists for ${slide.name}`}
+                                    className="slide-live-tag"
+                                  />
+                                }
+                              >
+                                Live
+                              </TooltipTrigger>
+                              <TooltipContent className="live-playlist-tooltip">
+                                <strong>Live in playlists</strong>
+                                <ul className="live-playlist-list">
+                                  {library.playlists
+                                    .filter(
+                                      (p) =>
+                                        p.publishedAt &&
+                                        p.publishedSlideIds?.includes(
+                                          slide.id,
+                                        ) &&
+                                        library.devices.some(
+                                          (d) =>
+                                            d.playlistId === p.id &&
+                                            screenStatus(d) === 'online',
+                                        ),
+                                    )
+                                    .map((p) => (
+                                      <li key={p.id}>{p.name}</li>
+                                    ))}
+                                </ul>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                           <button
                             className="thumbnail-button"
@@ -803,6 +844,7 @@ export default function App() {
                           </div>
                           <ManageAccessButton
                             resourceName={slide.name}
+                            tags={slide.accessTags}
                             onClick={() =>
                               setAccessResource({
                                 kind: 'slide',
@@ -840,7 +882,6 @@ export default function App() {
                   )}
                   <div className="section-meta">
                     <span>{library.playlists.length} playlists</span>
-                    <span>Changes go live when published</span>
                   </div>
                   {library.playlists.length ? (
                     <div className="playlist-list">
@@ -884,9 +925,15 @@ export default function App() {
                             >
                               <Play size={18} />
                             </IconButton>
-                            <button onClick={() => setPlaylist(p)}>Edit</button>
+                            <IconButton
+                              label={`Edit ${p.name}`}
+                              onClick={() => setPlaylist(p)}
+                            >
+                              <Pencil size={18} />
+                            </IconButton>
                             <ManageAccessButton
                               resourceName={p.name}
+                              tags={p.accessTags}
                               onClick={() =>
                                 setAccessResource({
                                   kind: 'playlist',
@@ -1389,6 +1436,7 @@ function DeviceRow({
             <div className="row-actions">
               <ManageAccessButton
                 resourceName={device.name}
+                tags={device.accessTags}
                 onClick={onManageAccess}
               />
               <IconButton

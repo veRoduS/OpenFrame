@@ -91,16 +91,24 @@ try {
   await page
     .getByRole('button', { name: 'Users & Groups', exact: true })
     .click();
-  await page
-    .getByLabel('Add user to Group A', { exact: true })
-    .selectOption(created.user.id);
   const section = page.locator('.group-section').filter({
     has: page.getByRole('heading', { name: 'Group A', exact: true }),
   });
-  await page
-    .getByRole('button', { name: 'Drag Robin Smith to a group', exact: true })
-    .dragTo(section);
-  await page.getByText('User added to group.', { exact: true }).waitFor();
+  await section
+    .getByLabel('Add user to Group A', { exact: true })
+    .selectOption(robin.user.id);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/groups') &&
+        response.request().method() === 'GET',
+    ),
+    section.getByRole('button', { name: 'Add user', exact: true }).click(),
+  ]);
+  assert.equal(
+    await page.locator('[draggable="true"][aria-label^="Drag " ]').count(),
+    0,
+  );
   assert.ok(
     (await api('/api/groups'))
       .find((g) => g.id === parent.id)
@@ -140,6 +148,9 @@ try {
     null,
   );
   await page.setViewportSize({ width: 1280, height: 900 });
+  await section
+    .getByLabel('Add user to Group A', { exact: true })
+    .selectOption(created.user.id);
   await section.getByRole('button', { name: 'Add user', exact: true }).click();
   await section.getByText('Jordan Taylor', { exact: true }).waitFor();
   await page
@@ -167,6 +178,40 @@ try {
     .getByRole('button', { name: 'Jordan Taylor', exact: true })
     .click();
   const dialog = page.getByRole('dialog');
+  assert.equal(
+    await dialog.getByLabel('Membership in Group B', { exact: true }).count(),
+    0,
+  );
+  await dialog
+    .getByRole('button', { name: 'Add Jordan Taylor to Group B', exact: true })
+    .click();
+  await dialog
+    .getByText('Add Jordan Taylor to Group B?', { exact: true })
+    .waitFor();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: 'Add Jordan Taylor to Group B', exact: true })
+    .click();
+  await dialog
+    .getByRole('button', { name: 'Confirm add', exact: true })
+    .click();
+  await dialog.getByLabel('Membership in Group B', { exact: true }).waitFor();
+  assert.ok(
+    (await api('/api/groups'))
+      .find((group) => group.id === other.id)
+      .members.some((person) => person.id === created.user.id),
+  );
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[aria-label="Membership in Group B"]').disabled,
+  );
+  await dialog
+    .getByLabel('Membership in Group B', { exact: true })
+    .selectOption('');
+  await dialog
+    .getByRole('button', { name: 'Add Jordan Taylor to Group B', exact: true })
+    .waitFor();
+  await dialog.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
   await dialog.getByText('Through groups: Group 1', { exact: false }).waitFor();
   await dialog
     .getByLabel('Account role', { exact: true })
@@ -178,6 +223,21 @@ try {
     .waitFor();
   await page.waitForFunction(
     () => !document.querySelector('[aria-label="Account role"]').disabled,
+  );
+  assert.equal(
+    await dialog.getByLabel('Membership in Group A', { exact: true }).count(),
+    0,
+  );
+  assert.ok(
+    (await dialog
+      .getByText('Group admin · Unrestricted', { exact: true })
+      .count()) >= 3,
+  );
+  assert.equal(
+    await dialog
+      .getByLabel('Direct access to Nested welcome', { exact: true })
+      .isChecked(),
+    true,
   );
   await dialog.getByLabel('Account role', { exact: true }).selectOption('user');
   await page.waitForFunction(
@@ -233,14 +293,11 @@ try {
   await page.getByLabel('Resource', { exact: true }).selectOption('slide');
   await page.getByRole('button', { name: 'Access', exact: true }).click();
   const options = await page
-    .getByLabel('Share with')
+    .getByLabel('Groups', { exact: true })
     .locator('option')
     .allTextContents();
-  const rootIndex = options.findIndex((name) => name === 'Group A (group)');
-  assert.equal(
-    options[rootIndex + 1],
-    '\u00a0\u00a0\u00a0\u00a0↳ Group 1 (group)',
-  );
+  const rootIndex = options.findIndex((name) => name === 'Group A');
+  assert.equal(options[rootIndex + 1], '\u00a0\u00a0\u00a0\u00a0↳ Group 1');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /^Media/ }).click();
   const nav = page.getByRole('navigation', { name: 'Media folders' });

@@ -93,12 +93,34 @@ try {
   await page.getByLabel('Resource', { exact: true }).selectOption('slide');
   await page.getByRole('button', { name: 'Access', exact: true }).click();
   await page
-    .getByLabel('Share with')
-    .selectOption({ label: 'Campus displays (group)' });
-  await page.getByRole('button', { name: 'Grant access' }).click();
+    .getByLabel('Groups', { exact: true })
+    .selectOption({ label: 'Campus displays' });
+  await page.getByRole('button', { name: 'Grant group access' }).click();
   await page.getByRole('button', { name: 'Remove access' }).waitFor();
+  await page
+    .getByLabel('Users', { exact: true })
+    .selectOption({ label: 'Jordan Taylor (jordan)' });
+  await page
+    .getByRole('button', { name: 'Grant user access', exact: true })
+    .click();
+  await page
+    .getByRole('dialog')
+    .getByText('Jordan Taylor', { exact: true })
+    .waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
+  await page
+    .getByRole('button', { name: /^Slides/ })
+    .first()
+    .click();
+  await page
+    .locator('.access-tags')
+    .getByText('Campus displays', { exact: true })
+    .waitFor();
+  await page
+    .locator('.access-tags')
+    .getByText('User: Jordan Taylor', { exact: true })
+    .waitFor();
   const member = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });
@@ -107,6 +129,13 @@ try {
   await member.getByLabel('Confirm password').fill('member12');
   await member.getByRole('button', { name: 'Set password & sign in' }).click();
   await member.getByRole('button', { name: 'Users & Groups' }).click();
+  assert.equal(
+    await member
+      .getByRole('button', { name: 'Create group', exact: true })
+      .count(),
+    0,
+  );
+  assert.ok((await member.locator('.logged-in-user').innerText()).length > 0);
   assert.equal(
     await member.getByRole('tab', { name: 'Users', exact: true }).count(),
     0,

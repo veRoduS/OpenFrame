@@ -490,13 +490,13 @@ export function createAccounts(db) {
           canManage: !!groupAdmin(req.user, group.id),
           members: db
             .prepare(
-              'SELECT u.id,u.username,u.name,m.role FROM memberships m JOIN users u ON u.id=m.userId WHERE m.groupId=?',
+              "SELECT u.id,u.username,u.name,u.role AS accountRole,CASE WHEN u.role='admin' THEN 'admin' ELSE m.role END AS role FROM users u LEFT JOIN memberships m ON m.userId=u.id AND m.groupId=? WHERE m.userId IS NOT NULL OR (u.role='admin' AND u.disabled=0) ORDER BY u.name COLLATE NOCASE",
             )
             .all(group.id),
         })),
       );
     });
-    app.post('/api/groups', admin, (req, res) => {
+    app.post('/api/groups', administrator, (req, res) => {
       const { name, parentId } = z
         .object({
           name: z.string().trim().min(1).max(100),
@@ -517,11 +517,6 @@ export function createAccounts(db) {
         id,
         name,
         parentId || null,
-      );
-      db.prepare('INSERT INTO memberships VALUES (?,?,?)').run(
-        id,
-        req.user.id,
-        'admin',
       );
       res.status(201).json({ id, name, parentId: parentId || null });
     });
@@ -613,6 +608,11 @@ export function createAccounts(db) {
       const target = userById(req.params.userId);
       if (!target || (target.disabled && role !== 'remove'))
         throw fail(404, 'Active user not found');
+      if (target.role === 'admin')
+        throw fail(
+          409,
+          'Admins automatically administer every group; their group access cannot be changed',
+        );
       if (!existing && req.user.role !== 'admin')
         throw fail(403, 'Only an admin can add existing users');
       if (!existing && role === 'remove') throw fail(404, 'Member not found');
