@@ -126,6 +126,8 @@ The checked-in `Publish Android player` workflow builds and publishes when `play
 - `ANDROID_KEY_ALIAS`: signing alias.
 - `ANDROID_KEY_PASSWORD`: key password.
 
+The workflow also accepts `OPENFRAME_ANDROID_KEYSTORE`, `OPENFRAME_ANDROID_STORE_PASSWORD`, `OPENFRAME_ANDROID_KEY_ALIAS`, and `OPENFRAME_ANDROID_KEY_PASSWORD` as aliases for those secrets, respectively. The `ANDROID_*` names take precedence when both are set. In GitHub, **`OPENFRAME_ANDROID_KEYSTORE` must contain the base64-encoded keystore file**, not the local path used by the shell environment variable with the same name. Existing environments using these aliases do not need their secrets renamed.
+
 Use the same key as the first distributed APK; a replacement key cannot update installed players. The workflow uses its scoped `GITHUB_TOKEN` to write only the APK branch and removes its temporary keystore. Do not put secrets into the repository, APK folder, workflow file, or USB package. Local builds can publish immediately with configured Git credentials; the hosted workflow additionally needs these secrets and the workflow on GitHub.
 
 ## Supported behavior and limits

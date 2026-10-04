@@ -95,6 +95,8 @@ Configure these environment or repository secrets using the **existing** Android
 | `ANDROID_KEY_ALIAS` | Existing signing alias |
 | `ANDROID_KEY_PASSWORD` | Signing-key password |
 
+The workflow also accepts the existing `OPENFRAME_ANDROID_KEYSTORE`, `OPENFRAME_ANDROID_STORE_PASSWORD`, `OPENFRAME_ANDROID_KEY_ALIAS`, and `OPENFRAME_ANDROID_KEY_PASSWORD` secret names as aliases, with `ANDROID_*` names taking precedence. The GitHub `OPENFRAME_ANDROID_KEYSTORE` secret must contain base64-encoded file contents, not a local keystore path.
+
 The workflow decodes the key only into the runner's temporary directory and removes it at completion. Do not place keys or passwords in repository files or APK metadata. Missing signing secrets block the workflow; generating a replacement key would prevent existing installations from accepting updates. See [Android builds and updates](android-tv.md) for local signing variables, platform tests, and physical-device acceptance.
 
 ## Pre-publication checklist

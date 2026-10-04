@@ -54,11 +54,15 @@ jobs:
       - name: Prepare Android SDK and existing release key
         if: steps.existing.outputs.published != 'true'
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.OPENFRAME_ANDROID_KEYSTORE }}
         run: |
-          test -n "$KEYSTORE_B64" || { echo 'Configure the existing Android release keystore secret; do not create a replacement key.'; exit 1; }
+          test -n "$KEYSTORE_B64" || { echo 'Configure ANDROID_KEYSTORE_BASE64 or OPENFRAME_ANDROID_KEYSTORE with the base64-encoded existing release keystore; do not create a replacement key.'; exit 1; }
           umask 077
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/openframe-release.jks"
+          if ! printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/openframe-release.jks"; then
+            echo 'The keystore secret must contain base64-encoded file contents, not a file path.'
+            exit 1
+          fi
+          test -s "$RUNNER_TEMP/openframe-release.jks" || { echo 'The decoded release keystore is empty.'; exit 1; }
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -66,9 +70,9 @@ jobs:
         if: steps.existing.outputs.published != 'true'
         env:
           OPENFRAME_ANDROID_KEYSTORE: ${{ runner.temp }}/openframe-release.jks
-          OPENFRAME_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          OPENFRAME_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          OPENFRAME_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          OPENFRAME_ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD || secrets.OPENFRAME_ANDROID_STORE_PASSWORD }}
+          OPENFRAME_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.OPENFRAME_ANDROID_KEY_ALIAS }}
+          OPENFRAME_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.OPENFRAME_ANDROID_KEY_PASSWORD }}
           OPENFRAME_ANDROID_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm build:android
       - name: Remove the temporary signing key
