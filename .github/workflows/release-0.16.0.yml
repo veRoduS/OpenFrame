@@ -1,0 +1,19 @@
+name: Complete approved 0.16.0 publication
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-0.16.0.yml']
+
+# This retry is scoped to the already approved, immutable milestone tag.
+# The reusable workflow runs corrected smoke tests against that tagged source.
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    if: github.repository == 'veRoduS/OpenFrame'
+    uses: ./.github/workflows/publish-images.yml
+    with:
+      tag: v0.16.0

@@ -113,14 +113,15 @@ jobs:
           console.log(`::add-mask::${initialPassword}`);
           const login = await fetch(base + '/api/login', {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username: 'superadmin', password: initialPassword}),
+            body: JSON.stringify({username: 'admin', password: initialPassword}),
           });
           assert.equal(login.ok, true, 'The generated administrator must be able to sign in');
           const cookie = login.headers.get('set-cookie')?.split(';')[0];
           assert.ok(cookie, 'Administrator sign-in must create a session');
           const auth = await (await fetch(base + '/api/auth', {headers: {cookie}})).json();
           assert.equal(auth.authenticated, true);
-          assert.equal(auth.user.username, 'superadmin');
+          assert.equal(auth.user.username, 'admin');
+          assert.equal(auth.user.role, 'admin');
           JS
       - run: docker compose up -d --force-recreate --wait --wait-timeout 120
       - name: Administrator persists after replacement

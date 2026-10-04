@@ -9,6 +9,11 @@ on:
         description: 'Existing approved milestone tag (for example v0.2.0)'
         required: true
         type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: read
