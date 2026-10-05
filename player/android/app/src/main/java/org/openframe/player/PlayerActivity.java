@@ -106,9 +106,10 @@ public final class PlayerActivity extends Activity {
         EditText server = new EditText(this);
         server.setSingleLine(true);
         server.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        server.setHint("https://screens.example.com");
+        server.setHint("Server URL or code 1962");
         server.setText(getPreferences(MODE_PRIVATE).getString("server", ""));
         layout.addView(server);
+        layout.addView(text("Enter 1962 to connect to openframe.blackfalcon.cloud.", 14));
         layout.addView(text("Screen name", 16));
         EditText name = new EditText(this);
         name.setSingleLine(true);

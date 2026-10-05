@@ -25,7 +25,7 @@ The address downloads the latest signed APK from GitHub. You can also use `https
 2. Insert the flash drive into the box. Open its file manager, browse the USB drive, and select the APK.
 3. If prompted, open Android's **Install unknown apps** settings and allow that file manager to install apps. Older/custom firmware may call this **Unknown sources**. Return to the APK and choose **Install**.
 4. Open **OpenFrame Player** from the TV app launcher. Connect the box to Wi-Fi or Ethernet through Android settings first.
-5. Enter the server origin (for example `https://screens.example.com` or `http://192.168.1.10:3100`) and a screen name. Use HTTPS for remote connections. HTTP requires an explicit local-network confirmation because it carries device credentials without encryption.
+5. Enter the server origin (for example `https://screens.example.com` or `http://192.168.1.10:3100`) and a screen name. Enter `1962` to connect to `https://openframe.blackfalcon.cloud`. Use HTTPS for remote connections. HTTP requires an explicit local-network confirmation because it carries device credentials without encryption.
 6. On the OpenFrame server, open **Screens**, approve the displayed pairing code, and assign a published playlist.
 7. Wait for the first successful download. The flash drive can then be removed. Content and pairing are stored in the app's private storage.
 

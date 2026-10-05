@@ -20,6 +20,8 @@ import java.util.Set;
 
 /** Owns credentials and networking. Only a credential-free snapshot reaches the WebView. */
 final class PlayerAgent {
+    static final String HOSTED_SERVER_CODE = "1962";
+    static final String HOSTED_SERVER_ORIGIN = "https://openframe.blackfalcon.cloud";
     static final int JSON_LIMIT = 4 * 1024 * 1024;
     static final int IMAGE_LIMIT = 25 * 1024 * 1024;
     static final long CACHE_LIMIT = 256L * 1024 * 1024;
@@ -50,6 +52,7 @@ final class PlayerAgent {
 
     static String normalizeServer(String value) {
         try {
+            if (value.trim().equals(HOSTED_SERVER_CODE)) return HOSTED_SERVER_ORIGIN;
             URI uri = new URI(value.trim());
             String scheme = uri.getScheme();
             if (!("https".equals(scheme) || "http".equals(scheme)) || uri.getHost() == null

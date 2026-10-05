@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.10.12] - 2026-10-05
+
+- Add hosted server code shortcut
+
 ## [0.10.11] - 2026-10-04
 
 - Render shapes, vertical weather and stock quotes; accept schema 3 and retain schema 1/2 support

@@ -48,7 +48,7 @@ The setup service uses NetworkManager on `wlan0`, a temporary 2.4 GHz WPA2 hotsp
 
 ## Enrollment and connection
 
-1. The phone submits Wi-Fi information and a public **HTTPS** server origin. Optional Cloudflare Access headers are sent only to that origin. No administrator password is entered on the Pi.
+1. The phone submits Wi-Fi information and a public **HTTPS** server origin. Enter `1962` to use `https://openframe.blackfalcon.cloud`. Optional Cloudflare Access headers are sent only to that origin. No administrator password is entered on the Pi.
 2. The Pi saves root-only pending state before joining Wi-Fi, generates its WireGuard key locally, and persists a random enrollment token before contacting the server. Interrupted requests reuse that identity instead of allocating duplicate devices.
 3. The server stores the public key and a hash of the device token. The screen shows a pairing code. No WireGuard settings or playlist content are delivered before ordinary administrator approval.
 4. After approval, the server allocates one address from `.2` through `.254`, registers that public key, and returns its own public key, public endpoint, client address, private server origin, and a route limited to the server's `/32`.

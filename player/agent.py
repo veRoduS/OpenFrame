@@ -18,12 +18,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.10.11'
+VERSION = '0.10.12'
+HOSTED_SERVER_CODE = '1962'
+HOSTED_SERVER_ORIGIN = 'https://openframe.blackfalcon.cloud'
 
 
 def normalize_server(value):
     if not isinstance(value, str):
         raise ValueError('server must be an http(s) origin')
+    if value.strip() == HOSTED_SERVER_CODE:
+        return HOSTED_SERVER_ORIGIN
     parsed = urllib.parse.urlsplit(value)
     if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment or parsed.path not in ('', '/') or any(c.isspace() for c in value):
         raise ValueError('server must be an http(s) origin, e.g. https://signage.example.com')
