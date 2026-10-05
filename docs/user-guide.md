@@ -24,9 +24,27 @@ Admins can open **Settings** to upload WOFF2, WOFF, TTF, or OTF custom fonts (up
 
 ## Finding slides, playlists, and screens
 
-Each library page has name search, an indented **Group** filter, and a **Status** filter. On phones, choose **Filters** to expand Group and Status; the button shows how many of those filters are active. Search and the results count remain visible when filters are collapsed. Combine them to narrow a large workspace. Selecting a parent group includes resources shared directly with it or any descendant group; selecting a child narrows to that branch. Group filters follow the resource’s Manage Access sharing, rather than its playlist assignment or creator’s membership. **No visible group** finds resources with no sharing to a group you can see. Filters only narrow resources you already have permission to access.
+Each library page has name search, an indented **Group** filter, and a **Status** filter. On phones, choose **Filters** to expand Group and Status; the button shows how many of those filters are active. Search and the results count remain visible when filters are collapsed. Combine them to narrow a large workspace. Selecting a parent group includes resources shared directly with it or any descendant group; selecting a child narrows to that branch. Group filters follow the resource’s managing group and Manage Access grants. Slides and playlists also include content inherited from the selected group’s ancestors. **No visible group** finds resources with no sharing to a group you can see. Filters only narrow resources you already have permission to access.
 
 Slides can be filtered by Live or Not live, playlists by Published or Draft, and screens by Online, Offline, or Awaiting approval. Screen summary counts follow the filtered results. **Showing X of Y** reports matches and the accessible total. **Clear filters** resets the current page; switching pages preserves each page’s selections until you reload. Online/Live uses the same recent-heartbeat indication as the existing dashboard.
+
+## Organize slides and playlists
+
+Slides and Playlists each have their own nested folders and tags. Open **All folders** to filter a folder and all its subfolders. **No folder** finds unfiled items. Select **New folder**, or use a folder's pencil icon to rename it and choose its location. Drag a slide thumbnail or playlist title onto a folder in the menu to move it; dragging over the folder menu opens it. Drag a folder onto another folder to nest it, or onto **No folder** to move it to the top level. The Edit folder form provides the same option on touch devices and keyboards.
+
+Select the checkboxes beside editable items, then use **Move / tag** to change folders or add/remove comma-separated tags in bulk. Up to 200 items can be changed at once. Tags are lowercased and deduplicated, with at most 30 tags of 40 characters per item. The tag dropdown combines with folder, search, group, status, and sort controls. Folder/tag changes do not change content access or what is published on screens. View-only items can be browsed and filtered but cannot be moved or tagged.
+
+Folders must be empty before deletion. Folder sharing controls who can rename or move that folder; it does not share the slides or playlists inside it. Folder names needed to show accessible content and its path are visible even when the folder itself is read-only.
+
+## Linked playlist forks
+
+Use the fork icon beside a published playlist to create a **linked fork**. Choose a name and managing group (or personal ownership). Its folder and tags start independently of the master. The fork includes all entries from the published master. Add local slides, set per-entry timing overrides, change **Playback speed**, or reorder entries without changing the master or any other fork.
+
+**Follow master order** follows upstream reordering and keeps local slides after the inherited entry they follow. **Custom order** retains your order and appends newly published master entries. Moving an entry selects Custom order automatically. Removing a source entry removes it from forks; a local slide anchored to it moves to the end. Repeated copies of the same slide have separate timing overrides. Use **Reset duration to master** to remove an override. Inherited slides and schedules remain controlled by the master; local entries can be removed and scheduled normally.
+
+Save and publish the fork once to use it on a screen. Subsequent master publications automatically update the fork using its last published overrides. Unpublished local draft changes stay unpublished. Master draft changes do not affect forks until the master is published; slide content edits retain the existing automatic refresh behavior. At 1× speed timing is unchanged; 2× halves durations, rounded and limited to 2–3600 seconds.
+
+Every fork recipient must be able to view its master and all included slides. If access is missing or the combined playlist exceeds 200 entries, automatic publication pauses, a warning appears, and screens retain the last valid publication. Correct access or shorten the fork, then publish the fork or master to retry. A master cannot be deleted while it has forks. Forks can be nested up to eight levels. These features are resolved by the server; existing Pi and Android players do not need an update for them.
 
 ## Slide properties
 
@@ -50,7 +68,7 @@ Deleting an image removes its file. Any saved slide or published playlist that u
 
 ## Groups and access
 
-Groups appear as compact, indented rows with member and subgroup counts. Click a group to expand its membership and location controls. Groups can be nested and existing groups can be moved using **Group location**. A parent membership grants access to content in every subgroup; child memberships do not grant access to parents or siblings. **Manage access** indents nested groups. Global admins can add existing users directly to groups and click a user under **Users & Groups > Users** to edit their account role, memberships, and direct content access.
+Groups appear as compact, indented rows with member and subgroup counts. Click a group to expand its membership and location controls. Groups can be nested and existing groups can be moved using **Group location**. A parent membership grants access to content in every subgroup. Slides and playlists are also viewable from descendant groups; inherited access is View only, and siblings remain separate. Screen and media grants retain downward-only inheritance. **Manage access** indents nested groups. Global admins can add existing users directly to groups and click a user under **Users & Groups > Users** to edit their account role, memberships, and direct content access.
 
 To use cropping, counters, and prepared-frame playback on an existing Pi installation, update `player/agent.py` and the complete `player/web/` directory, then restart the agent and kiosk. Include all JavaScript modules, not just `player.js`. Updating the Docker server alone does not update installed player code. Existing slide backgrounds, colors, and saved formatting are preserved. Older images default to a centered crop at 1x zoom, with no data migration.
 

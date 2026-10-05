@@ -1,8 +1,8 @@
 import './resource-access.css';
 import { useEffect, useState } from 'react';
 import { ChevronRight, Shield, X } from 'lucide-react';
-import { api, type AccessTag } from './types';
-import { orderedTree, indentedName } from './hierarchy';
+import { api, type AccessTag, type Library } from './types';
+import { orderedTree, indentedName, isWithin } from './hierarchy';
 import type { User } from './accounts';
 import {
   Dialog,
@@ -12,8 +12,18 @@ import {
 } from './components/ui/dialog';
 
 export type SharedResource = { kind: string; id: string; name: string };
-type Group = { id: string; name: string; parentId: string | null };
-type Grant = { userId: string; groupId: string };
+type Group = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  directMember?: boolean;
+};
+type Grant = { userId: string; groupId: string; permission?: 'view' | 'edit' };
+type Access = {
+  canShare: boolean;
+  grants: Grant[];
+  managingGroupId?: string | null;
+};
 
 export function ResourceAccessDialog({
   resource,
@@ -28,10 +38,12 @@ export function ResourceAccessDialog({
 }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [access, setAccess] = useState<{
-    canShare: boolean;
-    grants: Grant[];
-  } | null>(null);
+  const [access, setAccess] = useState<Access | null>(null);
+  const hasRoles =
+    !!resource &&
+    ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(
+      resource.kind,
+    );
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const groupName = (id: string) => {
@@ -55,16 +67,14 @@ export function ResourceAccessDialog({
     let current = true;
     setAccess(null);
     Promise.all([
-      api<{ canShare: boolean; grants: Grant[] }>(
-        `/api/access/${resource.kind}/${resource.id}`,
-      ),
-      api<Group[]>('/api/groups'),
+      api<Access>(`/api/access/${resource.kind}/${resource.id}`),
+      api<Library>('/api/library'),
       ...(user.role === 'admin' ? [api<User[]>('/api/users')] : []),
     ])
       .then(([nextAccess, nextGroups, nextUsers]) => {
         if (!current) return;
-        setAccess(nextAccess as { canShare: boolean; grants: Grant[] });
-        setGroups(nextGroups as Group[]);
+        setAccess(nextAccess as Access);
+        setGroups((nextGroups as Library).groups || []);
         setUsers((nextUsers as User[] | undefined) || []);
       })
       .catch((e) => current && setError((e as Error).message));
@@ -92,21 +102,22 @@ export function ResourceAccessDialog({
       remove,
     });
     setAccess(
-      (await api(`/api/access/${resource.kind}/${resource.id}`)) as {
-        canShare: boolean;
-        grants: Grant[];
-      },
+      (await api(`/api/access/${resource.kind}/${resource.id}`)) as Access,
     );
     await refresh();
   }
 
   return (
     <Dialog open={!!resource} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="of-modal resource-access-modal">
+      <DialogContent
+        className="of-modal resource-access-modal"
+        data-permission-roles={hasRoles}
+      >
         <DialogTitle>Access: {resource?.name}</DialogTitle>
         <DialogDescription>
-          Shared users and groups can edit this item. Attached images are
-          visible read-only.
+          {hasRoles
+            ? 'Choose View or Edit access. Access inherited through the group hierarchy is View only.'
+            : 'Shared users and groups can edit this item. Attached images are visible read-only.'}
         </DialogDescription>
         {error && (
           <p role="alert" className="inline-error">
@@ -114,6 +125,58 @@ export function ResourceAccessDialog({
           </p>
         )}
         {!access && !error && <p>Loading access...</p>}
+        {access && hasRoles && (
+          <label className="managing-group-control">
+            Managing group
+            <select
+              aria-label="Managing group"
+              value={access.managingGroupId || ''}
+              disabled={busy || !access.canShare}
+              onChange={(event) => {
+                const groupId = event.target.value || null;
+                void run(async () => {
+                  await api(
+                    `/api/access/${resource!.kind}/${resource!.id}/management`,
+                    'PUT',
+                    { groupId },
+                  );
+                  await refresh();
+                  setAccess(
+                    await api<Access>(
+                      `/api/access/${resource!.kind}/${resource!.id}`,
+                    ),
+                  );
+                });
+              }}
+            >
+              <option value="">Personal ownership</option>
+              {access.managingGroupId &&
+                !groups.some(
+                  (group) => group.id === access.managingGroupId,
+                ) && (
+                  <option value={access.managingGroupId}>
+                    Assigned managing group
+                  </option>
+                )}
+              {orderedTree(groups)
+                .filter(
+                  ({ item }) =>
+                    user.role === 'admin' ||
+                    item.directMember ||
+                    item.id === access.managingGroupId,
+                )
+                .map(({ item, depth }) => (
+                  <option key={item.id} value={item.id}>
+                    {indentedName(item.name, depth)}
+                  </option>
+                ))}
+            </select>
+            <span className="muted">
+              Direct members can edit. Other access inherited through the
+              hierarchy is view only.
+            </span>
+          </label>
+        )}
         {access?.canShare ? (
           <div className="access-grant-forms">
             {(
@@ -128,10 +191,14 @@ export function ResourceAccessDialog({
                     'target',
                   ) as string;
                   const form = event.currentTarget;
+                  const permission = new FormData(form).get('permission') as
+                    | 'view'
+                    | 'edit';
                   void run(async () => {
                     await share({
                       userId: type === 'user' ? id : '',
                       groupId: type === 'group' ? id : '',
+                      ...(hasRoles ? { permission } : {}),
                     });
                     form.reset();
                   });
@@ -150,11 +217,21 @@ export function ResourceAccessDialog({
                       Select a {type}
                     </option>
                     {type === 'group'
-                      ? orderedTree(groups).map(({ item: group, depth }) => (
-                          <option key={group.id} value={group.id}>
-                            {indentedName(group.name, depth)}
-                          </option>
-                        ))
+                      ? orderedTree(groups)
+                          .filter(
+                            ({ item: group }) =>
+                              user.role === 'admin' ||
+                              groups.some(
+                                (own) =>
+                                  own.directMember &&
+                                  isWithin(groups, group.id, own.id),
+                              ),
+                          )
+                          .map(({ item: group, depth }) => (
+                            <option key={group.id} value={group.id}>
+                              {indentedName(group.name, depth)}
+                            </option>
+                          ))
                       : users
                           .filter(
                             (entry) =>
@@ -167,6 +244,19 @@ export function ResourceAccessDialog({
                           ))}
                   </select>
                 </label>
+                {hasRoles && (
+                  <label>
+                    Permission
+                    <select
+                      name="permission"
+                      defaultValue="view"
+                      disabled={busy}
+                    >
+                      <option value="view">View</option>
+                      <option value="edit">Edit</option>
+                    </select>
+                  </label>
+                )}
                 <button
                   className="primary"
                   disabled={busy}
@@ -178,7 +268,9 @@ export function ResourceAccessDialog({
             ))}
           </div>
         ) : access ? (
-          <p>Only the owner or admin can change sharing.</p>
+          <p>
+            Only the managing group, personal owner, or admin can change access.
+          </p>
         ) : null}
         {access && (
           <div className="access-existing-grants" aria-label="Existing access">
@@ -218,12 +310,37 @@ export function ResourceAccessDialog({
                     return (
                       <div
                         className="access-grant-row"
+                        data-permission-roles={hasRoles}
                         key={grant.userId || grant.groupId}
                       >
                         <div>
                           <strong>{name}</strong>
                           {path && <span>{path}</span>}
                         </div>
+                        {hasRoles && (
+                          <select
+                            aria-label={`Permission for ${name}`}
+                            value={grant.permission || 'edit'}
+                            disabled={
+                              busy ||
+                              !access.canShare ||
+                              (type === 'user' && user.role !== 'admin')
+                            }
+                            onChange={(event) =>
+                              void run(() =>
+                                share({
+                                  ...grant,
+                                  permission: event.target.value as
+                                    | 'view'
+                                    | 'edit',
+                                }),
+                              )
+                            }
+                          >
+                            <option value="view">View</option>
+                            <option value="edit">Edit</option>
+                          </select>
+                        )}
                         {access.canShare &&
                           (type === 'group' || user.role === 'admin') && (
                             <button
@@ -246,8 +363,8 @@ export function ResourceAccessDialog({
           </div>
         )}
         <p className="muted access-explanation">
-          Admins always have unrestricted access. Group grants include
-          subgroups. Removing a grant keeps access shared separately.
+          Admins always have unrestricted access. Removing a grant keeps access
+          inherited or shared separately.
         </p>
       </DialogContent>
     </Dialog>

@@ -334,7 +334,11 @@ void test('playlist availability windows validate and persist into immutable pub
     items: [item],
   });
   assert.equal(created.status, 201);
-  assert.deepEqual(created.data.items[0], item);
+  assert.match(created.data.items[0].id, /^[a-f0-9-]{36}$/);
+  assert.deepEqual(created.data.items[0], {
+    ...item,
+    id: created.data.items[0].id,
+  });
   const id = created.data.id;
   await request(`/api/playlists/${id}/publish`, 'POST');
   const snapshot = () =>
@@ -387,7 +391,11 @@ void test('schedule toggle retains draft dates and excludes disabled limits from
     items: [item],
   });
   assert.equal(created.status, 201);
-  assert.deepEqual(created.data.items[0], item);
+  assert.match(created.data.items[0].id, /^[a-f0-9-]{36}$/);
+  assert.deepEqual(created.data.items[0], {
+    ...item,
+    id: created.data.items[0].id,
+  });
   const id = created.data.id;
   const snapshot = () =>
     JSON.parse(
@@ -559,10 +567,12 @@ void test('media folders support creation, rename, moving images and safe deleti
   ).data;
   assert.equal(child.parentId, folder.id);
   assert.equal(
-    (await request(`/api/folders/${folder.id}`, 'PUT', {
-      name: 'Events',
-      parentId: child.id,
-    })).status,
+    (
+      await request(`/api/folders/${folder.id}`, 'PUT', {
+        name: 'Events',
+        parentId: child.id,
+      })
+    ).status,
     400,
   );
   assert.equal(

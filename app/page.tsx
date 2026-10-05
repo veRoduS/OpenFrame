@@ -1,3 +1,12 @@
+import { Checkbox } from './components/ui/checkbox';
+import {
+  LibraryOrganizationToolbar,
+  OrganizationTags,
+  matchesOrganization,
+  startLibraryDrag,
+  type OrganizationFilter,
+} from './library-organization';
+import { orderedTree, indentedName } from './hierarchy';
 import {
   LibraryFilters,
   matchesLibraryFilter,
@@ -44,6 +53,7 @@ import {
   Pencil,
   Trash2,
   Copy,
+  GitFork,
   Type,
   ImagePlus,
   Clock,
@@ -295,6 +305,27 @@ export default function App() {
     playlists: { ...clearLibraryFilter },
     devices: { ...clearLibraryFilter },
   });
+  const [organizationFilters, setOrganizationFilters] = useState<
+    Record<'slides' | 'playlists', OrganizationFilter>
+  >({
+    slides: { folder: 'all', tag: '' },
+    playlists: { folder: 'all', tag: '' },
+  });
+  const [selectedItems, setSelectedItems] = useState<
+    Record<'slides' | 'playlists', string[]>
+  >({ slides: [], playlists: [] });
+  const [forkMaster, setForkMaster] = useState<Playlist | null>(null);
+  const selectItem = (
+    kind: 'slides' | 'playlists',
+    id: string,
+    checked: boolean,
+  ) =>
+    setSelectedItems((current) => ({
+      ...current,
+      [kind]: checked
+        ? [...new Set([...current[kind], id])]
+        : current[kind].filter((value) => value !== id),
+    }));
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -453,13 +484,20 @@ export default function App() {
       .flatMap((p) => p.publishedSlideIds || []),
   );
   const visibleSlides = library.slides
-    .filter((item) =>
-      matchesLibraryFilter(
-        item,
-        filters.slides,
-        groups,
-        liveSlides.has(item.id) ? 'live' : 'not-live',
-      ),
+    .filter(
+      (item) =>
+        matchesLibraryFilter(
+          item,
+          filters.slides,
+          groups,
+          liveSlides.has(item.id) ? 'live' : 'not-live',
+          true,
+        ) &&
+        matchesOrganization(
+          item,
+          organizationFilters.slides,
+          library.slideFolders || [],
+        ),
     )
     .sort((a, b) => {
       const byName = a.name.localeCompare(b.name, undefined, {
@@ -472,13 +510,20 @@ export default function App() {
         (Date.parse(b.updatedAt || '') || 0);
       return (slideSort === 'oldest' ? byTime : -byTime) || byName;
     });
-  const visiblePlaylists = library.playlists.filter((item) =>
-    matchesLibraryFilter(
-      item,
-      filters.playlists,
-      groups,
-      item.publishedAt ? 'published' : 'draft',
-    ),
+  const visiblePlaylists = library.playlists.filter(
+    (item) =>
+      matchesLibraryFilter(
+        item,
+        filters.playlists,
+        groups,
+        item.publishedAt ? 'published' : 'draft',
+        true,
+      ) &&
+      matchesOrganization(
+        item,
+        organizationFilters.playlists,
+        library.playlistFolders || [],
+      ),
   );
   const visibleDevices = library.devices.filter((item) =>
     matchesLibraryFilter(item, filters.devices, groups, screenStatus(item)),
@@ -502,6 +547,35 @@ export default function App() {
     >
       {tools}
     </LibraryFilters>
+  );
+  const organizationBar = (kind: 'slides' | 'playlists') => (
+    <LibraryOrganizationToolbar
+      kind={kind}
+      items={library[kind]}
+      folders={
+        kind === 'slides'
+          ? library.slideFolders || []
+          : library.playlistFolders || []
+      }
+      groups={groups}
+      isAdmin={auth?.user?.role === 'admin'}
+      filter={organizationFilters[kind]}
+      onFilter={(filter) =>
+        setOrganizationFilters((current) => ({ ...current, [kind]: filter }))
+      }
+      selected={selectedItems[kind]}
+      onSelect={(ids) =>
+        setSelectedItems((current) => ({ ...current, [kind]: ids }))
+      }
+      refresh={refresh}
+      onAccess={(folder) =>
+        setAccessResource({
+          kind: kind === 'slides' ? 'slide-folder' : 'playlist-folder',
+          id: folder.id,
+          name: folder.name,
+        })
+      }
+    />
   );
   return (
     <TooltipProvider delay={300}>
@@ -864,6 +938,7 @@ export default function App() {
                       </fieldset>
                     </div>,
                   )}
+                  {organizationBar('slides')}
                   {!!library.slides.length && !visibleSlides.length && (
                     <p className="empty-filter-results">
                       No results match these filters. Try another group or clear
@@ -874,6 +949,16 @@ export default function App() {
                     <div className="slide-grid" data-layout={slideLayout}>
                       {visibleSlides.map((slide) => (
                         <article className="slide-card" key={slide.id}>
+                          {!slide.readOnly && (
+                            <Checkbox
+                              className="library-item-select"
+                              aria-label={`Select ${slide.name}`}
+                              checked={selectedItems.slides.includes(slide.id)}
+                              onCheckedChange={(checked) =>
+                                selectItem('slides', slide.id, checked)
+                              }
+                            />
+                          )}
                           {liveSlides.has(slide.id) && (
                             <Tooltip>
                               <TooltipTrigger
@@ -912,8 +997,22 @@ export default function App() {
                           )}
                           <button
                             className="thumbnail-button"
+                            draggable={!slide.readOnly}
+                            onDragStart={(event) =>
+                              startLibraryDrag(
+                                event,
+                                'slides',
+                                selectedItems.slides.includes(slide.id)
+                                  ? selectedItems.slides.filter((id) =>
+                                      library.slides.some(
+                                        (s) => s.id === id && !s.readOnly,
+                                      ),
+                                    )
+                                  : [slide.id],
+                              )
+                            }
                             onClick={() => setEditing(slide)}
-                            aria-label={`Edit ${slide.name}`}
+                            aria-label={`${slide.readOnly ? 'View' : 'Edit'} ${slide.name}`}
                           >
                             <SlideCanvas
                               slide={slide}
@@ -938,6 +1037,8 @@ export default function App() {
                                 run(async () => {
                                   await api('/api/slides', 'POST', {
                                     ...slide,
+                                    managingGroupId: null,
+                                    folderId: null,
                                     name: `${slide.name.slice(0, 90)} copy`,
                                   });
                                   await refresh();
@@ -946,24 +1047,30 @@ export default function App() {
                             >
                               <Copy size={16} />
                             </IconButton>
-                            <IconButton
-                              label={`Delete ${slide.name}`}
-                              onClick={() =>
-                                setConfirm({
-                                  title: `Delete "${slide.name}"?`,
-                                  action: async () => {
-                                    await api(
-                                      `/api/slides/${slide.id}`,
-                                      'DELETE',
-                                    );
-                                    await refresh();
-                                  },
-                                })
-                              }
-                            >
-                              <Trash2 size={16} />
-                            </IconButton>
+                            {!slide.readOnly && (
+                              <IconButton
+                                label={`Delete ${slide.name}`}
+                                onClick={() =>
+                                  setConfirm({
+                                    title: `Delete "${slide.name}"?`,
+                                    action: async () => {
+                                      await api(
+                                        `/api/slides/${slide.id}`,
+                                        'DELETE',
+                                      );
+                                      await refresh();
+                                    },
+                                  })
+                                }
+                              >
+                                <Trash2 size={16} />
+                              </IconButton>
+                            )}
                           </div>
+                          <OrganizationTags item={slide} />
+                          {slide.readOnly && (
+                            <div className="slide-read-only">View only</div>
+                          )}
                           <ManageAccessButton
                             resourceName={slide.name}
                             tags={slide.accessTags}
@@ -996,6 +1103,7 @@ export default function App() {
                     { value: 'published', label: 'Published' },
                     { value: 'draft', label: 'Draft' },
                   ])}
+                  {organizationBar('playlists')}
                   {!!library.playlists.length && !visiblePlaylists.length && (
                     <p className="empty-filter-results">
                       No results match these filters. Try another group or clear
@@ -1005,7 +1113,21 @@ export default function App() {
                   {library.playlists.length ? (
                     <div className="playlist-list">
                       {visiblePlaylists.map((p) => (
-                        <article className="playlist-row" key={p.id}>
+                        <article
+                          className="playlist-row"
+                          data-library-organized="true"
+                          key={p.id}
+                        >
+                          {!p.readOnly && (
+                            <Checkbox
+                              className="library-item-select"
+                              aria-label={`Select ${p.name}`}
+                              checked={selectedItems.playlists.includes(p.id)}
+                              onCheckedChange={(checked) =>
+                                selectItem('playlists', p.id, checked)
+                              }
+                            />
+                          )}
                           <div className="playlist-thumb">
                             {library.slides.find(
                               (s) => s.id === p.items[0]?.slideId,
@@ -1020,17 +1142,42 @@ export default function App() {
                               <ListVideo size={24} />
                             )}
                           </div>
-                          <button
-                            className="title-button"
-                            onClick={() => setPlaylist(p)}
-                          >
-                            <strong>{p.name}</strong>
-                            <span>
-                              {p.items.length} slides{' '}
-                              <span className="dot-separator">/</span>{' '}
-                              {playlistDuration(p)} seconds
-                            </span>
-                          </button>
+                          <div className="playlist-name-info">
+                            <button
+                              className="title-button"
+                              draggable={!p.readOnly}
+                              onDragStart={(event) =>
+                                startLibraryDrag(
+                                  event,
+                                  'playlists',
+                                  selectedItems.playlists.includes(p.id)
+                                    ? selectedItems.playlists.filter((id) =>
+                                        library.playlists.some(
+                                          (p) => p.id === id && !p.readOnly,
+                                        ),
+                                      )
+                                    : [p.id],
+                                )
+                              }
+                              onClick={() => setPlaylist(p)}
+                            >
+                              <strong>{p.name}</strong>
+                              <span>
+                                {p.items.length} slides{' '}
+                                <span className="dot-separator">/</span>{' '}
+                                {playlistDuration(p)} seconds
+                                {p.fork ? ' / Linked fork' : ''}
+                                {p.readOnly ? ' / View only' : ''}
+                              </span>
+                            </button>
+                            <OrganizationTags item={p} />
+                            {p.forkSyncError && (
+                              <p className="inline-error" role="alert">
+                                Sync paused: {p.forkSyncError}. The last
+                                published version stays on screens.
+                              </p>
+                            )}
+                          </div>
                           <span
                             className={`badge ${p.publishedAt ? 'green' : ''}`}
                           >
@@ -1044,12 +1191,22 @@ export default function App() {
                             >
                               <Play size={18} />
                             </IconButton>
-                            <IconButton
-                              label={`Edit ${p.name}`}
-                              onClick={() => setPlaylist(p)}
-                            >
-                              <Pencil size={18} />
-                            </IconButton>
+                            {!p.readOnly && (
+                              <IconButton
+                                label={`Edit ${p.name}`}
+                                onClick={() => setPlaylist(p)}
+                              >
+                                <Pencil size={18} />
+                              </IconButton>
+                            )}
+                            {p.publishedAt && (
+                              <IconButton
+                                label={`Fork ${p.name}`}
+                                onClick={() => setForkMaster(p)}
+                              >
+                                <GitFork size={18} />
+                              </IconButton>
+                            )}
                             <ManageAccessButton
                               resourceName={p.name}
                               tags={p.accessTags}
@@ -1061,23 +1218,25 @@ export default function App() {
                                 })
                               }
                             />
-                            <IconButton
-                              label={`Delete ${p.name}`}
-                              onClick={() =>
-                                setConfirm({
-                                  title: `Delete "${p.name}"?`,
-                                  action: async () => {
-                                    await api(
-                                      `/api/playlists/${p.id}`,
-                                      'DELETE',
-                                    );
-                                    await refresh();
-                                  },
-                                })
-                              }
-                            >
-                              <Trash2 size={16} />
-                            </IconButton>
+                            {!p.readOnly && (
+                              <IconButton
+                                label={`Delete ${p.name}`}
+                                onClick={() =>
+                                  setConfirm({
+                                    title: `Delete "${p.name}"?`,
+                                    action: async () => {
+                                      await api(
+                                        `/api/playlists/${p.id}`,
+                                        'DELETE',
+                                      );
+                                      await refresh();
+                                    },
+                                  })
+                                }
+                              >
+                                <Trash2 size={16} />
+                              </IconButton>
+                            )}
                           </div>
                         </article>
                       ))}
@@ -1249,7 +1408,18 @@ export default function App() {
               <span>OpenFrame / Community edition</span>
             </footer>
           </main>
-          {editing && (
+          {editing?.readOnly && (
+            <Modal
+              title={editing.name}
+              description="View only. This slide is managed by another group."
+              open
+              onClose={() => setEditing(null)}
+              wide
+            >
+              <SlideCanvas slide={editing} assets={library.assets} />
+            </Modal>
+          )}
+          {editing && !editing.readOnly && (
             <Editor
               initial={editing}
               assets={library.assets}
@@ -1269,11 +1439,68 @@ export default function App() {
               }}
             />
           )}
-          {playlist && (
+          {playlist?.readOnly && (
+            <Modal
+              title={playlist.name}
+              description="View only. Create a linked fork to customize this playlist for your group."
+              open
+              onClose={() => setPlaylist(null)}
+              wide
+            >
+              <div className="playlist-fields">
+                {playlist.items.map((item, index) => (
+                  <div className="sequence-row" key={item.id || index}>
+                    <span className="sequence-number">{index + 1}</span>
+                    <strong>
+                      {library.slides.find((s) => s.id === item.slideId)
+                        ?.name || 'Slide'}
+                    </strong>
+                    <span>
+                      {Math.max(
+                        2,
+                        Math.min(
+                          3600,
+                          Math.round(
+                            item.duration / (playlist.fork?.speed || 1),
+                          ),
+                        ),
+                      )}{' '}
+                      seconds
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="dialog-actions">
+                <button
+                  onClick={() => setPreview(playlist.id)}
+                  disabled={!playlist.items.length}
+                >
+                  <Play size={16} />
+                  Preview
+                </button>
+                {playlist.publishedAt && (
+                  <button
+                    className="primary"
+                    onClick={() => setForkMaster(playlist)}
+                  >
+                    <GitFork size={16} />
+                    Fork playlist
+                  </button>
+                )}
+              </div>
+            </Modal>
+          )}
+          {playlist && !playlist.readOnly && (
             <PlaylistEditor
               initial={playlist}
               slides={library.slides}
               assets={library.assets}
+              groups={groups}
+              isAdmin={auth.user?.role === 'admin'}
+              masterName={
+                library.playlists.find((p) => p.id === playlist.fork?.masterId)
+                  ?.name
+              }
               onClose={() => setPlaylist(null)}
               onSave={savePlaylist}
               onSharePlan={(candidate) =>
@@ -1298,6 +1525,74 @@ export default function App() {
               }}
               onPreview={setPreview}
             />
+          )}
+          {forkMaster && (
+            <Modal
+              title="Fork playlist"
+              description="Follow the published master while keeping local slides, timing, and order changes. Your fork will not change the master."
+              open
+              onClose={() => !busy && setForkMaster(null)}
+            >
+              <form
+                className="organization-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const data = new FormData(event.currentTarget);
+                  run(async () => {
+                    const fork = await api<Playlist>(
+                      `/api/playlists/${forkMaster.id}/fork`,
+                      'POST',
+                      {
+                        name: data.get('name'),
+                        managingGroupId: data.get('group') || null,
+                      },
+                    );
+                    await refresh();
+                    setForkMaster(null);
+                    setPlaylist(fork);
+                  });
+                }}
+              >
+                <label>
+                  Name
+                  <input
+                    name="name"
+                    defaultValue={`${forkMaster.name.slice(0, 90)} fork`}
+                    required
+                    maxLength={100}
+                  />
+                </label>
+                <label>
+                  Managing group
+                  <select
+                    name="group"
+                    aria-label="Managing group"
+                    defaultValue=""
+                  >
+                    <option value="">Personal playlist</option>
+                    {orderedTree(groups)
+                      .filter(
+                        ({ item }) =>
+                          auth.user?.role === 'admin' || item.directMember,
+                      )
+                      .map(({ item, depth }) => (
+                        <option key={item.id} value={item.id}>
+                          {indentedName(item.name, depth)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                {error && (
+                  <p role="alert" className="inline-error">
+                    {error}
+                  </p>
+                )}
+                <button disabled={busy} className="primary">
+                  <GitFork size={16} />
+                  Create linked fork
+                </button>
+              </form>
+            </Modal>
           )}
           {setupOpen && <ScreenSetup onClose={() => setSetupOpen(false)} />}
           {auth.user && (
@@ -3089,7 +3384,7 @@ function Editor({
 }
 
 type PlaylistShareChange = {
-  kind: 'slide' | 'asset';
+  kind: 'slide' | 'asset' | 'playlist';
   id: string;
   name: string;
   target: { userId: string; groupId: string };
@@ -3101,6 +3396,9 @@ function PlaylistEditor({
   initial,
   slides,
   assets,
+  groups,
+  isAdmin,
+  masterName,
   onClose,
   onSave,
   onSharePlan,
@@ -3111,6 +3409,9 @@ function PlaylistEditor({
   initial: Playlist;
   slides: Slide[];
   assets: Asset[];
+  groups: NonNullable<Library['groups']>;
+  isAdmin: boolean;
+  masterName?: string;
   onClose: () => void;
   onSave: (p: Playlist) => Promise<Playlist>;
   onSharePlan: (p: Playlist) => Promise<PlaylistShareChange[]>;
@@ -3201,7 +3502,11 @@ function PlaylistEditor({
     const to = index + offset;
     if (to < 0 || to >= items.length) return;
     [items[index], items[to]] = [items[to], items[index]];
-    setP({ ...p, items });
+    setP({
+      ...p,
+      items,
+      ...(p.fork ? { fork: { ...p.fork, order: 'custom' } } : {}),
+    });
   }
   function addSlide(slide: Slide, confirmed = false) {
     if (!confirmed && p.items.some((item) => item.slideId === slide.id)) {
@@ -3210,7 +3515,22 @@ function PlaylistEditor({
     }
     setP((current) => ({
       ...current,
-      items: [...current.items, { slideId: slide.id, duration: 10 }],
+      items: [
+        ...current.items,
+        {
+          id: uuid(),
+          slideId: slide.id,
+          duration: 10,
+          ...(current.fork
+            ? {
+                afterEntryId:
+                  [...current.items]
+                    .reverse()
+                    .find((item) => item.sourceEntryId)?.sourceEntryId || null,
+              }
+            : {}),
+        },
+      ],
     }));
     setMessage(`Added ${slide.name}`);
     setDuplicateSlide(null);
@@ -3235,6 +3555,85 @@ function PlaylistEditor({
               onChange={(e) => setP({ ...p, name: e.target.value })}
             />
           </label>
+          {!p.id && (
+            <label>
+              Managing group
+              <select
+                aria-label="Playlist managing group"
+                value={p.managingGroupId || ''}
+                onChange={(event) =>
+                  setP({ ...p, managingGroupId: event.target.value || null })
+                }
+              >
+                <option value="">Personal playlist</option>
+                {orderedTree(groups)
+                  .filter(({ item }) => isAdmin || item.directMember)
+                  .map(({ item, depth }) => (
+                    <option key={item.id} value={item.id}>
+                      {indentedName(item.name, depth)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          {p.fork && (
+            <section className="fork-settings">
+              <strong>Linked to {masterName || 'master playlist'}</strong>
+              <p>
+                Master publication updates are automatic. Added slides and
+                overrides stay in this fork. Inherited slides and schedules stay
+                managed upstream.
+              </p>
+              <div className="fork-controls">
+                <label>
+                  Order
+                  <select
+                    aria-label="Fork order"
+                    value={p.fork.order}
+                    onChange={(event) =>
+                      setP({
+                        ...p,
+                        fork: {
+                          ...p.fork!,
+                          order: event.target.value as 'master' | 'custom',
+                        },
+                      })
+                    }
+                  >
+                    <option value="master">Follow master order</option>
+                    <option value="custom">Custom order</option>
+                  </select>
+                </label>
+                <label>
+                  Playback speed
+                  <input
+                    aria-label="Fork playback speed"
+                    type="number"
+                    min={0.1}
+                    max={10}
+                    step={0.1}
+                    value={p.fork.speed}
+                    onChange={(event) =>
+                      setP({
+                        ...p,
+                        fork: {
+                          ...p.fork!,
+                          speed: Math.max(
+                            0.1,
+                            Math.min(10, Number(event.target.value) || 1),
+                          ),
+                        },
+                      })
+                    }
+                  />
+                </label>
+              </div>
+              <p>
+                1× uses the original timing; 2× plays twice as fast. New master
+                slides are appended when using custom order.
+              </p>
+            </section>
+          )}
           <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
             <TabsList>
               <TabsTrigger value="sequence">
@@ -3333,6 +3732,13 @@ function PlaylistEditor({
                       </div>
                       <div className="sequence-details">
                         <strong>{slide?.name || 'Missing slide'}</strong>
+                        {p.fork && (
+                          <span className="inherited-entry-label">
+                            {item.sourceEntryId
+                              ? 'From master'
+                              : 'Added locally'}
+                          </span>
+                        )}
                         <span
                           className={`sequence-status ${availability.state}`}
                           title={statusDate?.toString()}
@@ -3356,6 +3762,7 @@ function PlaylistEditor({
                           <Switch
                             id={`schedule-${index}`}
                             aria-label={`Schedule slide ${index + 1}`}
+                            disabled={!!item.sourceEntryId}
                             checked={
                               item.scheduleEnabled ??
                               Boolean(item.startsAt || item.expiresAt)
@@ -3386,6 +3793,9 @@ function PlaylistEditor({
                                   i === index
                                     ? {
                                         ...v,
+                                        ...(v.sourceEntryId
+                                          ? { durationOverride: true }
+                                          : {}),
                                         duration: Math.max(
                                           2,
                                           Math.min(
@@ -3401,6 +3811,29 @@ function PlaylistEditor({
                           />
                           <span>sec</span>
                         </label>
+                        {item.sourceEntryId && item.durationOverride && (
+                          <IconButton
+                            label={`Reset duration for slide ${index + 1} to master`}
+                            onClick={() =>
+                              setP({
+                                ...p,
+                                items: p.items.map((entry, i) =>
+                                  i === index
+                                    ? {
+                                        ...entry,
+                                        durationOverride: false,
+                                        duration:
+                                          entry.masterDuration ||
+                                          entry.duration,
+                                      }
+                                    : entry,
+                                ),
+                              })
+                            }
+                          >
+                            <Undo2 size={16} />
+                          </IconButton>
+                        )}
                         <div className="row-actions">
                           <IconButton
                             label={`Move slide ${index + 1} up`}
@@ -3418,6 +3851,7 @@ function PlaylistEditor({
                           </IconButton>
                           <IconButton
                             label={`Remove slide ${index + 1}`}
+                            disabled={!!item.sourceEntryId}
                             onClick={() =>
                               setP({
                                 ...p,
@@ -3439,6 +3873,7 @@ function PlaylistEditor({
                                 : 'Expires at'}
                               <input
                                 type="datetime-local"
+                                disabled={!!item.sourceEntryId}
                                 step="1"
                                 aria-label={`${field === 'startsAt' ? 'Starts at' : 'Expires at'} for slide ${index + 1}`}
                                 value={

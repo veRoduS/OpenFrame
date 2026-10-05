@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.18.1] - 2026-10-05
+
+- Add inherited View/Edit access, linked playlist forks, and folders and tags for slides and playlists.
+- Keep existing direct grants as Edit while inherited hierarchy access becomes View; managing groups control editing without overriding global admins.
+- Refresh published forks from master publications while preserving published local entries, timing, order, names, and transitions; keep unpublished drafts separate and retain the last valid publication when access is missing.
+- Add separate nested folder trees, drag/drop moves, bulk tagging, and combined filters for both libraries, with enforced read-only views and responsive access controls.
+
 ## [0.18.0] - 2026-10-04
 
 - Workspace interface polish

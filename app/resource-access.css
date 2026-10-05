@@ -24,7 +24,8 @@
 }
 .of-modal.resource-access-modal {
   max-width: 620px !important;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
 }
 .resource-access-modal .access-grant-forms {
   display: grid;
@@ -46,6 +47,7 @@
 }
 .access-existing-grants {
   min-height: 0;
+  flex: 1 1 auto;
   max-height: 42dvh;
   overflow: auto;
   border-top: 1px solid #dce4df;
@@ -121,4 +123,29 @@
 .access-more {
   white-space: nowrap;
   flex-shrink: 0;
+}
+.managing-group-control {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.managing-group-control .muted {
+  font-size: 12px;
+}
+.access-grant-row > select {
+  width: auto;
+  min-width: 80px;
+}
+
+.resource-access-modal[data-permission-roles='true'] .access-grant-forms {
+  grid-template-columns: minmax(0, 1fr);
+  flex-shrink: 0;
+}
+.resource-access-modal[data-permission-roles='true']
+  .access-grant-forms
+  .account-form {
+  grid-template-columns: minmax(0, 1fr) 90px auto;
+}
+.access-grant-row[data-permission-roles='true'] {
+  grid-template-columns: minmax(0, 1fr) 90px 44px;
 }

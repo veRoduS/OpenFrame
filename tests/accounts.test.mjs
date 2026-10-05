@@ -399,6 +399,7 @@ void test('collaborators cannot add dependencies the resource owner cannot acces
   ).data;
   await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
     userId: collaborator.user.id,
+    permission: 'edit',
   });
   assert.equal(
     (
@@ -641,6 +642,7 @@ void test('group invitations, sharing, admin transfer and removal enforce member
     (
       await alice.call(`/api/access/slide/${item.id}`, 'POST', {
         groupId: group.id,
+        permission: 'edit',
       })
     ).status,
     200,
@@ -723,7 +725,7 @@ void test('group invitations, sharing, admin transfer and removal enforce member
   );
 });
 
-void test('child membership cannot access parent content', async (t) => {
+void test('child membership views parent content without gaining edit access', async (t) => {
   const { admin, user } = await fixture(t);
   const alice = await user('alice');
   const bob = await user('bob');
@@ -776,7 +778,12 @@ void test('child membership cannot access parent content', async (t) => {
   const visible = (await bob.call('/api/library')).data.slides;
   assert.deepEqual(
     visible.map((item) => item.id),
-    [childSlide.id],
+    [childSlide.id, parentSlide.id],
+  );
+  assert.ok(visible.every((item) => item.readOnly));
+  assert.equal(
+    (await bob.call(`/api/slides/${parentSlide.id}`, 'PUT', slide)).status,
+    403,
   );
 });
 
@@ -990,16 +997,16 @@ void test('parent access reaches descendants, shared images, and screens and fol
   }
   assert.equal((await parentMember.call('/api/groups')).data.length, 5);
   assert.equal((await parentMember.call('/api/library')).data.slides.length, 5);
-  assert.equal((await childMember.call('/api/library')).data.slides.length, 2);
+  assert.equal((await childMember.call('/api/library')).data.slides.length, 3);
   assert.equal((await outsider.call('/api/library')).data.slides.length, 0);
   assert.equal(
     (await childMember.call(`/api/slides/${items[0].id}`, 'PUT', slide)).status,
-    404,
+    403,
   );
   assert.equal(
     (await parentMember.call(`/api/slides/${items[4].id}`, 'PUT', slide))
       .status,
-    200,
+    403,
   );
   // Group context and dependency validation use the same inherited access.
   const playlist = await parentMember.call(
@@ -1012,7 +1019,7 @@ void test('parent access reaches descendants, shared images, and screens and fol
     },
     { 'X-OpenFrame-Group': parent.id },
   );
-  assert.equal(playlist.status, 201);
+  assert.equal(playlist.status, 409); // The other subgroups cannot see this slide.
   const asset = await uploadImage(admin);
   const imageSlide = (
     await admin('/api/slides', 'POST', {
@@ -1525,6 +1532,549 @@ void test('admin-created users receive unique 12-character passwords and can sig
       await afterChange('/api/login', 'POST', {
         username: created.data.user.username,
         password: 'my-new-personal-password',
+      })
+    ).status,
+    200,
+  );
+});
+
+void test('managing groups edit directly while hierarchy access stays view-only', async (t) => {
+  const { admin, user } = await fixture(t);
+  const manager = await user('permission-manager');
+  const viewer = await user('permission-viewer');
+  const root = (await admin('/api/groups', 'POST', { name: 'Group A' })).data;
+  const child = (
+    await admin('/api/groups', 'POST', { name: 'Group B', parentId: root.id })
+  ).data;
+  await admin(`/api/groups/${root.id}/members/${manager.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  await admin(`/api/groups/${child.id}/members/${viewer.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const asset = await uploadImage(admin);
+  const item = (
+    await admin('/api/slides', 'POST', {
+      ...slide,
+      managingGroupId: root.id,
+      layers: [
+        {
+          id: randomUUID(),
+          type: 'image',
+          assetId: asset.id,
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 100,
+        },
+      ],
+    })
+  ).data;
+  const master = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Master',
+      managingGroupId: root.id,
+      items: [{ slideId: item.id, duration: 10 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${master.id}/publish`, 'POST')).status,
+    200,
+  );
+  let library = (await viewer.call('/api/library')).data;
+  assert.equal(library.slides.find((s) => s.id === item.id).readOnly, true);
+  assert.equal(
+    library.playlists.find((p) => p.id === master.id).readOnly,
+    true,
+  );
+  assert.equal(
+    library.groups.find((g) => g.id === root.id).directMember,
+    false,
+  );
+  assert.equal((await viewer.call(`/api/preview/${master.id}`)).status, 200);
+  assert.equal(
+    (
+      await viewer.call(`/api/slides/${item.id}`, 'PUT', {
+        ...item,
+        name: 'Forbidden',
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await viewer.call(`/api/slides/${item.id}`, 'DELETE')).status,
+    403,
+  );
+  for (const [path, method, body] of [
+    [`/api/playlists/${master.id}`, 'PUT', master],
+    [`/api/playlists/${master.id}`, 'DELETE'],
+    [`/api/playlists/${master.id}/publish`, 'POST'],
+    [`/api/playlists/${master.id}/share-plan`, 'POST', master],
+    [`/api/playlists/${master.id}/share-apply`, 'POST', []],
+    [`/api/access/slide/${item.id}/management`, 'PUT', { groupId: child.id }],
+    [
+      `/api/organization/slides`,
+      'POST',
+      { ids: [item.id], addTags: ['forbidden'] },
+    ],
+  ])
+    assert.equal((await viewer.call(path, method, body)).status, 403, path);
+  assert.equal(
+    (
+      await manager.call(`/api/slides/${item.id}`, 'PUT', {
+        ...item,
+        name: 'Managed edit',
+      })
+    ).status,
+    200,
+  );
+  await admin(`/api/access/slide/${item.id}`, 'POST', {
+    userId: viewer.user.id,
+    permission: 'edit',
+  });
+  library = (await viewer.call('/api/library')).data;
+  const inheritedFork = (
+    await viewer.call(`/api/playlists/${master.id}/fork`, 'POST', {
+      name: 'Image fork',
+      managingGroupId: child.id,
+    })
+  ).data;
+  const sharingPlan = await viewer.call(
+    `/api/playlists/${inheritedFork.id}/share-plan`,
+    'POST',
+    inheritedFork,
+  );
+  assert.equal(sharingPlan.status, 200);
+  assert.deepEqual(sharingPlan.data, []);
+  assert.equal(
+    (await viewer.call('/api/library')).data.assets.find(
+      (a) => a.id === asset.id,
+    ).readOnly,
+    true,
+  );
+  const originallyOwned = (await viewer.call('/api/slides', 'POST', slide))
+    .data;
+  await admin(`/api/access/slide/${originallyOwned.id}/management`, 'PUT', {
+    groupId: root.id,
+  });
+  assert.equal(
+    (
+      await viewer.call(
+        `/api/slides/${originallyOwned.id}`,
+        'PUT',
+        originallyOwned,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await viewer.call(`/api/access/slide/${originallyOwned.id}`)).data
+      .canShare,
+    false,
+  );
+  const granted = library.slides.find((s) => s.id === item.id);
+  assert.equal(granted.readOnly, false);
+  assert.equal(
+    (
+      await viewer.call(`/api/slides/${item.id}`, 'PUT', {
+        ...granted,
+        name: 'Explicit edit',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await viewer.call(`/api/access/slide/${item.id}/management`, 'PUT', {
+        groupId: child.id,
+      })
+    ).status,
+    403,
+  );
+  await admin(`/api/access/slide/${item.id}`, 'POST', {
+    userId: viewer.user.id,
+    permission: 'view',
+  });
+  assert.equal(
+    (await viewer.call(`/api/slides/${item.id}`, 'PUT', granted)).status,
+    403,
+  );
+  assert.equal(
+    (
+      await admin(`/api/slides/${item.id}`, 'PUT', {
+        ...granted,
+        name: 'Admin edit',
+      })
+    ).status,
+    200,
+  );
+});
+
+void test('published linked forks preserve local overrides and do not publish local drafts on master updates', async (t) => {
+  const { admin, user, db } = await fixture(t);
+  const localUser = await user('fork-editor');
+  const root = (await admin('/api/groups', 'POST', { name: 'Master group' }))
+    .data;
+  const child = (
+    await admin('/api/groups', 'POST', {
+      name: 'Local group',
+      parentId: root.id,
+    })
+  ).data;
+  await admin(`/api/groups/${child.id}/members/${localUser.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const slides = [];
+  for (let i = 0; i < 3; i++)
+    slides.push(
+      (
+        await admin('/api/slides', 'POST', {
+          ...slide,
+          name: `Master slide ${i}`,
+          managingGroupId: root.id,
+        })
+      ).data,
+    );
+  let master = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Master',
+      managingGroupId: root.id,
+      items: [
+        { slideId: slides[0].id, duration: 10 },
+        { slideId: slides[0].id, duration: 20 },
+        { slideId: slides[1].id, duration: 30 },
+      ],
+    })
+  ).data;
+  await admin(`/api/playlists/${master.id}/publish`, 'POST');
+  const local = (
+    await localUser.call('/api/slides', 'POST', {
+      ...slide,
+      name: 'Local slide',
+      managingGroupId: child.id,
+    })
+  ).data;
+  const forkResponse = await localUser.call(
+    `/api/playlists/${master.id}/fork`,
+    'POST',
+    { name: 'Local fork', managingGroupId: child.id },
+  );
+  assert.equal(forkResponse.status, 201, JSON.stringify(forkResponse.data));
+  let fork = forkResponse.data;
+  assert.equal(fork.tags.length, 0);
+  assert.equal(fork.items.length, 3);
+  assert.notEqual(fork.items[0].id, fork.items[1].id);
+  const sourceIds = fork.items.map((i) => i.id);
+  fork = {
+    ...fork,
+    fork: { ...fork.fork, order: 'custom', speed: 2 },
+    items: [
+      { id: randomUUID(), slideId: local.id, duration: 8 },
+      fork.items[2],
+      { ...fork.items[1], duration: 40, durationOverride: true },
+      fork.items[0],
+    ],
+  };
+  const saved = await localUser.call(`/api/playlists/${fork.id}`, 'PUT', fork);
+  assert.equal(saved.status, 200, JSON.stringify(saved.data));
+  fork = saved.data;
+  assert.equal(
+    (await localUser.call(`/api/playlists/${fork.id}/publish`, 'POST')).status,
+    200,
+  );
+  const record = (id) =>
+    JSON.parse(
+      db
+        .prepare("SELECT body FROM records WHERE kind='playlist' AND id=?")
+        .get(id).body,
+    );
+  assert.deepEqual(
+    record(fork.id).published.items.map((i) => i.duration),
+    [4, 15, 20, 5],
+  );
+  assert.deepEqual(
+    record(master.id).published.items.map((i) => i.duration),
+    [10, 20, 30],
+  );
+  const revision = record(fork.id).published.revision;
+  const draft = {
+    ...fork,
+    name: 'Unpublished local name',
+    transition: { type: 'fade', durationMs: 800 },
+    items: fork.items.map((i) =>
+      i.slideId === local.id ? { ...i, duration: 18 } : i,
+    ),
+  };
+  assert.equal(
+    (await localUser.call(`/api/playlists/${fork.id}`, 'PUT', draft)).status,
+    200,
+  );
+  master = (
+    await admin(`/api/playlists/${master.id}`, 'PUT', {
+      ...master,
+      items: [
+        master.items[1],
+        { slideId: slides[2].id, duration: 50 },
+        master.items[0],
+      ],
+    })
+  ).data;
+  assert.equal(record(fork.id).published.revision, revision);
+  assert.equal(
+    (await admin(`/api/playlists/${master.id}/publish`, 'POST')).status,
+    200,
+  );
+  const updated = record(fork.id);
+  assert.notEqual(updated.published.revision, revision);
+  assert.deepEqual(
+    updated.published.items.map((i) => [i.slide.id, i.duration]),
+    [
+      [local.id, 4],
+      [slides[0].id, 20],
+      [slides[0].id, 5],
+      [slides[2].id, 25],
+    ],
+  );
+  assert.equal(updated.items.find((i) => i.slideId === local.id).duration, 18);
+  assert.deepEqual(
+    updated.publishedEntries.slice(1, 3).map((i) => i.id),
+    [sourceIds[1], sourceIds[0]],
+  );
+  assert.ok(updated.published.items.every((i) => !('sourceEntryId' in i)));
+  assert.equal(updated.published.schemaVersion, 2);
+  assert.equal(
+    (await admin(`/api/playlists/${master.id}`, 'DELETE')).status,
+    409,
+  );
+  assert.equal(
+    (
+      await localUser.call(`/api/playlists/${fork.id}`, 'PUT', {
+        ...draft,
+        items: [{ ...draft.items[0], id: sourceIds[0] }],
+      })
+    ).status,
+    400,
+  );
+});
+
+void test('folders and tags keep access unchanged and bulk updates reject inherited items atomically', async (t) => {
+  const { admin, user } = await fixture(t);
+  const member = await user('organizer');
+  const root = (
+    await admin('/api/groups', 'POST', { name: 'Organization root' })
+  ).data;
+  const child = (
+    await admin('/api/groups', 'POST', {
+      name: 'Organization child',
+      parentId: root.id,
+    })
+  ).data;
+  await admin(`/api/groups/${child.id}/members/${member.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const inherited = (
+    await admin('/api/slides', 'POST', { ...slide, managingGroupId: root.id })
+  ).data;
+  const own = (await member.call('/api/slides', 'POST', slide)).data;
+  const folder = (
+    await admin('/api/library-folders/slides', 'POST', {
+      name: 'Safety',
+      managingGroupId: root.id,
+    })
+  ).data;
+  const nested = (
+    await admin('/api/library-folders/slides', 'POST', {
+      name: 'Local safety',
+      parentId: folder.id,
+      managingGroupId: root.id,
+    })
+  ).data;
+  assert.equal(
+    (
+      await member.call('/api/organization/slides', 'POST', {
+        ids: [own.id, inherited.id],
+        folderId: nested.id,
+        addTags: ['Safety'],
+      })
+    ).status,
+    403,
+  );
+  let library = (await member.call('/api/library')).data;
+  assert.equal(library.slides.find((s) => s.id === own.id).folderId, null);
+  assert.equal(
+    (
+      await member.call('/api/organization/slides', 'POST', {
+        ids: [own.id],
+        folderId: nested.id,
+        addTags: ['Safety', ' safety ', 'NEWS'],
+      })
+    ).status,
+    200,
+  );
+  library = (await member.call('/api/library')).data;
+  const moved = library.slides.find((s) => s.id === own.id);
+  assert.equal(moved.readOnly, false);
+  assert.equal(moved.managingGroupId, null);
+  assert.deepEqual(moved.tags, ['safety', 'news']);
+  assert.equal(moved.folderId, nested.id);
+  assert.equal(
+    library.slideFolders.find((f) => f.id === folder.id).readOnly,
+    true,
+  );
+  assert.equal(
+    (
+      await member.call(`/api/library-folders/slides/${nested.id}`, 'PUT', {
+        name: 'Forbidden',
+        parentId: null,
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await admin(`/api/library-folders/slides/${folder.id}`, 'PUT', {
+        ...folder,
+        parentId: nested.id,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await admin(`/api/library-folders/slides/${nested.id}`, 'DELETE')).status,
+    409,
+  );
+  assert.equal(
+    (
+      await member.call('/api/organization/slides', 'POST', {
+        ids: [own.id],
+        folderId: null,
+        removeTags: ['safety'],
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await admin(`/api/library-folders/slides/${nested.id}`, 'DELETE')).status,
+    200,
+  );
+});
+
+void test('a fork retains its last valid publication when master viewing access is revoked', async (t) => {
+  const { admin, user, db } = await fixture(t);
+  const editor = await user('paused-fork-editor');
+  const first = (await admin('/api/slides', 'POST', slide)).data;
+  const second = (
+    await admin('/api/slides', 'POST', { ...slide, name: 'New master slide' })
+  ).data;
+  let master = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Revocable master',
+      items: [{ slideId: first.id, duration: 10 }],
+    })
+  ).data;
+  await admin(`/api/playlists/${master.id}/publish`, 'POST');
+  await admin(`/api/access/playlist/${master.id}`, 'POST', {
+    userId: editor.user.id,
+    permission: 'view',
+  });
+  const fork = (
+    await editor.call(`/api/playlists/${master.id}/fork`, 'POST', {
+      name: 'Protected fork',
+    })
+  ).data;
+  assert.equal(
+    (await editor.call(`/api/playlists/${fork.id}/publish`, 'POST')).status,
+    200,
+  );
+  const record = () =>
+    JSON.parse(
+      db
+        .prepare("SELECT body FROM records WHERE kind='playlist' AND id=?")
+        .get(fork.id).body,
+    );
+  const initial = record().published;
+  await admin(`/api/access/playlist/${master.id}`, 'POST', {
+    userId: editor.user.id,
+    remove: true,
+  });
+  master = (
+    await admin(`/api/playlists/${master.id}`, 'PUT', {
+      ...master,
+      items: [...master.items, { slideId: second.id, duration: 20 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${master.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.deepEqual(record().published, initial);
+  assert.match(record().forkSyncError, /Viewing access to the master/);
+  assert.equal(
+    (
+      await admin(`/api/slides/${first.id}`, 'PUT', {
+        ...first,
+        name: 'Protected new slide content',
+      })
+    ).status,
+    200,
+  );
+  assert.deepEqual(record().published, initial);
+  assert.equal((await editor.call(`/api/preview/${fork.id}`)).status, 404);
+  await admin(`/api/access/playlist/${master.id}`, 'POST', {
+    userId: editor.user.id,
+    permission: 'view',
+  });
+  assert.equal(
+    (await editor.call(`/api/playlists/${fork.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.equal(record().forkSyncError, undefined);
+  assert.equal(record().published.items.length, 2);
+  assert.notEqual(record().published.revision, initial.revision);
+});
+
+void test('editable folders can be renamed inside a read-only ancestor without gaining ancestor permissions', async (t) => {
+  const { admin, user } = await fixture(t);
+  const member = await user('folder-manager');
+  const group = (await admin('/api/groups', 'POST', { name: 'Folder group' }))
+    .data;
+  await admin(`/api/groups/${group.id}/members/${member.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const ancestor = (
+    await admin('/api/library-folders/playlists', 'POST', { name: 'Path only' })
+  ).data;
+  const nested = (
+    await admin('/api/library-folders/playlists', 'POST', {
+      name: 'Managed folder',
+      parentId: ancestor.id,
+      managingGroupId: group.id,
+    })
+  ).data;
+  const folders = (await member.call('/api/library')).data.playlistFolders;
+  assert.equal(folders.find((f) => f.id === ancestor.id).pathOnly, true);
+  const renamed = await member.call(
+    `/api/library-folders/playlists/${nested.id}`,
+    'PUT',
+    { ...nested, name: 'Renamed folder' },
+  );
+  assert.equal(renamed.status, 200, JSON.stringify(renamed.data));
+  assert.equal(renamed.data.parentId, ancestor.id);
+  assert.equal(
+    (
+      await member.call(
+        `/api/library-folders/playlists/${ancestor.id}`,
+        'PUT',
+        { name: 'Forbidden' },
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await member.call(`/api/library-folders/playlists/${nested.id}`, 'PUT', {
+        ...nested,
+        parentId: null,
       })
     ).status,
     200,

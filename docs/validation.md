@@ -1,5 +1,14 @@
 # Validation record
 
+## Local server revision 0.18.1: inherited access and linked playlists
+
+Checked on 2026-10-05: 52 Node server/access checks passed; two optional Python-agent integration checks were skipped because OPENFRAME_PYTHON was not enabled. Lint, typecheck, the production web build, and version/repository/compatibility checks passed. Both organization and library-access browser checks passed using installed Chromium, including desktop/phone layouts, inherited read-only views, user-local forks, timing/order, tagging, folder moves, and access dialog controls. Screenshots were visually reviewed at 1280 and 390 pixels.
+
+The reviewed player contract stays compatible with player 0.10.12: forks are flattened by the server into existing schema 2/3 publications, with ordinary embedded slides, assets, durations, schedules, and transitions. Stable entry IDs and frozen fork draft state stay on the server. Tests verify that master updates preserve published overrides without releasing draft item, name, or transition changes, and that missing master access retains the last valid publication even when a source slide is edited. Existing direct grants retain Edit while hierarchy access becomes View; credentials, sessions, player tokens, and stored publications are preserved.
+
+This is local source work. No deployment or physical Pi/Android playback check is included. Player source and its version remain unchanged.
+
+
 ## Player 0.10.5: automatic update preference
 
 Automatic APK checks can now be disabled per device. The persisted setting defaults off; the Back/Menu action always supports an immediate manual update check. Choosing GitHub or This server remains independent of that preference. The SDK build verifies that the player source compiles and the signed APK metadata matches the player version. No automated tests or physical Android TV checks were run for this small settings change.

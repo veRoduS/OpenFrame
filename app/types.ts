@@ -59,7 +59,21 @@ export type AccessTag = {
   name: string;
   username?: string;
 };
-export type Slide = {
+export type LibraryOrganization = {
+  readOnly?: boolean;
+  managingGroupId?: string | null;
+  folderId?: string | null;
+  tags?: string[];
+};
+export type LibraryFolder = {
+  pathOnly?: boolean;
+  id: string;
+  name: string;
+  parentId: string | null;
+  readOnly?: boolean;
+  managingGroupId?: string | null;
+};
+export type Slide = LibraryOrganization & {
   accessTags?: AccessTag[];
   groupIds?: string[];
   id: string;
@@ -70,7 +84,9 @@ export type Slide = {
   layers: Layer[];
   updatedAt?: string;
 };
-export type Playlist = {
+export type Playlist = LibraryOrganization & {
+  fork?: { masterId: string; order: 'master' | 'custom'; speed: number } | null;
+  forkSyncError?: string;
   accessTags?: AccessTag[];
   groupIds?: string[];
   id: string;
@@ -80,6 +96,11 @@ export type Playlist = {
     durationMs: number;
   };
   items: {
+    id?: string;
+    sourceEntryId?: string;
+    afterEntryId?: string | null;
+    durationOverride?: boolean;
+    masterDuration?: number;
     slideId: string;
     duration: number;
     startsAt?: string | null;
@@ -99,7 +120,18 @@ export function playlistDuration(playlist: Playlist) {
       : 0;
   return (
     Math.round(
-      (playlist.items.reduce((sum, item) => sum + item.duration, 0) +
+      (playlist.items.reduce(
+        (sum, item) =>
+          sum +
+          Math.max(
+            2,
+            Math.min(
+              3600,
+              Math.round(item.duration / (playlist.fork?.speed || 1)),
+            ),
+          ),
+        0,
+      ) +
         animation) *
         10,
     ) / 10
@@ -150,7 +182,14 @@ export type Device = {
   command?: { type: string } | null;
 };
 export type Library = {
-  groups?: { id: string; name: string; parentId?: string | null }[];
+  groups?: {
+    id: string;
+    name: string;
+    parentId?: string | null;
+    directMember?: boolean;
+  }[];
+  slideFolders?: LibraryFolder[];
+  playlistFolders?: LibraryFolder[];
   slides: Slide[];
   playlists: Playlist[];
   assets: Asset[];

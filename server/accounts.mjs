@@ -50,6 +50,8 @@ export function createAccounts(db) {
     CREATE TABLE IF NOT EXISTS resource_access (kind TEXT NOT NULL, id TEXT NOT NULL, ownerId TEXT, PRIMARY KEY(kind,id));
     CREATE TABLE IF NOT EXISTS resource_grants (kind TEXT NOT NULL, id TEXT NOT NULL, userId TEXT NOT NULL DEFAULT '', groupId TEXT NOT NULL DEFAULT '', PRIMARY KEY(kind,id,userId,groupId));
   `);
+  db.exec(`CREATE TABLE IF NOT EXISTS resource_permissions (kind TEXT NOT NULL,id TEXT NOT NULL,userId TEXT NOT NULL DEFAULT '',groupId TEXT NOT NULL DEFAULT '',permission TEXT NOT NULL CHECK(permission IN ('view','edit')),PRIMARY KEY(kind,id,userId,groupId));
+    CREATE TABLE IF NOT EXISTS resource_management (kind TEXT NOT NULL,id TEXT NOT NULL,groupId TEXT NOT NULL,PRIMARY KEY(kind,id));`);
   if (
     !db
       .prepare('PRAGMA table_info(groups)')
@@ -96,7 +98,7 @@ export function createAccounts(db) {
     !!db
       .prepare(`${descendants} SELECT 1 FROM effective_groups WHERE id=?`)
       .get(user.id, id);
-  const can = (user, kind, id) =>
+  const legacyCan = (user, kind, id) =>
     !!user &&
     !user.disabled &&
     (user.role === 'admin' ||
@@ -109,7 +111,7 @@ export function createAccounts(db) {
           (g.userId=? OR g.groupId IN (SELECT id FROM effective_groups))))
     `)
         .get(user.id, kind, id, user.id, user.id));
-  const groupCan = (groupId, kind, id) =>
+  const legacyGroupCan = (groupId, kind, id) =>
     !!db
       .prepare(`
     WITH RECURSIVE audience(id) AS (
@@ -118,7 +120,90 @@ export function createAccounts(db) {
     ) SELECT 1 FROM resource_grants WHERE kind=? AND id=? AND groupId IN (SELECT id FROM audience)
   `)
       .get(groupId, kind, id);
-  const canViewAsset = (user, id) =>
+  const libraryKinds = new Set([
+    'slide',
+    'playlist',
+    'slide-folder',
+    'playlist-folder',
+  ]);
+  function related(a, b) {
+    return !!db
+      .prepare(
+        `WITH RECURSIVE branch(id) AS (SELECT ? UNION SELECT g.id FROM groups g JOIN branch b ON g.parentId=b.id) SELECT 1 FROM branch WHERE id=?`,
+      )
+      .get(a, b);
+  }
+  function permission(user, kind, id) {
+    if (!user || user.disabled) return null;
+    if (user.role === 'admin') return 'edit';
+    if (!libraryKinds.has(kind))
+      return legacyCan(user, kind, id) ? 'edit' : null;
+    const management = db
+      .prepare('SELECT groupId FROM resource_management WHERE kind=? AND id=?')
+      .get(kind, id)?.groupId;
+    const memberships = db
+      .prepare('SELECT groupId FROM memberships WHERE userId=?')
+      .all(user.id)
+      .map((m) => m.groupId);
+    if (management && memberships.includes(management)) return 'edit';
+    const owner = db
+      .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
+      .get(kind, id)?.ownerId;
+    if (!management && owner === user.id) return 'edit';
+    let visible =
+      !!management &&
+      memberships.some((g) => related(g, management) || related(management, g));
+    const audience = db
+      .prepare(
+        `SELECT g.*,COALESCE(p.permission,'edit') AS permission FROM resource_grants g LEFT JOIN resource_permissions p USING(kind,id,userId,groupId) WHERE g.kind=? AND g.id=?`,
+      )
+      .all(kind, id);
+    for (const grant of audience) {
+      const direct =
+        grant.userId === user.id ||
+        (grant.groupId && memberships.includes(grant.groupId));
+      if (direct && grant.permission === 'edit') return 'edit';
+      if (
+        direct ||
+        (grant.groupId &&
+          memberships.some(
+            (g) => related(g, grant.groupId) || related(grant.groupId, g),
+          ))
+      )
+        visible = true;
+    }
+    return visible ? 'view' : null;
+  }
+  const can = (user, kind, id) => !!permission(user, kind, id);
+  const canEdit = (user, kind, id) => permission(user, kind, id) === 'edit';
+  function groupCan(groupId, kind, id) {
+    if (!libraryKinds.has(kind)) return legacyGroupCan(groupId, kind, id);
+    const audience = db
+      .prepare('SELECT groupId FROM resource_management WHERE kind=? AND id=?')
+      .all(kind, id)
+      .concat(
+        db
+          .prepare(
+            "SELECT groupId FROM resource_grants WHERE kind=? AND id=? AND groupId<>''",
+          )
+          .all(kind, id),
+      );
+    // A group audience includes every descendant, so a sibling-only share is insufficient.
+    const recipients = db
+      .prepare(
+        `WITH RECURSIVE branch(id) AS (SELECT id FROM groups WHERE id=? UNION SELECT g.id FROM groups g JOIN branch b ON g.parentId=b.id) SELECT id FROM branch`,
+      )
+      .all(groupId);
+    return (
+      recipients.length > 0 &&
+      recipients.every((r) =>
+        audience.some(
+          (g) => related(r.id, g.groupId) || related(g.groupId, r.id),
+        ),
+      )
+    );
+  }
+  const legacyCanViewAsset = (user, id) =>
     can(user, 'asset', id) ||
     !!db
       .prepare(
@@ -154,12 +239,37 @@ export function createAccounts(db) {
         LIMIT 1`,
       )
       .get({ assetId: id, userId: user?.id || '' });
+  const canViewAsset = (user, id) =>
+    legacyCanViewAsset(user, id) ||
+    db
+      .prepare(
+        "SELECT kind,id,body FROM records WHERE kind IN ('slide','playlist')",
+      )
+      .all()
+      .some((row) => {
+        if (!can(user, row.kind, row.id)) return false;
+        const record = JSON.parse(row.body);
+        const slides =
+          row.kind === 'slide'
+            ? [record]
+            : (record.published?.items || []).map((i) => i.slide);
+        return slides.some((slide) =>
+          slide?.layers.some(
+            (layer) =>
+              layer.type === 'image' &&
+              !layer.removedMedia &&
+              layer.assetId === id,
+          ),
+        );
+      });
   const scopedKinds = new Set([
     'slide',
     'playlist',
     'asset',
     'folder',
     'device',
+    'slide-folder',
+    'playlist-folder',
   ]);
   function allowed(kind, id) {
     const user = context.getStore()?.user;
@@ -176,6 +286,12 @@ export function createAccounts(db) {
         kind,
         id,
         '',
+        state.groupId,
+      );
+    if (result.changes && state?.groupId && libraryKinds.has(kind))
+      db.prepare('INSERT INTO resource_management VALUES (?,?,?)').run(
+        kind,
+        id,
         state.groupId,
       );
   }
@@ -652,6 +768,9 @@ export function createAccounts(db) {
     administrator,
     mount,
     can,
+    canEdit,
+    permission,
+    related,
     groupAdmin,
     groupCan,
     member,

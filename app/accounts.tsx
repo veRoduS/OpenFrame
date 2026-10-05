@@ -802,6 +802,8 @@ type UserResource = Resource & {
   owner: boolean;
   viaGroups: string[];
   effective: boolean;
+  permission?: 'view' | 'edit' | null;
+  directPermission?: 'view' | 'edit' | null;
   readOnly: boolean;
 };
 function UserAccessDialog({
@@ -1116,8 +1118,41 @@ function UserAccessDialog({
                                       : item.direct
                                         ? 'Direct access'
                                         : 'No access'}
+                              {account.role !== 'admin' &&
+                              item.permission &&
+                              ['slide', 'playlist'].includes(item.kind)
+                                ? ` (${item.permission === 'edit' ? 'Edit' : 'View'})`
+                                : ''}
                             </span>
                           </div>
+                          {item.direct &&
+                            ['slide', 'playlist'].includes(item.kind) && (
+                              <label>
+                                Direct permission
+                                <select
+                                  aria-label={`Direct permission for ${item.name}`}
+                                  disabled={
+                                    busy ||
+                                    account.role === 'admin' ||
+                                    !!account.disabled
+                                  }
+                                  value={item.directPermission || 'edit'}
+                                  onChange={(event) => {
+                                    const permission = event.target.value;
+                                    void change(async () => {
+                                      await api(
+                                        `/api/access/${item.kind}/${item.id}`,
+                                        'POST',
+                                        { userId: account.id, permission },
+                                      );
+                                    });
+                                  }}
+                                >
+                                  <option value="view">View</option>
+                                  <option value="edit">Edit</option>
+                                </select>
+                              </label>
+                            )}
                           <label className="direct-access-toggle">
                             <input
                               type="checkbox"

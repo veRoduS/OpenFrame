@@ -14,6 +14,7 @@ export function matchesLibraryFilter(
   filter: LibraryFilter,
   groups: Group[],
   status: string,
+  includeInherited = false,
 ) {
   return (
     item.name
@@ -23,7 +24,11 @@ export function matchesLibraryFilter(
     (!filter.group ||
       (filter.group === 'ungrouped'
         ? !item.groupIds?.length
-        : item.groupIds?.some((id) => isWithin(groups, id, filter.group))))
+        : item.groupIds?.some(
+            (id) =>
+              isWithin(groups, id, filter.group) ||
+              (includeInherited && isWithin(groups, filter.group, id)),
+          )))
   );
 }
 export function LibraryFilters({

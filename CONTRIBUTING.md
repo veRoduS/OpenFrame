@@ -50,6 +50,8 @@ After building, `node tests/accounts.browser.mjs` verifies user invitations, pas
 
 Account authorization, migration, direct media access, and screen assignment are covered by `tests/accounts.test.mjs` in the standard Node suite.
 
+After building, `node tests/library-access.browser.mjs` checks inherited View access, independent linked forks, speed/order controls, bulk tagging, folder moves, and the View/Edit sharing dialog at desktop and phone widths. Use the same Playwright settings as other browser checks. It uses an isolated local database and writes ignored screenshots under `work/`; it does not modify your library. Server access tests also cover managing groups, explicit Edit grants, publication propagation without publishing local drafts, revoked master access, and folders under read-only ancestors.
+
 After building, `node tests/editor-locks.browser.mjs` verifies eight-character login, separate image insertion/replacement, full locks, and movement-locked dimension edits for text, images, clocks, and counters in an isolated database. The accounts and editor-lock browser checks also accept `OPENFRAME_BROWSER_EXECUTABLE` for an installed Chromium executable.
 
 After building, `node tests/weather.browser.mjs` checks ZIP lookup, current/six-hour weather, local icons, resize handles, units, persistence, responsive layouts, and player weather updates without replacing the active frame. It starts an isolated database/server and injects fake NWS and ZIP responses; it never modifies your normal library or contacts those services. Use the same Playwright environment settings as the other browser tests.

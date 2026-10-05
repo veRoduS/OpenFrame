@@ -1,3 +1,5 @@
+import { composeFork, identifyEntries } from './playlist-forks.mjs';
+import { mountLibraryOrganization } from './library-organization.mjs';
 import { createStockCache, stockSymbols } from './stocks.mjs';
 import express from 'express';
 import { createAccounts } from './accounts.mjs';
@@ -57,6 +59,26 @@ export function createApp({
       .prepare('SELECT body FROM records WHERE kind=?')
       .all(kind)
       .map((r) => JSON.parse(r.body));
+  // Stable entry IDs are metadata only; existing player publications remain untouched.
+  for (const p of allRecords('playlist')) {
+    p.items = identifyEntries(p.items);
+    if (p.published && !p.publishedEntries)
+      p.publishedEntries = p.published.items.map((entry, index) => ({
+        id:
+          p.items[index]?.slideId === entry.slide.id
+            ? p.items[index].id
+            : randomUUID(),
+        slideId: entry.slide.id,
+        duration: entry.duration,
+        startsAt: entry.startsAt,
+        expiresAt: entry.expiresAt,
+        scheduleEnabled: entry.scheduleEnabled,
+      }));
+    db.prepare("UPDATE records SET body=? WHERE kind='playlist' AND id=?").run(
+      JSON.stringify(p),
+      p.id,
+    );
+  }
   const weather = createWeatherCache({ db, fetcher: weatherFetch });
   const zipLookup = createZipLookup({ fetcher: zipFetch });
   const list = (kind) =>
@@ -73,12 +95,67 @@ export function createApp({
     return r ? JSON.parse(r.body) : null;
   };
   const put = (kind, item) => {
+    if (kind === 'playlist' && item.fork) {
+      try {
+        item = {
+          ...item,
+          items: composeFork(
+            item,
+            allRecords('playlist').find((p) => p.id === item.fork.masterId),
+          ),
+        };
+      } catch (error) {
+        throw fail(409, error.message);
+      }
+    }
     const exists = db
       .prepare('SELECT 1 FROM records WHERE kind=? AND id=?')
       .get(kind, item.id);
     if (exists && !accounts.allowed(kind, item.id))
       throw fail(404, 'Not found');
     const state = accounts.context.getStore();
+    if (
+      exists &&
+      state?.user &&
+      ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind) &&
+      !accounts.canEdit(state.user, kind, item.id)
+    )
+      throw fail(403, 'Edit permission required');
+    if (
+      ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind) &&
+      item.managingGroupId !== undefined
+    ) {
+      const groupId = item.managingGroupId;
+      const changed =
+        !exists ||
+        groupId !==
+          (db
+            .prepare(
+              'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+            )
+            .get(kind, item.id)?.groupId || null);
+      if (
+        exists &&
+        state?.user &&
+        changed &&
+        !canShare(state.user, kind, item.id)
+      )
+        throw fail(
+          403,
+          'Only the managing group or admin can change management',
+        );
+      if (
+        groupId &&
+        (!db.prepare('SELECT id FROM groups WHERE id=?').get(groupId) ||
+          (changed &&
+            state?.user &&
+            state.user.role !== 'admin' &&
+            !db
+              .prepare('SELECT 1 FROM memberships WHERE userId=? AND groupId=?')
+              .get(state?.user?.id || '', groupId)))
+      )
+        throw fail(403, 'Direct membership in the managing group required');
+    }
     if (state && ['slide', 'playlist', 'device', 'asset'].includes(kind)) {
       const audiences = db
         .prepare(
@@ -88,7 +165,17 @@ export function createApp({
       const ownerId = db
         .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
         .get(kind, item.id)?.ownerId;
-      if (ownerId) audiences.push({ userId: ownerId, groupId: '' });
+      const managingGroup =
+        item.managingGroupId !== undefined
+          ? item.managingGroupId
+          : db
+              .prepare(
+                'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+              )
+              .get(kind, item.id)?.groupId;
+      if (managingGroup) audiences.push({ userId: '', groupId: managingGroup });
+      if (ownerId && !managingGroup)
+        audiences.push({ userId: ownerId, groupId: '' });
       if (!exists && state.groupId)
         audiences.push({ userId: '', groupId: state.groupId });
       for (const [childKind, childId] of dependencies(kind, item)) {
@@ -113,12 +200,36 @@ export function createApp({
         }
       }
     }
-    if (!exists) accounts.created(kind, item.id);
-    db.prepare('INSERT OR REPLACE INTO records VALUES (?,?,?)').run(
-      kind,
-      item.id,
-      JSON.stringify(item),
-    );
+    db.exec('SAVEPOINT resource_write');
+    try {
+      if (!exists) accounts.created(kind, item.id);
+      if (
+        ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(
+          kind,
+        ) &&
+        item.managingGroupId !== undefined
+      ) {
+        db.prepare('DELETE FROM resource_management WHERE kind=? AND id=?').run(
+          kind,
+          item.id,
+        );
+        if (item.managingGroupId)
+          db.prepare('INSERT INTO resource_management VALUES (?,?,?)').run(
+            kind,
+            item.id,
+            item.managingGroupId,
+          );
+      }
+      db.prepare('INSERT OR REPLACE INTO records VALUES (?,?,?)').run(
+        kind,
+        item.id,
+        JSON.stringify(item),
+      );
+      db.exec('RELEASE resource_write');
+    } catch (error) {
+      db.exec('ROLLBACK TO resource_write; RELEASE resource_write');
+      throw error;
+    }
     return item;
   };
   const remove = (kind, id) =>
@@ -127,6 +238,13 @@ export function createApp({
     const record = get(kind, id);
     if (!record) throw fail(404, 'Not found');
     return record;
+  };
+  const requireEditable = (kind, id) => {
+    const item = requireRecord(kind, id);
+    const user = accounts.context.getStore()?.user;
+    if (user && !accounts.canEdit(user, kind, id))
+      throw fail(403, 'Edit permission required');
+    return item;
   };
   const app = express();
   app.disable('x-powered-by');
@@ -288,15 +406,20 @@ export function createApp({
   const grants = (kind, id) =>
     db
       .prepare(
-        'SELECT userId,groupId FROM resource_grants WHERE kind=? AND id=?',
+        "SELECT g.userId,g.groupId,COALESCE(p.permission,'edit') AS permission FROM resource_grants g LEFT JOIN resource_permissions p USING(kind,id,userId,groupId) WHERE g.kind=? AND g.id=?",
       )
       .all(kind, id);
   function canShare(user, kind, id) {
     return (
       user.role === 'admin' ||
+      !!db
+        .prepare(
+          'SELECT 1 FROM resource_management r JOIN memberships m ON m.groupId=r.groupId WHERE r.kind=? AND r.id=? AND m.userId=?',
+        )
+        .get(kind, id, user.id) ||
       db
         .prepare(
-          'SELECT 1 FROM resource_access WHERE kind=? AND id=? AND ownerId=?',
+          'SELECT 1 FROM resource_access a WHERE kind=? AND id=? AND ownerId=? AND NOT EXISTS (SELECT 1 FROM resource_management m WHERE m.kind=a.kind AND m.id=a.id)',
         )
         .get(kind, id, user.id)
     );
@@ -317,6 +440,7 @@ export function createApp({
         .map((l) => ['asset', l.assetId]);
     if (kind === 'playlist')
       return [
+        ...(item.fork ? [['playlist', item.fork.masterId]] : []),
         ...item.items.map((i) => ['slide', i.slideId]),
         ...(item.published?.assets || []).map((a) => ['asset', a.id]),
       ];
@@ -335,7 +459,7 @@ export function createApp({
     if (!exists && !canShare(user, kind, id))
       throw fail(
         403,
-        'Only the owner or admin can share this item and its contents',
+        'Only the managing group, personal owner, or admin can share this item and its contents',
       );
     if (!exists)
       db.prepare('INSERT INTO resource_grants VALUES (?,?,?,?)').run(
@@ -344,10 +468,36 @@ export function createApp({
         target.userId,
         target.groupId,
       );
+    if (target.permission)
+      db.prepare(
+        'INSERT OR REPLACE INTO resource_permissions VALUES (?,?,?,?,?)',
+      ).run(
+        kind,
+        id,
+        target.userId,
+        target.groupId,
+        ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind)
+          ? target.permission
+          : 'edit',
+      );
     for (const [childKind, childId] of dependencies(kind, item)) {
       // Embedded media stays owned and editable only by its media audience.
       if (childKind === 'asset' && kind !== 'folder') continue;
-      grantTree(user, childKind, childId, target, visited);
+      const alreadyVisible = target.userId
+        ? accounts.can(
+            db.prepare('SELECT * FROM users WHERE id=?').get(target.userId),
+            childKind,
+            childId,
+          )
+        : accounts.groupCan(target.groupId, childKind, childId);
+      if (!alreadyVisible)
+        grantTree(
+          user,
+          childKind,
+          childId,
+          { ...target, permission: 'view' },
+          visited,
+        );
     }
   }
   app.get('/api/users/:id/access', administrator, (req, res) => {
@@ -361,14 +511,40 @@ export function createApp({
           const audience = grants(kind, item.id);
           const direct = audience.some((grant) => grant.userId === user.id);
           const owner =
+            !db
+              .prepare(
+                'SELECT 1 FROM resource_management WHERE kind=? AND id=?',
+              )
+              .get(kind, item.id) &&
             db
               .prepare(
                 'SELECT ownerId FROM resource_access WHERE kind=? AND id=?',
               )
               .get(kind, item.id)?.ownerId === user.id;
+          const managingGroup = db
+            .prepare(
+              'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+            )
+            .get(kind, item.id)?.groupId;
+          if (
+            managingGroup &&
+            !audience.some((g) => g.groupId === managingGroup)
+          )
+            audience.push({ groupId: managingGroup, userId: '' });
           const viaGroups = audience
             .filter(
-              (grant) => grant.groupId && accounts.member(user, grant.groupId),
+              (grant) =>
+                grant.groupId &&
+                (['slide', 'playlist'].includes(kind)
+                  ? db
+                      .prepare('SELECT groupId FROM memberships WHERE userId=?')
+                      .all(user.id)
+                      .some(
+                        (m) =>
+                          accounts.related(m.groupId, grant.groupId) ||
+                          accounts.related(grant.groupId, m.groupId),
+                      )
+                  : accounts.member(user, grant.groupId)),
             )
             .map(
               (grant) =>
@@ -382,13 +558,18 @@ export function createApp({
             id: item.id,
             name: item.name,
             direct,
+            directPermission:
+              audience.find((grant) => grant.userId === user.id)?.permission ||
+              null,
             owner,
             viaGroups,
             effective: accounts.can(user, kind, item.id),
+            permission: accounts.permission(user, kind, item.id),
             readOnly:
-              kind === 'asset' &&
-              !accounts.can(user, kind, item.id) &&
-              !!accounts.canViewAsset(user, item.id),
+              accounts.permission(user, kind, item.id) === 'view' ||
+              (kind === 'asset' &&
+                !accounts.can(user, kind, item.id) &&
+                !!accounts.canViewAsset(user, item.id)),
           };
         }),
       ),
@@ -396,23 +577,50 @@ export function createApp({
   });
   app.get('/api/access/:kind/:id', admin, (req, res) => {
     const { kind, id } = req.params;
-    if (!['slide', 'asset', 'playlist', 'folder', 'device'].includes(kind))
+    if (
+      ![
+        'slide',
+        'asset',
+        'playlist',
+        'folder',
+        'device',
+        'slide-folder',
+        'playlist-folder',
+      ].includes(kind)
+    )
       throw fail(400, 'Invalid resource');
     requireRecord(kind, id);
     res.json({
       canShare: !!canShare(req.user, kind, id),
       grants: grants(kind, id),
+      managingGroupId:
+        db
+          .prepare(
+            'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+          )
+          .get(kind, id)?.groupId || null,
     });
   });
   app.post('/api/access/:kind/:id', admin, (req, res) => {
     const { kind, id } = req.params;
-    if (!['slide', 'asset', 'playlist', 'folder', 'device'].includes(kind))
+    if (
+      ![
+        'slide',
+        'asset',
+        'playlist',
+        'folder',
+        'device',
+        'slide-folder',
+        'playlist-folder',
+      ].includes(kind)
+    )
       throw fail(400, 'Invalid resource');
     const target = z
       .object({
         userId: z.string().default(''),
         groupId: z.string().default(''),
         remove: z.boolean().default(false),
+        permission: z.enum(['view', 'edit']).default('view'),
       })
       .parse(req.body);
     if (!!target.userId === !!target.groupId)
@@ -438,11 +646,14 @@ export function createApp({
       throw fail(403, 'Join the group before sharing');
     db.exec('BEGIN IMMEDIATE');
     try {
-      if (target.remove)
+      if (target.remove) {
         db.prepare(
           'DELETE FROM resource_grants WHERE kind=? AND id=? AND userId=? AND groupId=?',
         ).run(kind, id, target.userId, target.groupId);
-      else grantTree(req.user, kind, id, target);
+        db.prepare(
+          'DELETE FROM resource_permissions WHERE kind=? AND id=? AND userId=? AND groupId=?',
+        ).run(kind, id, target.userId, target.groupId);
+      } else grantTree(req.user, kind, id, target);
       db.exec('COMMIT');
     } catch (error) {
       db.exec('ROLLBACK');
@@ -450,6 +661,61 @@ export function createApp({
     }
     res.json({ ok: true });
   });
+  app.put('/api/access/:kind/:id/management', admin, (req, res) => {
+    const { kind, id } = req.params;
+    if (
+      !['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind)
+    )
+      throw fail(400, 'Invalid resource');
+    const item = requireEditable(kind, id);
+    const { groupId } = z
+      .object({ groupId: z.uuid().nullable() })
+      .parse(req.body);
+    put(kind, { ...item, managingGroupId: groupId });
+    res.json({ ok: true });
+  });
+  const organization = mountLibraryOrganization(app, {
+    db,
+    admin,
+    accounts,
+    allRecords,
+    put,
+    remove,
+    requireEditable,
+  });
+  const publicResource = (kind, item) => ({
+    ...item,
+    folderId: item.folderId || null,
+    tags: item.tags || [],
+    readOnly: !accounts.canEdit(
+      accounts.context.getStore()?.user,
+      kind,
+      item.id,
+    ),
+    managingGroupId:
+      db
+        .prepare(
+          'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+        )
+        .get(kind, item.id)?.groupId || null,
+  });
+  function resolvedPlaylist(p) {
+    if (!p.fork) return p;
+    try {
+      const result = {
+        ...p,
+        items: composeFork(
+          p,
+          allRecords('playlist').find(
+            (master) => master.id === p.fork.masterId,
+          ),
+        ),
+      };
+      return result;
+    } catch (error) {
+      return { ...p, forkSyncError: error.message };
+    }
+  }
   app.get('/api/library', admin, (req, res) => {
     const groups = db
       .prepare(
@@ -458,14 +724,40 @@ export function createApp({
       .all()
       .filter(
         (group) =>
-          req.user.role === 'admin' || accounts.member(req.user, group.id),
+          req.user.role === 'admin' ||
+          db
+            .prepare('SELECT groupId FROM memberships WHERE userId=?')
+            .all(req.user.id)
+            .some(
+              (m) =>
+                accounts.related(m.groupId, group.id) ||
+                accounts.related(group.id, m.groupId),
+            ),
       );
+    for (const group of groups)
+      group.directMember = !!db
+        .prepare('SELECT 1 FROM memberships WHERE groupId=? AND userId=?')
+        .get(group.id, req.user.id);
     const visibleGroups = new Set(groups.map((group) => group.id));
     const withGroups = (kind, item) => {
       const audience = grants(kind, item.id);
       const sharedGroups = audience.filter((grant) => grant.groupId);
+      const manager = db
+        .prepare(
+          'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+        )
+        .get(kind, item.id)?.groupId;
+      if (manager && !sharedGroups.some((g) => g.groupId === manager))
+        sharedGroups.push({ groupId: manager, userId: '', permission: 'edit' });
       return {
         ...item,
+        readOnly: !accounts.canEdit(req.user, kind, item.id),
+        managingGroupId:
+          db
+            .prepare(
+              'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+            )
+            .get(kind, item.id)?.groupId || null,
         groupIds: sharedGroups
           .map((grant) => grant.groupId)
           .filter((id) => visibleGroups.has(id)),
@@ -508,15 +800,28 @@ export function createApp({
     };
     res.json({
       groups,
-      slides: list('slide').map((item) => withGroups('slide', item)),
-      playlists: list('playlist').map(({ published, ...p }) => ({
-        ...withGroups('playlist', p),
-        publishedAt: published?.publishedAt || null,
-        publishedSlideIds:
-          published?.items
-            ?.map((item) => item.slide?.id ?? item.slideId)
-            .filter(Boolean) || [],
-      })),
+      slides: list('slide').map((item) =>
+        withGroups('slide', publicResource('slide', item)),
+      ),
+      slideFolders: organization.visibleFolders('slide', req.user),
+      playlistFolders: organization.visibleFolders('playlist', req.user),
+      playlists: list('playlist')
+        .map(resolvedPlaylist)
+        .map(
+          ({
+            published,
+            publishedEntries: _entries,
+            publishedForkState: _forkState,
+            ...p
+          }) => ({
+            ...withGroups('playlist', publicResource('playlist', p)),
+            publishedAt: published?.publishedAt || null,
+            publishedSlideIds:
+              published?.items
+                ?.map((item) => item.slide?.id ?? item.slideId)
+                .filter(Boolean) || [],
+          }),
+        ),
       assets: allRecords('asset')
         .filter((asset) => accounts.canViewAsset(req.user, asset.id))
         .map((asset) => ({
@@ -551,19 +856,35 @@ export function createApp({
   }
   app.post('/api/slides', admin, (req, res) => {
     const slide = slideSchema.parse(req.body);
+    organization.validateFolder('slide', slide.folderId, req.user);
     checkImages(slide, req.user);
     checkFonts(slide);
     res.status(201).json(
-      put('slide', {
-        ...slide,
-        id: randomUUID(),
-        updatedAt: new Date().toISOString(),
-      }),
+      publicResource(
+        'slide',
+        put('slide', {
+          ...slide,
+          id: randomUUID(),
+          updatedAt: new Date().toISOString(),
+        }),
+      ),
     );
   });
   app.put('/api/slides/:id', admin, (req, res) => {
-    requireRecord('slide', req.params.id);
-    const slide = slideSchema.parse(req.body);
+    const previous = requireEditable('slide', req.params.id);
+    const slide = slideSchema.parse({
+      ...req.body,
+      folderId:
+        req.body.folderId === undefined
+          ? previous.folderId || null
+          : req.body.folderId,
+      tags: req.body.tags === undefined ? previous.tags || [] : req.body.tags,
+      managingGroupId:
+        req.body.managingGroupId === undefined
+          ? previous.managingGroupId
+          : req.body.managingGroupId,
+    });
+    organization.validateFolder('slide', slide.folderId, req.user);
     checkImages(slide, req.user);
     checkFonts(slide);
     const saved = put('slide', {
@@ -572,10 +893,10 @@ export function createApp({
       updatedAt: new Date().toISOString(),
     });
     refreshPublishedSlide(saved);
-    res.json(saved);
+    res.json(publicResource('slide', saved));
   });
   app.delete('/api/slides/:id', admin, (req, res) => {
-    requireRecord('slide', req.params.id);
+    requireEditable('slide', req.params.id);
     if (
       allRecords('playlist').some((p) =>
         p.items.some((i) => i.slideId === req.params.id),
@@ -585,19 +906,86 @@ export function createApp({
     remove('slide', req.params.id);
     res.json({ ok: true });
   });
-  function validatePlaylist(body) {
-    const p = playlistSchema.parse(body);
+  function validatePlaylist(body, previous = null, allowFork = false) {
+    const p = playlistSchema.parse({
+      ...body,
+      ...(previous && body.folderId === undefined
+        ? { folderId: previous.folderId || null }
+        : {}),
+      ...(previous && body.tags === undefined
+        ? { tags: previous.tags || [] }
+        : {}),
+    });
+    organization.validateFolder(
+      'playlist',
+      p.folderId,
+      accounts.context.getStore()?.user,
+    );
+    if (
+      (p.fork && !previous?.fork && !allowFork) ||
+      (previous?.fork &&
+        (!p.fork || p.fork.masterId !== previous.fork.masterId))
+    )
+      throw fail(
+        400,
+        'Use Fork playlist to create a linked fork; its master cannot be changed',
+      );
+    try {
+      p.items = identifyEntries(p.items, previous?.items || []);
+    } catch (error) {
+      throw fail(400, error.message);
+    }
+    if (p.fork) {
+      const master = requireRecord('playlist', p.fork.masterId);
+      const sources = new Set((master.publishedEntries || []).map((i) => i.id));
+      for (const item of p.items)
+        if (!item.sourceEntryId && sources.has(item.id))
+          throw fail(400, 'Local entry IDs cannot replace inherited entries');
+      for (const item of p.items)
+        if (
+          item.sourceEntryId &&
+          (item.id !== item.sourceEntryId || !sources.has(item.sourceEntryId))
+        )
+          throw fail(
+            400,
+            'An inherited entry is no longer in the master; reload this playlist',
+          );
+      let anchor = null;
+      p.items = p.items.map((item) => {
+        if (item.sourceEntryId) {
+          anchor = item.sourceEntryId;
+          return item;
+        }
+        return { ...item, afterEntryId: anchor };
+      });
+      try {
+        p.items = composeFork(p, master);
+      } catch (error) {
+        throw fail(400, error.message);
+      }
+    } else if (p.items.some((i) => i.sourceEntryId))
+      throw fail(400, 'Only forks can contain inherited entries');
     p.items.forEach((i) => requireRecord('slide', i.slideId));
     return p;
   }
   function playlistShareChanges(user, playlistId, candidate) {
+    const manager =
+      candidate.managingGroupId !== undefined
+        ? candidate.managingGroupId
+        : playlistId
+          ? db
+              .prepare(
+                'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
+              )
+              .get('playlist', playlistId)?.groupId
+          : null;
     const targets = [];
     const playlistOwner = playlistId
       ? db
           .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
           .get('playlist', playlistId)?.ownerId
       : user.id;
-    if (playlistOwner)
+    if (playlistOwner && !manager)
       targets.push({
         userId: playlistOwner,
         groupId: '',
@@ -619,6 +1007,22 @@ export function createApp({
       }
     }
     const resources = new Map();
+    if (candidate.fork) {
+      const master = requireRecord('playlist', candidate.fork.masterId);
+      resources.set(`playlist:${master.id}`, {
+        kind: 'playlist',
+        id: master.id,
+        name: master.name,
+      });
+    }
+    if (manager && !targets.some((t) => t.groupId === manager))
+      targets.push({
+        userId: '',
+        groupId: manager,
+        label:
+          db.prepare('SELECT name FROM groups WHERE id=?').get(manager)?.name ||
+          'Managing group',
+      });
     for (const { slideId } of candidate.items) {
       const slide = requireRecord('slide', slideId);
       resources.set(`slide:${slide.id}`, {
@@ -634,11 +1038,7 @@ export function createApp({
         );
         if (!asset || !accounts.canViewAsset(user, asset.id))
           throw fail(404, 'Referenced media not found');
-        resources.set(`asset:${asset.id}`, {
-          kind: 'asset',
-          id: asset.id,
-          name: asset.name,
-        });
+        // Slide visibility supplies read-only media access; do not request media editing grants.
       }
     }
     const changes = [];
@@ -664,26 +1064,25 @@ export function createApp({
     return changes;
   }
   function canShareResource(user, kind, id) {
-    return (
-      user.role === 'admin' ||
-      !!db
-        .prepare(
-          'SELECT 1 FROM resource_access WHERE kind=? AND id=? AND ownerId=?',
-        )
-        .get(kind, id, user.id)
-    );
+    return canShare(user, kind, id);
   }
   app.post('/api/playlists/:id/share-plan', admin, (req, res) => {
     const playlistId = req.params.id === 'new' ? '' : req.params.id;
-    if (playlistId) requireRecord('playlist', playlistId);
-    const candidate = validatePlaylist(req.body);
+    if (playlistId) requireEditable('playlist', playlistId);
+    const candidate = validatePlaylist(
+      req.body,
+      req.params.id && req.params.id !== 'new'
+        ? get('playlist', req.params.id)
+        : null,
+    );
     res.json(playlistShareChanges(req.user, playlistId, candidate));
   });
   app.post('/api/playlists/:id/share-apply', admin, (req, res) => {
+    if (req.params.id !== 'new') requireEditable('playlist', req.params.id);
     const changes = z
       .array(
         z.object({
-          kind: z.enum(['slide', 'asset']),
+          kind: z.enum(['slide', 'asset', 'playlist']),
           id: z.string(),
           target: z.object({ userId: z.string(), groupId: z.string() }),
         }),
@@ -722,6 +1121,15 @@ export function createApp({
           change.target.userId,
           change.target.groupId,
         );
+        db.prepare(
+          'INSERT OR REPLACE INTO resource_permissions VALUES (?,?,?,?,?)',
+        ).run(
+          change.kind,
+          change.id,
+          change.target.userId,
+          change.target.groupId,
+          change.kind === 'asset' ? 'edit' : 'view',
+        );
       }
       db.exec('COMMIT');
     } catch (error) {
@@ -732,30 +1140,162 @@ export function createApp({
   });
   app.post('/api/playlists', admin, (req, res) =>
     res.status(201).json(
-      put('playlist', {
-        ...validatePlaylist(req.body),
-        id: randomUUID(),
-        updatedAt: new Date().toISOString(),
-      }),
+      publicResource(
+        'playlist',
+        put('playlist', {
+          ...validatePlaylist(
+            req.body,
+            req.params.id && req.params.id !== 'new'
+              ? get('playlist', req.params.id)
+              : null,
+          ),
+          id: randomUUID(),
+          updatedAt: new Date().toISOString(),
+        }),
+      ),
     ),
   );
   app.put('/api/playlists/:id', admin, (req, res) => {
-    const p = requireRecord('playlist', req.params.id);
+    const p = requireEditable('playlist', req.params.id);
     res.json(
-      put('playlist', {
-        ...p,
-        ...validatePlaylist(req.body),
-        updatedAt: new Date().toISOString(),
-      }),
+      publicResource(
+        'playlist',
+        put('playlist', {
+          ...p,
+          ...validatePlaylist(
+            req.body,
+            req.params.id && req.params.id !== 'new'
+              ? get('playlist', req.params.id)
+              : null,
+          ),
+          updatedAt: new Date().toISOString(),
+        }),
+      ),
     );
   });
   app.delete('/api/playlists/:id', admin, (req, res) => {
-    requireRecord('playlist', req.params.id);
+    requireEditable('playlist', req.params.id);
+    if (allRecords('playlist').some((p) => p.fork?.masterId === req.params.id))
+      throw fail(
+        409,
+        'This playlist has linked forks; delete those forks first',
+      );
     if (allRecords('device').some((d) => d.playlistId === req.params.id))
       throw fail(409, 'Unassign this playlist from devices first');
     remove('playlist', req.params.id);
     res.json({ ok: true });
   });
+  app.post('/api/playlists/:id/fork', admin, (req, res) => {
+    const master = requireRecord('playlist', req.params.id);
+    if (!master.published)
+      throw fail(400, 'Publish the master before creating a fork');
+    let ancestor = master;
+    let depth = 0;
+    while (ancestor?.fork) {
+      if (++depth >= 8)
+        throw fail(400, 'Fork nesting is limited to eight levels');
+      ancestor = allRecords('playlist').find(
+        (p) => p.id === ancestor.fork.masterId,
+      );
+    }
+    const input = z
+      .object({
+        name: z.string().trim().min(1).max(100),
+        managingGroupId: z.uuid().nullable().optional(),
+      })
+      .parse(req.body);
+    const candidate = validatePlaylist(
+      {
+        ...input,
+        items: [],
+        fork: { masterId: master.id, order: 'master', speed: 1 },
+      },
+      null,
+      true,
+    );
+    const fork = put('playlist', {
+      ...candidate,
+      id: randomUUID(),
+      updatedAt: new Date().toISOString(),
+    });
+    res.status(201).json(publicResource('playlist', fork));
+  });
+  function checkPublicationRecipients(playlist, items = playlist.items) {
+    const recipients = grants('playlist', playlist.id);
+    const management = db
+      .prepare('SELECT groupId FROM resource_management WHERE kind=? AND id=?')
+      .get('playlist', playlist.id)?.groupId;
+    if (management) recipients.push({ userId: '', groupId: management });
+    else {
+      const owner = db
+        .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
+        .get('playlist', playlist.id)?.ownerId;
+      if (owner) recipients.push({ userId: owner, groupId: '' });
+    }
+    for (const audience of recipients) {
+      const visible = (kind, id) =>
+        audience.userId
+          ? accounts.can(
+              db.prepare('SELECT * FROM users WHERE id=?').get(audience.userId),
+              kind,
+              id,
+            )
+          : accounts.groupCan(audience.groupId, kind, id);
+      if (playlist.fork && !visible('playlist', playlist.fork.masterId))
+        throw new Error(
+          'Viewing access to the master is required for every fork recipient',
+        );
+      for (const item of items)
+        if (!visible('slide', item.slideId || item.slide.id))
+          throw new Error(
+            'Viewing access to every slide is required for every playlist recipient',
+          );
+    }
+  }
+  function propagateForks(masterId, visited = new Set()) {
+    if (visited.has(masterId)) return;
+    visited.add(masterId);
+    for (const fork of allRecords('playlist').filter(
+      (p) => p.fork?.masterId === masterId && p.publishedForkState,
+    )) {
+      try {
+        const candidate = resolvedPlaylist({
+          ...fork,
+          ...fork.publishedForkState,
+        });
+        delete candidate.forkSyncError;
+        candidate.items = composeFork(
+          candidate,
+          allRecords('playlist').find((p) => p.id === masterId),
+        );
+        checkPublicationRecipients(candidate);
+        const published = accounts.context.run(undefined, () =>
+          snapshot(candidate),
+        );
+        fork.published = published;
+        fork.publishedEntries = candidate.items.map((i) => ({
+          ...i,
+          duration: Math.max(
+            2,
+            Math.min(
+              3600,
+              Math.round(i.duration / (candidate.fork.speed || 1)),
+            ),
+          ),
+        }));
+        delete fork.forkSyncError;
+        db.prepare(
+          "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
+        ).run(JSON.stringify(fork), fork.id);
+        propagateForks(fork.id, visited);
+      } catch (error) {
+        fork.forkSyncError = error.message;
+        db.prepare(
+          "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
+        ).run(JSON.stringify(fork), fork.id);
+      }
+    }
+  }
   function playlistAssets(items) {
     const imageIds = new Set(
       items.flatMap((item) =>
@@ -790,14 +1330,52 @@ export function createApp({
     }
     return assets;
   }
+  function manifestSlide(slide) {
+    const {
+      folderId: _folderId,
+      tags: _tags,
+      managingGroupId: _management,
+      ...content
+    } = slide;
+    return content;
+  }
   function snapshot(p) {
+    if (p.fork) {
+      requireRecord('playlist', p.fork.masterId);
+      try {
+        p = {
+          ...p,
+          items: composeFork(
+            p,
+            allRecords('playlist').find((m) => m.id === p.fork.masterId),
+          ),
+        };
+      } catch (error) {
+        throw fail(409, error.message);
+      }
+      p.items.forEach((i) => requireRecord('slide', i.slideId));
+    }
+    const master = p.fork
+      ? allRecords('playlist').find((m) => m.id === p.fork.masterId)
+      : null;
     const items = p.items.map((item) => ({
-      duration: item.duration,
+      duration: Math.max(
+        2,
+        Math.min(3600, Math.round(item.duration / (p.fork?.speed || 1))),
+      ),
       startsAt: item.scheduleEnabled === false ? null : (item.startsAt ?? null),
       scheduleEnabled: item.scheduleEnabled,
       expiresAt:
         item.scheduleEnabled === false ? null : (item.expiresAt ?? null),
-      slide: requireRecord('slide', item.slideId),
+      slide: manifestSlide(
+        item.sourceEntryId
+          ? master.published.items[
+              master.publishedEntries.findIndex(
+                (e) => e.id === item.sourceEntryId,
+              )
+            ].slide
+          : requireRecord('slide', item.slideId),
+      ),
     }));
     return {
       schemaVersion: items.some((item) =>
@@ -826,8 +1404,21 @@ export function createApp({
       const published = playlist.published;
       if (!published?.items?.some((item) => item.slide?.id === slide.id))
         continue;
+      try {
+        checkPublicationRecipients(playlist, published.items);
+      } catch (error) {
+        if (playlist.fork) {
+          playlist.forkSyncError = error.message;
+          db.prepare(
+            "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
+          ).run(JSON.stringify(playlist), playlist.id);
+        }
+        continue;
+      }
       const items = published.items.map((item) =>
-        item.slide?.id === slide.id ? { ...item, slide } : item,
+        item.slide?.id === slide.id
+          ? { ...item, slide: manifestSlide(slide) }
+          : item,
       );
       playlist.published = {
         ...published,
@@ -842,11 +1433,30 @@ export function createApp({
     }
   }
   app.post('/api/playlists/:id/publish', admin, (req, res) => {
-    const p = requireRecord('playlist', req.params.id);
+    const p = requireEditable('playlist', req.params.id);
+    p.items = resolvedPlaylist(p).items;
     if (!p.items.length)
       throw fail(400, 'Add at least one slide before publishing');
     p.published = snapshot(p);
+    delete p.forkSyncError;
+    p.publishedEntries = p.items.map((i) => ({
+      ...i,
+      duration: Math.max(
+        2,
+        Math.min(3600, Math.round(i.duration / (p.fork?.speed || 1))),
+      ),
+    }));
+    if (p.fork)
+      p.publishedForkState = {
+        name: p.name,
+        transition: structuredClone(
+          p.transition || { type: 'cut', durationMs: 500 },
+        ),
+        fork: structuredClone(p.fork),
+        items: structuredClone(p.items),
+      };
     put('playlist', p);
+    propagateForks(p.id);
     res.json({ publishedAt: p.published.publishedAt });
   });
   app.get('/api/preview/:id', admin, (req, res) => {

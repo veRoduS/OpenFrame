@@ -132,17 +132,20 @@ export const layerSchema = z
   .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather')
   .refine((l) => l.type !== 'shape' || !!l.shape, 'Configure the shape')
   .refine((l) => l.type !== 'stocks' || !!l.stocks, 'Configure stock symbols');
+export const tagsSchema = z
+  .array(z.string().trim().min(1).max(40))
+  .max(30)
+  .transform((tags) => [...new Set(tags.map((tag) => tag.toLowerCase()))]);
 export const slideSchema = z.object({
+  folderId: id.nullable().default(null),
+  tags: tagsSchema.default([]),
+  managingGroupId: id.nullable().optional(),
   name: z.string().trim().min(1).max(100),
   width: z.number().int().min(320).max(3840),
   height: z.number().int().min(320).max(3840),
   background: color.default('#ffffff'),
   layers: z.array(layerSchema).max(50),
 });
-export const tagsSchema = z
-  .array(z.string().trim().min(1).max(40))
-  .max(30)
-  .transform((tags) => [...new Set(tags.map((tag) => tag.toLowerCase()))]);
 export const folderSchema = z.object({
   name: z.string().trim().min(1).max(80),
   parentId: id.nullable().default(null),
@@ -168,6 +171,17 @@ export const assetBatchSchema = z
   })
   .strict();
 export const playlistSchema = z.object({
+  folderId: id.nullable().default(null),
+  tags: tagsSchema.default([]),
+  managingGroupId: id.nullable().optional(),
+  fork: z
+    .object({
+      masterId: id,
+      order: z.enum(['master', 'custom']).default('master'),
+      speed: z.number().min(0.1).max(10).default(1),
+    })
+    .nullable()
+    .optional(),
   name: z.string().trim().min(1).max(100),
   transition: z
     .object({
@@ -185,6 +199,10 @@ export const playlistSchema = z.object({
     .array(
       z
         .object({
+          id: id.optional(),
+          sourceEntryId: id.optional(),
+          afterEntryId: id.nullable().optional(),
+          durationOverride: z.boolean().optional(),
           slideId: id,
           duration: z.number().int().min(2).max(3600),
           startsAt: z.iso.datetime({ offset: true }).nullable().optional(),
