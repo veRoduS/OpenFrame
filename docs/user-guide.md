@@ -48,6 +48,8 @@ Every fork recipient must be able to view its master and all included slides. If
 
 ## Slide properties
 
+The add controls in the Layers panel have two groups: **Content** for text, images, rectangles, and circles; and **Widgets** for clocks, weather, counters, and stock trackers. Hover over an icon to see its name.
+
 Select a layer to edit it in the right sidebar. On phones, use **Canvas**, **Layers**, and **Properties** below the preview. Properties scroll independently while the canvas stays visible; Canvas expands the preview. The slide name and save status have their own header row. Controls are grouped into Content, Source image, or Widget settings; Position & size; Typography or Image display; and Arrange. Related numeric fields sit side by side. Expand **Crop adjustments** under Image display to reveal image zoom, focal position, and crop reset controls.
 
 The **Layer lock** selector stays at the top. **Full Lock** disables movement and editing; choose Unlocked to edit again. **Lock movement** keeps X and Y fixed while allowing text, image, and widget settings to change. Use **Replace image** to choose a different image while keeping the layer's frame and position; replacement resets its crop.

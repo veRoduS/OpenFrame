@@ -2297,42 +2297,68 @@ function Editor({
             Layers <span>{slide.layers.length}</span>
           </h2>
           <div className="insert-tools">
-            <IconButton label="Add text" onClick={() => add('text')}>
-              <Type size={20} />
-            </IconButton>
-            <IconButton label="Add stock tracker" onClick={() => add('stocks')}>
-              <TrendingUp size={20} />
-            </IconButton>
-            <IconButton
-              label="Add rectangle"
-              onClick={() => add('shape', undefined, 'rectangle')}
+            <section
+              className="insert-tool-group"
+              aria-labelledby="insert-content-heading"
             >
-              <Square size={20} />
-            </IconButton>
-            <IconButton
-              label="Add circle"
-              onClick={() => add('shape', undefined, 'circle')}
+              <h3 className="insert-tool-heading" id="insert-content-heading">
+                Content
+              </h3>
+              <div className="insert-tool-buttons">
+                <IconButton label="Add text" onClick={() => add('text')}>
+                  <Type size={20} />
+                </IconButton>
+                <IconButton label="Add image" onClick={() => setMedia('add')}>
+                  <ImagePlus size={20} />
+                </IconButton>
+                <IconButton
+                  label="Add rectangle"
+                  onClick={() => add('shape', undefined, 'rectangle')}
+                >
+                  <Square size={20} />
+                </IconButton>
+                <IconButton
+                  label="Add circle"
+                  onClick={() => add('shape', undefined, 'circle')}
+                >
+                  <Circle size={20} />
+                </IconButton>
+              </div>
+            </section>
+            <section
+              className="insert-tool-group"
+              aria-labelledby="insert-widgets-heading"
             >
-              <Circle size={20} />
-            </IconButton>
-            <IconButton label="Add image" onClick={() => setMedia('add')}>
-              <ImagePlus size={20} />
-            </IconButton>
-            <IconButton label="Add clock widget" onClick={() => add('clock')}>
-              <Clock size={20} />
-            </IconButton>
-            <IconButton
-              label="Add weather widget"
-              onClick={() => add('weather')}
-            >
-              <CloudSun size={20} />
-            </IconButton>
-            <IconButton
-              label="Add counter widget"
-              onClick={() => add('counter')}
-            >
-              <Timer size={20} />
-            </IconButton>
+              <h3 className="insert-tool-heading" id="insert-widgets-heading">
+                Widgets
+              </h3>
+              <div className="insert-tool-buttons">
+                <IconButton
+                  label="Add clock widget"
+                  onClick={() => add('clock')}
+                >
+                  <Clock size={20} />
+                </IconButton>
+                <IconButton
+                  label="Add weather widget"
+                  onClick={() => add('weather')}
+                >
+                  <CloudSun size={20} />
+                </IconButton>
+                <IconButton
+                  label="Add counter widget"
+                  onClick={() => add('counter')}
+                >
+                  <Timer size={20} />
+                </IconButton>
+                <IconButton
+                  label="Add stock tracker"
+                  onClick={() => add('stocks')}
+                >
+                  <TrendingUp size={20} />
+                </IconButton>
+              </div>
+            </section>
           </div>
           <div className="layer-list">
             {[...slide.layers].reverse().map((layer, i) => (

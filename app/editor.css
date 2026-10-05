@@ -3,6 +3,48 @@
   display: none;
 }
 
+.slide-editor .insert-tools {
+  display: grid;
+  gap: 12px;
+}
+
+.insert-tool-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.insert-tool-group + .insert-tool-group {
+  padding-top: 12px;
+  border-top: 1px solid #e8ece9;
+}
+
+.insert-tool-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--of-text-muted);
+}
+
+.insert-tool-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.slide-editor .insert-tool-buttons button {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 8px;
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .insert-tool-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 767px) {
   .slide-editor .editor-header {
     display: grid;
