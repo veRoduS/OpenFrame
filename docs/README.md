@@ -34,3 +34,5 @@
 - [Server changelog](../CHANGELOG.md) and [player changelog](../player/CHANGELOG.md): independent development histories.
 - [Roadmap and limitations](roadmap.md): current scope and outstanding validation.
 - [Validation record](validation.md): dated checks for the local release-preparation revision.
+
+- [Data feeds API handoff](data-feeds-api.md) — external updates, scoped tokens, schemas, examples, and [OpenAPI contract](../server/data-feeds.openapi.json).

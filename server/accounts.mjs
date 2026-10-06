@@ -76,7 +76,7 @@ export function createAccounts(db) {
   // The legacy password is migrated once; legacy sessions cannot identify a user.
   db.exec("DELETE FROM settings WHERE key='password'; DELETE FROM sessions;");
   db.exec(
-    "INSERT OR IGNORE INTO resource_access(kind,id,ownerId) SELECT kind,id,NULL FROM records WHERE kind IN ('slide','playlist','asset','folder','device')",
+    "INSERT OR IGNORE INTO resource_access(kind,id,ownerId) SELECT kind,id,NULL FROM records WHERE kind IN ('slide','playlist','asset','folder','device','data-feed')",
   );
   const context = new AsyncLocalStorage();
   const userById = (id) => db.prepare('SELECT * FROM users WHERE id=?').get(id);
@@ -125,6 +125,7 @@ export function createAccounts(db) {
     'playlist',
     'slide-folder',
     'playlist-folder',
+    'data-feed',
   ]);
   function related(a, b) {
     return !!db
@@ -270,6 +271,7 @@ export function createAccounts(db) {
     'device',
     'slide-folder',
     'playlist-folder',
+    'data-feed',
   ]);
   function allowed(kind, id) {
     const user = context.getStore()?.user;

@@ -136,7 +136,15 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
       } else {
         const content = document.createElement('span');
         box.append(content);
-        const layout = () => layoutText(box, content, layer, scale);
+        if (layer.type === 'data')
+          Object.assign(content.style, {
+            display: 'block',
+            width: '100%',
+            height: '100%',
+          });
+        const layout = () => {
+          if (layer.type !== 'data') layoutText(box, content, layer, scale);
+        };
         layouts.push(layout);
         if (layer.type === 'text') content.textContent = layer.text;
         else {

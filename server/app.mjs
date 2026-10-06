@@ -1,3 +1,4 @@
+import { mountDataFeeds, feedMetadata, feedIds } from './data-feeds.mjs';
 import { composeFork, identifyEntries } from './playlist-forks.mjs';
 import { mountLibraryOrganization } from './library-organization.mjs';
 import { createStockCache, stockSymbols } from './stocks.mjs';
@@ -117,12 +118,24 @@ export function createApp({
     if (
       exists &&
       state?.user &&
-      ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind) &&
+      [
+        'slide',
+        'playlist',
+        'slide-folder',
+        'playlist-folder',
+        'data-feed',
+      ].includes(kind) &&
       !accounts.canEdit(state.user, kind, item.id)
     )
       throw fail(403, 'Edit permission required');
     if (
-      ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind) &&
+      [
+        'slide',
+        'playlist',
+        'slide-folder',
+        'playlist-folder',
+        'data-feed',
+      ].includes(kind) &&
       item.managingGroupId !== undefined
     ) {
       const groupId = item.managingGroupId;
@@ -204,9 +217,13 @@ export function createApp({
     try {
       if (!exists) accounts.created(kind, item.id);
       if (
-        ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(
-          kind,
-        ) &&
+        [
+          'slide',
+          'playlist',
+          'slide-folder',
+          'playlist-folder',
+          'data-feed',
+        ].includes(kind) &&
         item.managingGroupId !== undefined
       ) {
         db.prepare('DELETE FROM resource_management WHERE kind=? AND id=?').run(
@@ -261,10 +278,21 @@ export function createApp({
         ? new URL(process.env.PUBLIC_URL).origin
         : `${req.protocol}://${req.get('host')}`;
       if (req.headers.origin !== expected)
-        return res.status(403).json({ error: 'Origin not allowed' });
+        return res
+          .status(403)
+          .json({
+            error: 'Origin not allowed',
+            ...(req.path.startsWith('/api/data-feeds')
+              ? { code: 'REQUEST_FAILED' }
+              : {}),
+          });
     }
     next();
   });
+  app.use(
+    '/api/data-feeds/:id/data',
+    express.json({ limit: '32kb', strict: true }),
+  );
   app.use(express.json({ limit: '1mb' }));
   mountAndroidReleases(app, {
     source: androidReleaseSource,
@@ -435,9 +463,13 @@ export function createApp({
           .map((f) => ['folder', f.id]),
       ];
     if (kind === 'slide')
-      return item.layers
-        .filter((l) => l.type === 'image' && !l.removedMedia)
-        .map((l) => ['asset', l.assetId]);
+      return item.layers.flatMap((l) =>
+        l.type === 'image' && !l.removedMedia
+          ? [['asset', l.assetId]]
+          : l.type === 'data' && l.data?.feedId
+            ? [['data-feed', l.data.feedId]]
+            : [],
+      );
     if (kind === 'playlist')
       return [
         ...(item.fork ? [['playlist', item.fork.masterId]] : []),
@@ -476,7 +508,13 @@ export function createApp({
         id,
         target.userId,
         target.groupId,
-        ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind)
+        [
+          'slide',
+          'playlist',
+          'slide-folder',
+          'playlist-folder',
+          'data-feed',
+        ].includes(kind)
           ? target.permission
           : 'edit',
       );
@@ -506,72 +544,75 @@ export function createApp({
       .get(req.params.id);
     if (!user) throw fail(404, 'User not found');
     res.json(
-      ['device', 'slide', 'playlist', 'asset', 'folder'].flatMap((kind) =>
-        allRecords(kind).map((item) => {
-          const audience = grants(kind, item.id);
-          const direct = audience.some((grant) => grant.userId === user.id);
-          const owner =
-            !db
+      ['device', 'slide', 'playlist', 'asset', 'folder', 'data-feed'].flatMap(
+        (kind) =>
+          allRecords(kind).map((item) => {
+            const audience = grants(kind, item.id);
+            const direct = audience.some((grant) => grant.userId === user.id);
+            const owner =
+              !db
+                .prepare(
+                  'SELECT 1 FROM resource_management WHERE kind=? AND id=?',
+                )
+                .get(kind, item.id) &&
+              db
+                .prepare(
+                  'SELECT ownerId FROM resource_access WHERE kind=? AND id=?',
+                )
+                .get(kind, item.id)?.ownerId === user.id;
+            const managingGroup = db
               .prepare(
-                'SELECT 1 FROM resource_management WHERE kind=? AND id=?',
+                'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
               )
-              .get(kind, item.id) &&
-            db
-              .prepare(
-                'SELECT ownerId FROM resource_access WHERE kind=? AND id=?',
+              .get(kind, item.id)?.groupId;
+            if (
+              managingGroup &&
+              !audience.some((g) => g.groupId === managingGroup)
+            )
+              audience.push({ groupId: managingGroup, userId: '' });
+            const viaGroups = audience
+              .filter(
+                (grant) =>
+                  grant.groupId &&
+                  (['slide', 'playlist', 'data-feed'].includes(kind)
+                    ? db
+                        .prepare(
+                          'SELECT groupId FROM memberships WHERE userId=?',
+                        )
+                        .all(user.id)
+                        .some(
+                          (m) =>
+                            accounts.related(m.groupId, grant.groupId) ||
+                            accounts.related(grant.groupId, m.groupId),
+                        )
+                    : accounts.member(user, grant.groupId)),
               )
-              .get(kind, item.id)?.ownerId === user.id;
-          const managingGroup = db
-            .prepare(
-              'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
-            )
-            .get(kind, item.id)?.groupId;
-          if (
-            managingGroup &&
-            !audience.some((g) => g.groupId === managingGroup)
-          )
-            audience.push({ groupId: managingGroup, userId: '' });
-          const viaGroups = audience
-            .filter(
-              (grant) =>
-                grant.groupId &&
-                (['slide', 'playlist'].includes(kind)
-                  ? db
-                      .prepare('SELECT groupId FROM memberships WHERE userId=?')
-                      .all(user.id)
-                      .some(
-                        (m) =>
-                          accounts.related(m.groupId, grant.groupId) ||
-                          accounts.related(grant.groupId, m.groupId),
-                      )
-                  : accounts.member(user, grant.groupId)),
-            )
-            .map(
-              (grant) =>
-                db
-                  .prepare('SELECT name FROM groups WHERE id=?')
-                  .get(grant.groupId)?.name,
-            )
-            .filter(Boolean);
-          return {
-            kind,
-            id: item.id,
-            name: item.name,
-            direct,
-            directPermission:
-              audience.find((grant) => grant.userId === user.id)?.permission ||
-              null,
-            owner,
-            viaGroups,
-            effective: accounts.can(user, kind, item.id),
-            permission: accounts.permission(user, kind, item.id),
-            readOnly:
-              accounts.permission(user, kind, item.id) === 'view' ||
-              (kind === 'asset' &&
-                !accounts.can(user, kind, item.id) &&
-                !!accounts.canViewAsset(user, item.id)),
-          };
-        }),
+              .map(
+                (grant) =>
+                  db
+                    .prepare('SELECT name FROM groups WHERE id=?')
+                    .get(grant.groupId)?.name,
+              )
+              .filter(Boolean);
+            return {
+              kind,
+              id: item.id,
+              name: item.name,
+              direct,
+              directPermission:
+                audience.find((grant) => grant.userId === user.id)
+                  ?.permission || null,
+              owner,
+              viaGroups,
+              effective: accounts.can(user, kind, item.id),
+              permission: accounts.permission(user, kind, item.id),
+              readOnly:
+                accounts.permission(user, kind, item.id) === 'view' ||
+                (kind === 'asset' &&
+                  !accounts.can(user, kind, item.id) &&
+                  !!accounts.canViewAsset(user, item.id)),
+            };
+          }),
       ),
     );
   });
@@ -586,6 +627,7 @@ export function createApp({
         'device',
         'slide-folder',
         'playlist-folder',
+        'data-feed',
       ].includes(kind)
     )
       throw fail(400, 'Invalid resource');
@@ -612,6 +654,7 @@ export function createApp({
         'device',
         'slide-folder',
         'playlist-folder',
+        'data-feed',
       ].includes(kind)
     )
       throw fail(400, 'Invalid resource');
@@ -664,7 +707,13 @@ export function createApp({
   app.put('/api/access/:kind/:id/management', admin, (req, res) => {
     const { kind, id } = req.params;
     if (
-      !['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(kind)
+      ![
+        'slide',
+        'playlist',
+        'slide-folder',
+        'playlist-folder',
+        'data-feed',
+      ].includes(kind)
     )
       throw fail(400, 'Invalid resource');
     const item = requireEditable(kind, id);
@@ -698,6 +747,18 @@ export function createApp({
           'SELECT groupId FROM resource_management WHERE kind=? AND id=?',
         )
         .get(kind, item.id)?.groupId || null,
+  });
+  const dataFeeds = mountDataFeeds(app, {
+    db,
+    accounts,
+    admin,
+    allRecords,
+    list,
+    put,
+    remove,
+    requireRecord,
+    requireEditable,
+    publicResource,
   });
   function resolvedPlaylist(p) {
     if (!p.fork) return p;
@@ -800,6 +861,12 @@ export function createApp({
     };
     res.json({
       groups,
+      dataFeeds: list('data-feed').map((feed) =>
+        withGroups(
+          'data-feed',
+          publicResource('data-feed', feedMetadata(feed)),
+        ),
+      ),
       slides: list('slide').map((item) =>
         withGroups('slide', publicResource('slide', item)),
       ),
@@ -857,6 +924,7 @@ export function createApp({
   app.post('/api/slides', admin, (req, res) => {
     const slide = slideSchema.parse(req.body);
     organization.validateFolder('slide', slide.folderId, req.user);
+    dataFeeds.validateLayers(slide, req.user);
     checkImages(slide, req.user);
     checkFonts(slide);
     res.status(201).json(
@@ -885,6 +953,7 @@ export function createApp({
           : req.body.managingGroupId,
     });
     organization.validateFolder('slide', slide.folderId, req.user);
+    dataFeeds.validateLayers(slide, req.user);
     checkImages(slide, req.user);
     checkFonts(slide);
     const saved = put('slide', {
@@ -1245,11 +1314,21 @@ export function createApp({
         throw new Error(
           'Viewing access to the master is required for every fork recipient',
         );
-      for (const item of items)
+      for (const item of items) {
         if (!visible('slide', item.slideId || item.slide.id))
-          throw new Error(
+          throw fail(
+            409,
             'Viewing access to every slide is required for every playlist recipient',
           );
+        const slide =
+          item.slide || allRecords('slide').find((s) => s.id === item.slideId);
+        for (const layer of slide?.layers || [])
+          if (layer.type === 'data' && !visible('data-feed', layer.data.feedId))
+            throw fail(
+              409,
+              'Viewing access to every data feed is required for every playlist recipient',
+            );
+      }
     }
   }
   function propagateForks(masterId, visited = new Set()) {
@@ -1377,16 +1456,25 @@ export function createApp({
           : requireRecord('slide', item.slideId),
       ),
     }));
+    if (feedIds({ items }).length > 20)
+      throw fail(400, 'A playlist can use at most 20 distinct data feeds');
+    for (const item of items)
+      dataFeeds.validateLayers(item.slide, accounts.context.getStore()?.user);
     return {
-      schemaVersion: items.some((item) =>
-        item.slide.layers.some(
-          (layer) =>
-            ['shape', 'stocks'].includes(layer.type) ||
-            (layer.type === 'weather' && layer.weather?.layout === 'vertical'),
-        ),
+      schemaVersion: items.some((i) =>
+        i.slide.layers.some((l) => l.type === 'data'),
       )
-        ? 3
-        : 2,
+        ? 4
+        : items.some((item) =>
+              item.slide.layers.some(
+                (layer) =>
+                  ['shape', 'stocks'].includes(layer.type) ||
+                  (layer.type === 'weather' &&
+                    layer.weather?.layout === 'vertical'),
+              ),
+            )
+          ? 3
+          : 2,
       revision: randomUUID(),
       name: p.name,
       publishedAt: new Date().toISOString(),
@@ -1405,7 +1493,17 @@ export function createApp({
       if (!published?.items?.some((item) => item.slide?.id === slide.id))
         continue;
       try {
-        checkPublicationRecipients(playlist, published.items);
+        const nextItems = published.items.map((item) =>
+          item.slide?.id === slide.id ? { ...item, slide } : item,
+        );
+        if (feedIds({ items: nextItems }).length > 20)
+          throw fail(409, 'A playlist can use at most 20 distinct data feeds');
+        checkPublicationRecipients(
+          playlist,
+          published.items.map((item) =>
+            item.slide?.id === slide.id ? { ...item, slide } : item,
+          ),
+        );
       } catch (error) {
         if (playlist.fork) {
           playlist.forkSyncError = error.message;
@@ -1422,6 +1520,11 @@ export function createApp({
       );
       playlist.published = {
         ...published,
+        schemaVersion: items.some((i) =>
+          i.slide.layers.some((l) => l.type === 'data'),
+        )
+          ? 4
+          : published.schemaVersion,
         revision: randomUUID(),
         publishedAt: new Date().toISOString(),
         items,
@@ -1438,6 +1541,7 @@ export function createApp({
     if (!p.items.length)
       throw fail(400, 'Add at least one slide before publishing');
     p.published = snapshot(p);
+    checkPublicationRecipients(p, p.published.items);
     delete p.forkSyncError;
     p.publishedEntries = p.items.map((i) => ({
       ...i,
@@ -1468,6 +1572,9 @@ export function createApp({
       ...manifest,
       weather: weather.forManifest(manifest),
       stocks: stocks.forManifest(manifest),
+      dataFeeds: dataFeeds.snapshots(manifest, (id) =>
+        accounts.can(req.user, 'data-feed', id),
+      ),
     });
   });
   app.get('/api/weather/zip', admin, async (req, res) => {
@@ -1967,6 +2074,25 @@ export function createApp({
     await managedVpn.revoked();
     res.json({ ok: true });
   });
+  function feedVisibleToDevice(device, id) {
+    const audiences = grants('device', device.id);
+    const owner = db
+      .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
+      .get('device', device.id)?.ownerId;
+    if (owner) audiences.push({ userId: owner, groupId: '' });
+    return (
+      audiences.length > 0 &&
+      audiences.every((a) =>
+        a.userId
+          ? accounts.can(
+              db.prepare('SELECT * FROM users WHERE id=?').get(a.userId),
+              'data-feed',
+              id,
+            )
+          : accounts.groupCan(a.groupId, 'data-feed', id),
+      )
+    );
+  }
   app.post('/api/player/sync', player, (req, res) => {
     const status = z
       .object({
@@ -2015,6 +2141,9 @@ export function createApp({
       rotation: device.rotation,
       command: device.command,
       weather: weather.forManifest(published),
+      dataFeeds: dataFeeds.snapshots(published, (id) =>
+        feedVisibleToDevice(device, id),
+      ),
       manifest: {
         ...(published || {
           schemaVersion: 2,
@@ -2040,6 +2169,22 @@ export function createApp({
           : err.status || 500;
     if (status === 500) console.error(err);
     res.status(status).json({
+      ...(req.path.startsWith('/api/data-feeds')
+        ? {
+            code:
+              err instanceof z.ZodError || err.type === 'entity.parse.failed'
+                ? 'INVALID_PAYLOAD'
+                : status === 413
+                  ? 'PAYLOAD_TOO_LARGE'
+                  : /^[A-Z_]+$/.test(err.code || '')
+                    ? err.code
+                    : status === 404
+                      ? 'NOT_FOUND'
+                      : status === 403
+                        ? 'FORBIDDEN'
+                        : 'REQUEST_FAILED',
+          }
+        : {}),
       error:
         err instanceof z.ZodError
           ? err.issues

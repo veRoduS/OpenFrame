@@ -53,11 +53,29 @@ class PlayerTests(unittest.TestCase):
         with patch.object(self.agent, 'request', return_value=response):
             self.agent.sync()
         self.assertEqual(self.agent.state['manifest']['stocks']['WMT']['price'], 105)
-        response['manifest']['schemaVersion'] = 4
+        response['manifest']['schemaVersion'] = 5
         with patch.object(self.agent, 'request', return_value=response):
             with self.assertRaises(ValueError):
                 self.agent.sync()
         self.assertEqual(json.loads((self.agent.cache / 'state.json').read_text())['manifest']['schemaVersion'], 3)
+
+    def test_data_feeds_survive_offline_restart_and_clear_when_revoked(self):
+        response = self.response('data')
+        response['manifest']['schemaVersion'] = 4
+        response['dataFeeds'] = {'feed': {'status': 'ready', 'data': {'value': 75}, 'updatedAt': '2026-10-06T10:00:00Z'}}
+        with patch.object(self.agent, 'request', return_value=response):
+            self.agent.sync()
+        restarted = module.Agent(self.config, self.tmp.name)
+        self.assertEqual(restarted.state['dataFeeds']['feed']['data']['value'], 75)
+        with patch.object(restarted, 'request', side_effect=OSError('Offline')):
+            with self.assertRaises(OSError):
+                restarted.sync()
+        self.assertEqual(restarted.state['dataFeeds']['feed']['data']['value'], 75)
+        response['dataFeeds'] = {'feed': {'status': 'unavailable', 'data': None}}
+        with patch.object(restarted, 'request', return_value=response):
+            restarted.sync()
+        self.assertIsNone(restarted.state['dataFeeds']['feed']['data'])
+        self.assertIsNone(module.Agent(self.config, self.tmp.name).state['dataFeeds']['feed']['data'])
 
     def test_weather_persists_offline_and_retains_last_snapshot_for_assigned_locations(self):
         weather = {'41.8781,-87.6298': {'status': 'ready', 'fetchedAt': '2026-09-16T12:00:00Z', 'periods': [{'temperatureF': 72}]}}

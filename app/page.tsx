@@ -1,3 +1,4 @@
+import { DataFeeds, DataWidgetOptions, dataModes } from './data-feeds';
 import { Checkbox } from './components/ui/checkbox';
 import {
   LibraryOrganizationToolbar,
@@ -38,6 +39,7 @@ import './screens.css';
 import { WeatherOptions } from './weather-options';
 import {
   Monitor,
+  Database,
   Users,
   FileCog,
   LayoutTemplate,
@@ -222,6 +224,7 @@ function Modal({
   );
 }
 const emptyLibrary: Library = {
+  dataFeeds: [],
   slides: [],
   playlists: [],
   assets: [],
@@ -229,6 +232,7 @@ const emptyLibrary: Library = {
   devices: [],
 };
 const viewInfo = {
+  dataFeeds: { title: 'Data feeds', icon: Database },
   slides: { title: 'Slides', icon: LayoutTemplate },
   playlists: { title: 'Playlists', icon: ListVideo },
   devices: { title: 'Screens', icon: Monitor },
@@ -542,7 +546,7 @@ export default function App() {
       groups={groups}
       statuses={statuses}
       shown={shown}
-      total={library[key].length}
+      total={library[key]?.length || 0}
       noun={viewInfo[key].title}
     >
       {tools}
@@ -747,7 +751,7 @@ export default function App() {
                             ? ''
                             : key === 'media'
                               ? library.assets.length
-                              : library[key].length}
+                              : library[key]?.length || 0}
                         </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -810,7 +814,9 @@ export default function App() {
                               ? 'WORKSPACE CONFIGURATION'
                               : view === 'password'
                                 ? 'MY ACCOUNT'
-                                : 'IMAGE LIBRARY'}
+                                : view === 'dataFeeds'
+                                  ? 'LIVE DATA'
+                                  : 'IMAGE LIBRARY'}
                   </span>
                   <h1>{viewInfo[view].title}</h1>
                 </div>
@@ -873,6 +879,15 @@ export default function App() {
                     <X size={18} />
                   </button>
                 </div>
+              )}
+              {view === 'dataFeeds' && (
+                <DataFeeds
+                  feeds={library.dataFeeds || []}
+                  groups={library.groups}
+                  isAdmin={auth.user?.role === 'admin'}
+                  onRefresh={refresh}
+                  onAccess={setAccessResource}
+                />
               )}
               {view === 'accounts' && auth.user?.role === 'admin' && (
                 <Accounts user={auth.user} refresh={refresh} />
@@ -1416,12 +1431,13 @@ export default function App() {
               onClose={() => setEditing(null)}
               wide
             >
-              <SlideCanvas slide={editing} assets={library.assets} />
+              <SlideCanvas slide={editing} assets={library.assets} liveData />
             </Modal>
           )}
           {editing && !editing.readOnly && (
             <Editor
               initial={editing}
+              feeds={library.dataFeeds || []}
               assets={library.assets}
               fonts={fonts}
               folders={library.folders}
@@ -1978,6 +1994,7 @@ function PropertySection({
 }
 
 function Editor({
+  feeds,
   initial,
   assets,
   fonts,
@@ -1987,6 +2004,7 @@ function Editor({
   onSave,
   onUpload,
 }: {
+  feeds: import('./types').DataFeed[];
   initial: Slide;
   assets: Asset[];
   fonts: CustomFont[];
@@ -2106,8 +2124,24 @@ function Editor({
     type: Layer['type'],
     assetId?: string,
     shapeKind?: 'circle' | 'rectangle',
+    dataMode?: NonNullable<Layer['data']>['mode'],
   ) {
     const layer = newLayer(type, assetId);
+    if (type === 'data') {
+      layer.data!.mode = dataMode || 'metric';
+      layer.data!.title =
+        dataModes.find((m) => m.mode === layer.data!.mode)?.label || 'Data';
+      const expected =
+        dataMode === 'line'
+          ? 'series'
+          : dataMode === 'bar'
+            ? 'categories'
+            : 'number';
+      const feed = feeds.find((f) => f.fields.some((v) => v.type === expected));
+      layer.data!.feedId = feed?.id || null;
+      layer.data!.field =
+        feed?.fields.find((v) => v.type === expected)?.key || '';
+    }
     if (type === 'shape') {
       layer.shape!.kind = shapeKind || 'rectangle';
       layer.width = 25;
@@ -2357,6 +2391,15 @@ function Editor({
                 >
                   <TrendingUp size={20} />
                 </IconButton>
+                {dataModes.map(({ mode, label, icon: Icon }) => (
+                  <IconButton
+                    key={mode}
+                    label={`Add ${label.toLowerCase()} widget`}
+                    onClick={() => add('data', undefined, undefined, mode)}
+                  >
+                    <Icon size={20} />
+                  </IconButton>
+                ))}
               </div>
             </section>
           </div>
@@ -2371,7 +2414,9 @@ function Editor({
                   showProperties();
                 }}
               >
-                {layer.type === 'stocks' ? (
+                {layer.type === 'data' ? (
+                  <Database size={16} />
+                ) : layer.type === 'stocks' ? (
                   <TrendingUp size={16} />
                 ) : layer.type === 'shape' ? (
                   layer.shape?.kind === 'circle' ? (
@@ -2391,24 +2436,26 @@ function Editor({
                   <Type size={16} />
                 )}
                 <span>
-                  {layer.type === 'stocks'
-                    ? layer.stocks?.name || 'Stocks'
-                    : layer.type === 'shape'
-                      ? layer.shape?.kind === 'circle'
-                        ? 'Circle'
-                        : 'Rectangle'
-                      : layer.type === 'text'
-                        ? layer.text || 'Text'
-                        : layer.type === 'counter'
-                          ? 'Counter'
-                          : layer.type === 'weather'
-                            ? layer.weather?.name || 'Weather'
-                            : layer.type === 'clock'
-                              ? 'Clock'
-                              : layer.removedMedia
-                                ? 'Removed media'
-                                : assets.find((a) => a.id === layer.assetId)
-                                    ?.name || 'Image'}
+                  {layer.type === 'data'
+                    ? layer.data?.title || 'Data widget'
+                    : layer.type === 'stocks'
+                      ? layer.stocks?.name || 'Stocks'
+                      : layer.type === 'shape'
+                        ? layer.shape?.kind === 'circle'
+                          ? 'Circle'
+                          : 'Rectangle'
+                        : layer.type === 'text'
+                          ? layer.text || 'Text'
+                          : layer.type === 'counter'
+                            ? 'Counter'
+                            : layer.type === 'weather'
+                              ? layer.weather?.name || 'Weather'
+                              : layer.type === 'clock'
+                                ? 'Clock'
+                                : layer.removedMedia
+                                  ? 'Removed media'
+                                  : assets.find((a) => a.id === layer.assetId)
+                                      ?.name || 'Image'}
                 </span>
                 <small>{slide.layers.length - i}</small>
               </button>
@@ -2514,19 +2561,22 @@ function Editor({
             {current && (
               <div className="property-heading">
                 <strong>
-                  {current.type === 'stocks'
-                    ? 'Stock tracker'
-                    : current.type === 'shape'
-                      ? 'Shape'
-                      : current.type === 'text'
-                        ? 'Text'
-                        : current.type === 'counter'
-                          ? 'Counter widget'
-                          : current.type === 'weather'
-                            ? 'Weather widget'
-                            : current.type === 'clock'
-                              ? 'Clock widget'
-                              : 'Image'}
+                  {current.type === 'data'
+                    ? dataModes.find((m) => m.mode === current.data?.mode)
+                        ?.label || 'Data widget'
+                    : current.type === 'stocks'
+                      ? 'Stock tracker'
+                      : current.type === 'shape'
+                        ? 'Shape'
+                        : current.type === 'text'
+                          ? 'Text'
+                          : current.type === 'counter'
+                            ? 'Counter widget'
+                            : current.type === 'weather'
+                              ? 'Weather widget'
+                              : current.type === 'clock'
+                                ? 'Clock widget'
+                                : 'Image'}
                 </strong>
                 <IconButton
                   label="Delete layer"
@@ -2609,6 +2659,13 @@ function Editor({
                       Replace image
                     </button>
                   </>
+                )}
+                {current.type === 'data' && current.data && (
+                  <DataWidgetOptions
+                    layer={current}
+                    feeds={feeds}
+                    onChange={(data) => patchLayer({ data })}
+                  />
                 )}
                 {current.type === 'stocks' && current.stocks && (
                   <>
@@ -3066,7 +3123,25 @@ function Editor({
                   </label>
                 )}
               </PropertySection>
-              {current.type !== 'shape' && (
+              {current.type === 'data' && (
+                <PropertySection title="Appearance">
+                  <label>
+                    Text color
+                    <input
+                      type="color"
+                      value={current.color}
+                      onChange={(event) =>
+                        patchLayer({ color: event.target.value })
+                      }
+                    />
+                  </label>
+                  <p className="muted">
+                    Text and chart scale with the widget. Resize its box to fit
+                    your slide.
+                  </p>
+                </PropertySection>
+              )}
+              {current.type !== 'shape' && current.type !== 'data' && (
                 <PropertySection
                   title={
                     current.type === 'image' ? 'Image display' : 'Typography'

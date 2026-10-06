@@ -1,5 +1,15 @@
 # Validation record
 
+## Local server 0.19.1 / player 0.10.13: live data feeds
+
+Checked on 2026-10-06: all 188 Node tests, 92 Python tests, and 28 native Java agent/updater tests passed. Node tests include the real Python-agent integration and feed payload/authentication/permissions, expiry/revocation, limits, publication recipients, and handoff documentation. Python and Android tests verify schema 4, data snapshots after offline restart, and clearing revoked values following a successful online sync. Java tests used the existing host JDK/JUnit fixture, including real Express enrollment.
+
+The data-feed browser check passes for feed creation, one-time tokens, metric/progress/line/bar widgets, live updates without replacing the active frame, lifecycle disposal, and layouts at 1440, 390, and 320 pixels. The library-access browser regression also passes, preserving inherited View/Edit, linked forks, timing/order overrides, tags, and folder moves. Renderer and feed-dialog screenshots were visually reviewed. Lint, typecheck, production web build, version/repository checks, diff hygiene, and the explicit compatibility review pass.
+
+New widgets conditionally emit manifest schema 4 and require player 0.10.13+. Existing playlists retain schema 2/3, and new players accept schemas 1–4 against older servers. Snapshots travel separately from publication revisions and never include integration tokens. The standalone Markdown guide, OpenAPI JSON, Python client, and Copy integration details control provide a complete integration handoff.
+
+This is local source work; no GitHub source push, deployment, APK build/publication, physical TV/Pi acceptance, or long-run hardware performance check is included.
+
 ## GitHub milestone 0.19.0: inherited access and library organization
 
 Checked on 2026-10-06: all 179 Node tests passed, including real Python-agent integration, and all 91 Python tests passed. Organization, library-access, and editor-lock browser checks passed using installed Chromium against disposable databases. These cover desktop/phone group and folder management, inherited View access, independent playlist forks, timing/order, bulk tags, image insertion/replacement, and layer locks. Lint, typecheck, formatting of the changed implementation files, the production web build, version/repository/compatibility checks, and three Pi shell syntax checks passed.

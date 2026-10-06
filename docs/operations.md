@@ -118,3 +118,9 @@ To roll back, stop the failed deployment and use the previous source tag. Do not
 | Pi fills its SD card | Cached assets are retained; monitor disk use and plan maintenance |
 
 Pi diagnostics: `sudo systemctl status openframe-agent`, `sudo journalctl -u openframe-agent -n 100`, and `sudo journalctl -u openframe-firstboot -n 100`. WireGuard/Cloudflare-specific checks are in their guides. Do not attach unredacted logs or configuration to public issues. For administrator recovery, follow [Users and groups](users-and-groups.md#upgrade-and-recovery); do not delete your database.
+
+## Live data feeds
+
+Data feed definitions, the latest valid snapshot, and hashed token metadata live in the existing SQLite database and use the normal backup/restore process. No provider keys, chart service, or extra background worker is needed. Integrations retain their own rolling measurement history and send bounded snapshots; the server stores no append-only history. Rate-limit windows are in memory and reset after server restart.
+
+Deploy server 0.19.1+ and upgrade the complete Pi player or Android app to 0.10.13+ before assigning playlists containing data widgets (manifest schema 4). Existing playlists retain their compatible schema. Player upgrades/publication remain separate from the server deployment. Use a correct server/player clock for token expiry and stale-age labels, and HTTPS for external updates. Revoke unused tokens through Data feeds; disabling a token creator or removing their Edit access also denies updates. See [API handoff](data-feeds-api.md) for payload limits, retries, and offline/revocation behavior.

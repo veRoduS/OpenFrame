@@ -1,3 +1,8 @@
+import {
+  renderDataWidget,
+  getDataFeedSnapshots,
+  subscribeDataFeeds,
+} from './data-feeds.js';
 import { renderStocks, getStockSnapshots, subscribeStocks } from './stocks.js';
 import { counterText, nextCounterDelay } from './counter.js';
 import { createClockFormatter, nextClockDelay } from './clock.js';
@@ -96,3 +101,15 @@ registerWidget('counter', (element, layer, { onChange = () => {} } = {}) => {
     onChange,
   );
 });
+
+registerWidget('data', (element, layer) =>
+  liveText(
+    element,
+    () => JSON.stringify(getDataFeedSnapshots()[layer.data?.feedId] || null),
+    () => (layer.data?.showUpdated ? 60000 : null),
+    () => {},
+    subscribeDataFeeds,
+    (node, value) =>
+      renderDataWidget(node, layer.data, JSON.parse(value), layer.color),
+  ),
+);

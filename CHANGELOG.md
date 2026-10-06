@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.19.1] - 2026-10-06
+
+- Add reusable live data feeds, scoped integration tokens, dashboard widgets, and shareable API documentation
+
 ## [0.19.0] - 2026-10-06
 
 - Inherited access, linked playlist forks, library folders and tags, and grouped editor controls

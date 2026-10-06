@@ -1,3 +1,4 @@
+import { setDataFeedSnapshots } from './data-feeds.js';
 import { setStockSnapshots } from './stocks.js';
 import { Playback } from './playback.js';
 import { prepareFrame, commitFrame } from './frame.js';
@@ -45,6 +46,9 @@ const playback = new Playback({
 });
 function applyState(state) {
   lastState = state;
+  setDataFeedSnapshots(
+    state.approved ? state.dataFeeds || state.manifest?.dataFeeds : {},
+  );
   setStockSnapshots(state.approved ? state.manifest?.stocks : {});
   setWeatherSnapshots(
     state.approved ? state.weather || state.manifest?.weather : {},
@@ -115,7 +119,7 @@ async function poll() {
       !lastState ||
       lastState.manifest?.items.some((item) =>
         item.slide.layers.some((layer) =>
-          ['weather', 'stocks'].includes(layer.type),
+          ['weather', 'stocks', 'data'].includes(layer.type),
         ),
       )
     )

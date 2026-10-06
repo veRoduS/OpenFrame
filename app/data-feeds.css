@@ -1,0 +1,175 @@
+.data-feeds-page {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.data-feed-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: end;
+  justify-content: space-between;
+}
+.data-feed-toolbar label {
+  max-width: 400px;
+  flex: 1;
+}
+.data-feed-list {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.data-feed-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--color-border, #dde3df);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--color-card, #fff);
+}
+button.data-feed-open {
+  color: inherit;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  min-width: 0;
+  flex: 1;
+  box-shadow: none;
+  border: 0;
+  border-radius: 0;
+}
+.data-feed-open span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.data-feed-open strong {
+  overflow-wrap: anywhere;
+}
+.data-feed-open small,
+.data-feed-token small {
+  color: var(--of-text-muted);
+  display: block;
+  font-weight: 400;
+}
+.data-feed-empty {
+  padding: 48px 24px;
+  border: 1px dashed var(--color-border, #dde3df);
+  border-radius: 12px;
+  margin: 24px 0;
+  text-align: center;
+}
+.data-feed-modal {
+  max-width: 640px;
+}
+.data-feed-modal fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 16px;
+}
+.data-feed-modal h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+.data-feed-field {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.data-feed-field label {
+  flex: 1;
+  min-width: 0;
+}
+.data-feed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.data-feed-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-alt, #eef3ef);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 13px;
+  max-height: 240px;
+  overflow: auto;
+  color: var(--foreground);
+}
+.data-feed-token {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border, #dde3df);
+}
+.data-feed-secret {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid var(--color-border, #dde3df);
+  background: var(--surface-alt, #eef3ef);
+  padding: 16px;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+.data-feed-secret code {
+  display: block;
+  width: 100%;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.data-feed-id {
+  overflow-wrap: anywhere;
+}
+.data-widget-options {
+  display: grid;
+  gap: 16px;
+}
+.data-feed-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.data-feed-checkbox input {
+  width: auto;
+}
+@media (max-width: 600px) {
+  .data-feed-list article {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .data-feed-field {
+    gap: 8px;
+  }
+  .data-feed-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+.data-feed-toolbar label,
+.data-feed-modal label,
+.data-widget-options label {
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+}
+.data-feed-modal label.data-feed-checkbox {
+  display: flex;
+}
+.data-feed-token > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.data-feed-token button {
+  flex-shrink: 0;
+}

@@ -1062,6 +1062,7 @@ function UserAccessDialog({
                       <option value="playlist">Playlists</option>
                       <option value="asset">Media</option>
                       <option value="folder">Folders</option>
+                      <option value="data-feed">Data feeds</option>
                     </select>
                   </label>
                   <label>
@@ -1079,7 +1080,16 @@ function UserAccessDialog({
                   (kind === 'all' || item.kind === kind) &&
                   item.name.toLowerCase().includes(query.toLowerCase()),
               ) && <p className="account-empty">No matching content.</p>}
-              {(['slide', 'playlist', 'device', 'asset', 'folder'] as const)
+              {(
+                [
+                  'slide',
+                  'playlist',
+                  'device',
+                  'asset',
+                  'folder',
+                  'data-feed',
+                ] as const
+              )
                 .filter((type) => kind === 'all' || kind === type)
                 .map((type) => {
                   const matches = resources.filter(
@@ -1094,6 +1104,7 @@ function UserAccessDialog({
                     device: 'Screens',
                     asset: 'Media',
                     folder: 'Folders',
+                    'data-feed': 'Data feeds',
                   };
                   return (
                     <section className="user-content-section" key={type}>

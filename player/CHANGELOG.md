@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.10.13] - 2026-10-06
+
+- Render live data metrics, progress bars and charts with cached snapshots and manifest schema 4
+
 ## [0.10.12] - 2026-10-05
 
 - Add hosted server code shortcut

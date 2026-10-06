@@ -147,9 +147,29 @@ public class PlayerAgentTest {
         JSONObject manifest = new JSONObject(player.snapshot()).getJSONObject("manifest");
         assertEquals(3, manifest.getInt("schemaVersion"));
         assertEquals(105, manifest.getJSONObject("stocks").getJSONObject("WMT").getInt("price"));
-        response.getJSONObject("manifest").put("schemaVersion", 4);
+        response.getJSONObject("manifest").put("schemaVersion", 5);
         player.tick();
         assertEquals(3, new JSONObject(player.snapshot()).getJSONObject("manifest").getInt("schemaVersion"));
+    }
+
+    @Test public void dataFeedsPersistOfflineAndClearAfterRevocation() throws Exception {
+        response = new JSONObject().put("approved", true).put("rotation", 0).put("blank", false)
+                .put("manifest", new JSONObject().put("schemaVersion", 4).put("revision", "data")
+                        .put("items", new JSONArray()).put("assets", new JSONArray()))
+                .put("dataFeeds", new JSONObject().put("feed", new JSONObject().put("status", "ready")
+                        .put("data", new JSONObject().put("value", 75))));
+        PlayerAgent player = agent(); player.tick();
+        assertEquals(75, new JSONObject(player.snapshot()).getJSONObject("dataFeeds").getJSONObject("feed").getJSONObject("data").getInt("value"));
+        status = 503;
+        PlayerAgent restarted = agent(); restarted.tick();
+        assertEquals(75, new JSONObject(restarted.snapshot()).getJSONObject("dataFeeds").getJSONObject("feed").getJSONObject("data").getInt("value"));
+        status = 200;
+        response.put("dataFeeds", new JSONObject().put("feed", new JSONObject().put("status", "unavailable").put("data", JSONObject.NULL)));
+        restarted.tick();
+        assertTrue(new JSONObject(restarted.snapshot()).getJSONObject("dataFeeds").getJSONObject("feed").isNull("data"));
+        PlayerAgent cleared = agent(); cleared.tick();
+        assertTrue(new JSONObject(cleared.snapshot()).getJSONObject("dataFeeds").getJSONObject("feed").isNull("data"));
+        assertFalse(cleared.snapshot().contains("secret-token"));
     }
 
     @Test public void enrollmentAndSyncRejectUnexpectedSuccessStatuses() throws Exception {

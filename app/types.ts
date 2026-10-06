@@ -2,7 +2,15 @@ import { v4 as uuid } from 'uuid';
 
 export type Layer = {
   id: string;
-  type: 'text' | 'image' | 'clock' | 'counter' | 'weather' | 'shape' | 'stocks';
+  type:
+    | 'text'
+    | 'image'
+    | 'clock'
+    | 'counter'
+    | 'weather'
+    | 'shape'
+    | 'stocks'
+    | 'data';
   x: number;
   y: number;
   width: number;
@@ -25,6 +33,21 @@ export type Layer = {
   cropY?: number;
   cropZoom?: number;
   clock?: { showSeconds?: boolean; hour12?: boolean };
+  data?: {
+    mode: 'metric' | 'progress' | 'line' | 'bar';
+    feedId: string | null;
+    field: string;
+    title: string;
+    unit: string;
+    decimals: number;
+    target: number;
+    targetField: string;
+    orientation: 'horizontal' | 'vertical';
+    accent: string;
+    track: string;
+    showUpdated: boolean;
+    staleAfterMinutes: number;
+  };
   stocks?: { name: string; symbols: string[] };
   shape?: {
     kind: 'rectangle' | 'circle';
@@ -181,7 +204,17 @@ export type Device = {
   } | null;
   command?: { type: string } | null;
 };
+export type DataFeed = {
+  id: string;
+  name: string;
+  fields: { key: string; type: 'number' | 'series' | 'categories' }[];
+  readOnly?: boolean;
+  managingGroupId?: string | null;
+  accessTags?: AccessTag[];
+  updatedAt: string | null;
+};
 export type Library = {
+  dataFeeds?: DataFeed[];
   groups?: {
     id: string;
     name: string;
@@ -241,6 +274,27 @@ export function newLayer(type: Layer['type'], assetId?: string): Layer {
     cropX: 50,
     cropY: 50,
     cropZoom: 1,
+    ...(type === 'data'
+      ? {
+          width: 50,
+          height: 35,
+          data: {
+            mode: 'metric' as const,
+            feedId: null,
+            field: '',
+            title: 'Metric',
+            unit: '',
+            decimals: 0,
+            target: 100,
+            targetField: '',
+            orientation: 'horizontal' as const,
+            accent: '#17613d',
+            track: '#dce5df',
+            showUpdated: true,
+            staleAfterMinutes: 60,
+          },
+        }
+      : {}),
     ...(type === 'stocks'
       ? {
           width: 25,

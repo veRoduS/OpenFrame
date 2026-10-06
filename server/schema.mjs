@@ -1,3 +1,4 @@
+import { dataWidgetSchema } from './data-feeds.mjs';
 import { stockSymbols } from './stocks.mjs';
 import { z } from 'zod';
 
@@ -24,6 +25,7 @@ export const layerSchema = z
       'weather',
       'shape',
       'stocks',
+      'data',
     ]),
     x: z.number().min(0).max(100),
     y: z.number().min(0).max(100),
@@ -54,6 +56,7 @@ export const layerSchema = z
     cropX: z.number().min(0).max(100).default(50),
     cropY: z.number().min(0).max(100).default(50),
     cropZoom: z.number().min(1).max(4).default(1),
+    data: dataWidgetSchema.optional(),
     stocks: z
       .object({
         name: z.string().trim().max(80).default('Stocks'),
@@ -131,6 +134,7 @@ export const layerSchema = z
   .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter')
   .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather')
   .refine((l) => l.type !== 'shape' || !!l.shape, 'Configure the shape')
+  .refine((l) => l.type !== 'data' || !!l.data, 'Configure the data widget')
   .refine((l) => l.type !== 'stocks' || !!l.stocks, 'Configure stock symbols');
 export const tagsSchema = z
   .array(z.string().trim().min(1).max(40))

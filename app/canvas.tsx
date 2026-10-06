@@ -1,3 +1,4 @@
+import { renderDataWidget } from '../player/web/data-feeds.js';
 import { renderStocks } from '../player/web/stocks.js';
 import { renderShape } from '../player/web/shape.js';
 import {
@@ -19,6 +20,65 @@ import {
   weatherView,
   renderWeather,
 } from '../player/web/weather.js';
+
+function DataContent({ layer, active }: { layer: Layer; active: boolean }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [value, setValue] = useState<{ id: string; snapshot: unknown } | null>(
+    null,
+  );
+  const [now, setNow] = useState(Date.now());
+  const id = layer.data?.feedId;
+  useLayoutEffect(() => {
+    if (ref.current)
+      renderDataWidget(
+        ref.current,
+        layer.data,
+        value && value.id === id ? value.snapshot : null,
+        layer.color,
+        now,
+      );
+  }, [layer, value, id, now]);
+  useEffect(() => {
+    if (!active || !id) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const abort = new AbortController();
+    async function poll() {
+      try {
+        const response = await fetch(`/api/data-feeds/${id}/data`, {
+          cache: 'no-store',
+          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]),
+        });
+        if (!stopped)
+          setValue({
+            id: id!,
+            snapshot: response.ok
+              ? await response.json()
+              : { status: 'unavailable', data: null },
+          });
+      } catch {
+        /* Keep the last valid snapshot while offline. */
+      } finally {
+        if (!stopped) {
+          setNow(Date.now());
+          timer = setTimeout(poll, 15000);
+        }
+      }
+    }
+    void poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [id, active]);
+  return (
+    <span
+      ref={ref}
+      style={{ display: 'block', width: '100%', height: '100%' }}
+    />
+  );
+}
 
 function ShapeContent({ layer, slide }: { layer: Layer; slide: Slide }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -175,11 +235,13 @@ export function SlideCanvas({
   cropMode = false,
   onCrop,
   interactive = false,
+  liveData = interactive,
 }: {
   slide: Slide;
   assets: Asset[];
   selected?: string | null;
   interactive?: boolean;
+  liveData?: boolean;
   onSelect?: (id: string | null) => void;
   onMove?: (id: string, x: number, y: number) => void;
   onDragStart?: () => void;
@@ -368,6 +430,8 @@ export function SlideCanvas({
               src={assets.find((a) => a.id === layer.assetId)?.url}
               style={imageStyle(layer) as React.CSSProperties}
             />
+          ) : layer.type === 'data' ? (
+            <DataContent layer={layer} active={liveData} />
           ) : layer.type === 'stocks' ? (
             <StockContent layer={layer} scale={scale} active={interactive} />
           ) : layer.type === 'shape' ? (
@@ -403,6 +467,7 @@ export function SlideCanvas({
                 'weather',
                 'shape',
                 'stocks',
+                'data',
               ].includes(l.type),
           )
           .map((layer) =>

@@ -41,9 +41,13 @@ export function ResourceAccessDialog({
   const [access, setAccess] = useState<Access | null>(null);
   const hasRoles =
     !!resource &&
-    ['slide', 'playlist', 'slide-folder', 'playlist-folder'].includes(
-      resource.kind,
-    );
+    [
+      'slide',
+      'playlist',
+      'slide-folder',
+      'playlist-folder',
+      'data-feed',
+    ].includes(resource.kind);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const groupName = (id: string) => {
