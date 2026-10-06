@@ -1,19 +1,38 @@
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import express from 'express';
 
 // Optional browser regression: API responses are isolated fixtures, never real writes.
 const { chromium } = await import(
   process.env.OPENFRAME_PLAYWRIGHT || 'playwright'
 );
+const host = express();
+const root = path.resolve(import.meta.dirname, '..');
+host.use(express.static(path.join(root, 'dist')));
+host.get('/{*path}', (_, res) =>
+  res.sendFile(path.join(root, 'dist/index.html')),
+);
+const server = host.listen(0, '127.0.0.1');
+await new Promise((resolve) => server.once('listening', resolve));
+const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({
   headless: true,
+  ...(process.env.OPENFRAME_BROWSER_EXECUTABLE
+    ? { executablePath: process.env.OPENFRAME_BROWSER_EXECUTABLE }
+    : {}),
   ...(process.env.OPENFRAME_BROWSER_CHANNEL
     ? { channel: process.env.OPENFRAME_BROWSER_CHANNEL }
     : {}),
 });
 mkdirSync('work', { recursive: true });
 try {
-  for (const width of [1280, 390, 320]) {
+  for (const [width, height] of [
+    [1280, 900],
+    [1280, 720],
+    [390, 844],
+    [320, 568],
+  ]) {
     const page = await browser.newPage({
       viewport: { width: 1280, height: 900 },
     });
@@ -23,12 +42,15 @@ try {
       'Opening hours and upcoming announcements',
       'Weekend events',
     ];
+    names.push(
+      ...Array.from({ length: 27 }, (_, i) => `Library slide ${i + 4}`),
+    );
     const slides = names.map((name, index) => ({
       id: `slide-${index}`,
       name,
-      width: 1920,
-      height: 1080,
-      background: ['#e0eaf4', '#e3f0e8', '#f3e5eb'][index],
+      width: index === 28 ? 1080 : 1920,
+      height: index === 29 ? 1920 : index === 28 ? 1920 : 1080,
+      background: ['#e0eaf4', '#e3f0e8', '#f3e5eb'][index % 3],
       layers: [],
     }));
     let playlist = {
@@ -38,12 +60,19 @@ try {
         { slideId: slides[0].id, duration: 10 },
         { slideId: slides[0].id, duration: 20 },
       ],
+      transition: { type: 'fade', durationMs: 500 },
     };
     await page.route('**/api/**', async (route) => {
       const request = route.request();
       const path = new URL(request.url()).pathname;
       let data;
-      if (path === '/api/auth') data = { setup: false, authenticated: true };
+      if (path === '/api/auth')
+        data = {
+          setup: false,
+          authenticated: true,
+          user: { id: 'admin', name: 'Test admin', role: 'admin' },
+          groups: [],
+        };
       else if (path === '/api/library')
         data = {
           slides,
@@ -52,6 +81,8 @@ try {
           devices: [],
           folders: [],
         };
+      else if (path === '/api/playlists/playlist/share-plan')
+        data = { changes: [] };
       else if (
         path === '/api/playlists/playlist' &&
         request.method() === 'PUT'
@@ -65,17 +96,59 @@ try {
         body: JSON.stringify(data),
       });
     });
-    await page.goto(
-      new URL('/app', process.env.OPENFRAME_URL || 'http://127.0.0.1:3100/')
-        .href,
-    );
+    await page.goto(new URL('/dashboard', base).href);
     await page.getByText('Playlists', { exact: true }).first().click();
     await page.getByText(playlist.name, { exact: true }).click();
     const editor = page.locator('.of-modal.wide');
     await editor.waitFor();
-    await page.setViewportSize({ width, height: 900 });
+    await page.setViewportSize({ width, height });
     await editor.getByRole('tab', { name: 'Add slides', exact: true }).click();
     const card = (index) => page.locator('.add-slide-grid > button').nth(index);
+    const grid = page.locator('.add-slide-grid');
+    assert.equal(await grid.locator('button').count(), 30);
+    const geometry = await grid.evaluate((el) => ({
+      height: el.clientHeight,
+      contentHeight: el.scrollHeight,
+      cards: [...el.children].map((button) => {
+        const canvas = button.querySelector('.slide-canvas');
+        const meta = button.querySelector(':scope > span');
+        const preview = canvas.getBoundingClientRect();
+        return {
+          previewHeight: preview.height,
+          expectedHeight:
+            (preview.width /
+              parseFloat(getComputedStyle(canvas).aspectRatio.split('/')[0])) *
+            parseFloat(getComputedStyle(canvas).aspectRatio.split('/')[1]),
+          cardHeight: button.getBoundingClientRect().height,
+          contentHeight: preview.height + meta.getBoundingClientRect().height,
+        };
+      }),
+    }));
+    assert.ok(
+      geometry.contentHeight > geometry.height,
+      'Large libraries must scroll',
+    );
+    assert.ok(geometry.height <= 350, 'Keep the picker bounded');
+    for (const row of geometry.cards) {
+      assert.ok(
+        Math.abs(row.previewHeight - row.expectedHeight) < 2,
+        `Compressed preview at ${width}px: ${JSON.stringify(row)}`,
+      );
+      assert.ok(
+        row.cardHeight >= row.contentHeight,
+        'Card must contain its preview and title',
+      );
+    }
+    await card(29).scrollIntoViewIfNeeded();
+    assert.ok(
+      await card(29).evaluate((button) => {
+        const card = button.getBoundingClientRect();
+        const grid = button.parentElement.getBoundingClientRect();
+        return card.bottom > grid.top && card.top < grid.bottom;
+      }),
+      'The final slide must be reachable by scrolling',
+    );
+    await card(0).scrollIntoViewIfNeeded();
     const count = async (expected) =>
       assert.equal(
         await editor
@@ -145,7 +218,15 @@ try {
         }),
       );
     assert.equal(overflow, false);
-    await page.screenshot({ path: `work/playlist-picker-${width}.png` });
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      'No horizontal overflow',
+    );
+    await page.screenshot({
+      path: `work/playlist-picker-${width}-${height}.png`,
+    });
 
     await editor
       .getByRole('tab', { name: 'Sequence (5)', exact: true })
@@ -178,10 +259,11 @@ try {
       .getByRole('button', { name: 'Cancel', exact: true })
       .click();
     console.log(
-      `${width}px: indicators, cancel, confirmation, double-click, removal, and save/reopen passed`,
+      `${width}×${height}: preview sizing, scrolling, indicators, confirmation, removal, and save/reopen passed`,
     );
     await page.close();
   }
 } finally {
   await browser.close();
+  await new Promise((resolve) => server.close(resolve));
 }
