@@ -1,6 +1,8 @@
 .data-feeds-page {
   max-width: 1000px;
-  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
 }
 .data-feed-toolbar {
   display: flex;
@@ -172,4 +174,16 @@ button.data-feed-open {
 }
 .data-feed-token button {
   flex-shrink: 0;
+}
+
+.workspace-settings {
+  max-width: 1000px;
+  gap: 32px;
+}
+.workspace-settings > section + section {
+  padding-top: 28px;
+  border-top: 1px solid var(--color-border, #dde3df);
+}
+.data-feed-endpoint input {
+  width: 100%;
 }

@@ -39,7 +39,6 @@ import './screens.css';
 import { WeatherOptions } from './weather-options';
 import {
   Monitor,
-  Database,
   Users,
   FileCog,
   LayoutTemplate,
@@ -76,6 +75,7 @@ import {
   Square,
   TrendingUp,
   Settings,
+  Database,
   Bold,
   AlignLeft,
   AlignCenter,
@@ -232,7 +232,6 @@ const emptyLibrary: Library = {
   devices: [],
 };
 const viewInfo = {
-  dataFeeds: { title: 'Data feeds', icon: Database },
   slides: { title: 'Slides', icon: LayoutTemplate },
   playlists: { title: 'Playlists', icon: ListVideo },
   devices: { title: 'Screens', icon: Monitor },
@@ -298,7 +297,7 @@ export default function App() {
     if (
       auth?.authenticated &&
       auth.user?.role !== 'admin' &&
-      (view === 'accounts' || view === 'settings')
+      view === 'accounts'
     )
       setView('slides');
   }, [auth, view]);
@@ -552,7 +551,10 @@ export default function App() {
       {tools}
     </LibraryFilters>
   );
-  const organizationBar = (kind: 'slides' | 'playlists') => (
+  const organizationBar = (
+    kind: 'slides' | 'playlists',
+    children: ReactNode,
+  ) => (
     <LibraryOrganizationToolbar
       kind={kind}
       items={library[kind]}
@@ -579,7 +581,9 @@ export default function App() {
           name: folder.name,
         })
       }
-    />
+    >
+      {children}
+    </LibraryOrganizationToolbar>
   );
   return (
     <TooltipProvider delay={300}>
@@ -731,8 +735,7 @@ export default function App() {
                   .filter(([key]) =>
                     key === 'password'
                       ? auth.user?.role !== 'admin'
-                      : (key !== 'settings' && key !== 'accounts') ||
-                        auth.user?.role === 'admin',
+                      : key !== 'accounts' || auth.user?.role === 'admin',
                   )
                   .map(([key, item]) => (
                     <SidebarMenuItem key={key}>
@@ -814,9 +817,7 @@ export default function App() {
                               ? 'WORKSPACE CONFIGURATION'
                               : view === 'password'
                                 ? 'MY ACCOUNT'
-                                : view === 'dataFeeds'
-                                  ? 'LIVE DATA'
-                                  : 'IMAGE LIBRARY'}
+                                : 'IMAGE LIBRARY'}
                   </span>
                   <h1>{viewInfo[view].title}</h1>
                 </div>
@@ -880,25 +881,27 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {view === 'dataFeeds' && (
-                <DataFeeds
-                  feeds={library.dataFeeds || []}
-                  groups={library.groups}
-                  isAdmin={auth.user?.role === 'admin'}
-                  onRefresh={refresh}
-                  onAccess={setAccessResource}
-                />
-              )}
               {view === 'accounts' && auth.user?.role === 'admin' && (
                 <Accounts user={auth.user} refresh={refresh} />
               )}
               {view === 'password' && auth.user && (
                 <PasswordSettings user={auth.user} />
               )}
-              {view === 'settings' && auth.user?.role === 'admin' && (
-                <div className="account-section">
-                  <StockSettings />
-                  <FontSettings fonts={fonts} refresh={refreshFonts} />
+              {view === 'settings' && (
+                <div className="account-section workspace-settings">
+                  <DataFeeds
+                    feeds={library.dataFeeds || []}
+                    groups={library.groups}
+                    isAdmin={auth.user?.role === 'admin'}
+                    onRefresh={refresh}
+                    onAccess={setAccessResource}
+                  />
+                  {auth.user?.role === 'admin' && (
+                    <>
+                      <StockSettings />
+                      <FontSettings fonts={fonts} refresh={refreshFonts} />
+                    </>
+                  )}
                 </div>
               )}
               {view === 'slides' && (
@@ -953,162 +956,171 @@ export default function App() {
                       </fieldset>
                     </div>,
                   )}
-                  {organizationBar('slides')}
-                  {!!library.slides.length && !visibleSlides.length && (
-                    <p className="empty-filter-results">
-                      No results match these filters. Try another group or clear
-                      the filters.
-                    </p>
-                  )}
-                  {library.slides.length ? (
-                    <div className="slide-grid" data-layout={slideLayout}>
-                      {visibleSlides.map((slide) => (
-                        <article className="slide-card" key={slide.id}>
-                          {!slide.readOnly && (
-                            <Checkbox
-                              className="library-item-select"
-                              aria-label={`Select ${slide.name}`}
-                              checked={selectedItems.slides.includes(slide.id)}
-                              onCheckedChange={(checked) =>
-                                selectItem('slides', slide.id, checked)
-                              }
-                            />
-                          )}
-                          {liveSlides.has(slide.id) && (
-                            <Tooltip>
-                              <TooltipTrigger
-                                render={
-                                  <button
-                                    type="button"
-                                    aria-label={`Live playlists for ${slide.name}`}
-                                    className="slide-live-tag"
-                                  />
+                  {organizationBar(
+                    'slides',
+                    <>
+                      {!!library.slides.length && !visibleSlides.length && (
+                        <p className="empty-filter-results">
+                          No results match these filters. Try another group or
+                          clear the filters.
+                        </p>
+                      )}
+                      {library.slides.length ? (
+                        <div className="slide-grid" data-layout={slideLayout}>
+                          {visibleSlides.map((slide) => (
+                            <article className="slide-card" key={slide.id}>
+                              {!slide.readOnly && (
+                                <Checkbox
+                                  className="library-item-select"
+                                  aria-label={`Select ${slide.name}`}
+                                  checked={selectedItems.slides.includes(
+                                    slide.id,
+                                  )}
+                                  onCheckedChange={(checked) =>
+                                    selectItem('slides', slide.id, checked)
+                                  }
+                                />
+                              )}
+                              {liveSlides.has(slide.id) && (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={
+                                      <button
+                                        type="button"
+                                        aria-label={`Live playlists for ${slide.name}`}
+                                        className="slide-live-tag"
+                                      />
+                                    }
+                                  >
+                                    <span>Live</span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="live-playlist-tooltip">
+                                    <strong>Live in playlists</strong>
+                                    <ul className="live-playlist-list">
+                                      {library.playlists
+                                        .filter(
+                                          (p) =>
+                                            p.publishedAt &&
+                                            p.publishedSlideIds?.includes(
+                                              slide.id,
+                                            ) &&
+                                            library.devices.some(
+                                              (d) =>
+                                                d.playlistId === p.id &&
+                                                screenStatus(d) === 'online',
+                                            ),
+                                        )
+                                        .map((p) => (
+                                          <li key={p.id}>{p.name}</li>
+                                        ))}
+                                    </ul>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              <button
+                                className="thumbnail-button"
+                                draggable={!slide.readOnly}
+                                onDragStart={(event) =>
+                                  startLibraryDrag(
+                                    event,
+                                    'slides',
+                                    selectedItems.slides.includes(slide.id)
+                                      ? selectedItems.slides.filter((id) =>
+                                          library.slides.some(
+                                            (s) => s.id === id && !s.readOnly,
+                                          ),
+                                        )
+                                      : [slide.id],
+                                  )
                                 }
+                                onClick={() => setEditing(slide)}
+                                aria-label={`${slide.readOnly ? 'View' : 'Edit'} ${slide.name}`}
                               >
-                                <span>Live</span>
-                              </TooltipTrigger>
-                              <TooltipContent className="live-playlist-tooltip">
-                                <strong>Live in playlists</strong>
-                                <ul className="live-playlist-list">
-                                  {library.playlists
-                                    .filter(
-                                      (p) =>
-                                        p.publishedAt &&
-                                        p.publishedSlideIds?.includes(
-                                          slide.id,
-                                        ) &&
-                                        library.devices.some(
-                                          (d) =>
-                                            d.playlistId === p.id &&
-                                            screenStatus(d) === 'online',
-                                        ),
-                                    )
-                                    .map((p) => (
-                                      <li key={p.id}>{p.name}</li>
-                                    ))}
-                                </ul>
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                          <button
-                            className="thumbnail-button"
-                            draggable={!slide.readOnly}
-                            onDragStart={(event) =>
-                              startLibraryDrag(
-                                event,
-                                'slides',
-                                selectedItems.slides.includes(slide.id)
-                                  ? selectedItems.slides.filter((id) =>
-                                      library.slides.some(
-                                        (s) => s.id === id && !s.readOnly,
-                                      ),
-                                    )
-                                  : [slide.id],
-                              )
-                            }
-                            onClick={() => setEditing(slide)}
-                            aria-label={`${slide.readOnly ? 'View' : 'Edit'} ${slide.name}`}
-                          >
-                            <SlideCanvas
-                              slide={slide}
-                              assets={library.assets}
-                            />
-                          </button>
-                          <div className="slide-card-info">
-                            <button
-                              className="title-button"
-                              onClick={() => setEditing(slide)}
-                            >
-                              <strong>{slide.name}</strong>
-                              <span>
-                                {slide.width} x {slide.height}{' '}
-                                <span className="dot-separator">/</span>{' '}
-                                {slide.layers.length} layers
-                              </span>
-                            </button>
-                            <IconButton
-                              label={`Duplicate ${slide.name}`}
-                              onClick={() =>
-                                run(async () => {
-                                  await api('/api/slides', 'POST', {
-                                    ...slide,
-                                    managingGroupId: null,
-                                    folderId: null,
-                                    name: `${slide.name.slice(0, 90)} copy`,
-                                  });
-                                  await refresh();
-                                }, 'Slide duplicated')
-                              }
-                            >
-                              <Copy size={16} />
-                            </IconButton>
-                            {!slide.readOnly && (
-                              <IconButton
-                                label={`Delete ${slide.name}`}
-                                onClick={() =>
-                                  setConfirm({
-                                    title: `Delete "${slide.name}"?`,
-                                    action: async () => {
-                                      await api(
-                                        `/api/slides/${slide.id}`,
-                                        'DELETE',
-                                      );
+                                <SlideCanvas
+                                  slide={slide}
+                                  assets={library.assets}
+                                />
+                              </button>
+                              <div className="slide-card-info">
+                                <button
+                                  className="title-button"
+                                  onClick={() => setEditing(slide)}
+                                >
+                                  <strong>{slide.name}</strong>
+                                  <span>
+                                    {slide.width} x {slide.height}{' '}
+                                    <span className="dot-separator">/</span>{' '}
+                                    {slide.layers.length} layers
+                                  </span>
+                                </button>
+                                <IconButton
+                                  label={`Duplicate ${slide.name}`}
+                                  onClick={() =>
+                                    run(async () => {
+                                      await api('/api/slides', 'POST', {
+                                        ...slide,
+                                        managingGroupId: null,
+                                        folderId: null,
+                                        name: `${slide.name.slice(0, 90)} copy`,
+                                      });
                                       await refresh();
-                                    },
+                                    }, 'Slide duplicated')
+                                  }
+                                >
+                                  <Copy size={16} />
+                                </IconButton>
+                                {!slide.readOnly && (
+                                  <IconButton
+                                    label={`Delete ${slide.name}`}
+                                    onClick={() =>
+                                      setConfirm({
+                                        title: `Delete "${slide.name}"?`,
+                                        action: async () => {
+                                          await api(
+                                            `/api/slides/${slide.id}`,
+                                            'DELETE',
+                                          );
+                                          await refresh();
+                                        },
+                                      })
+                                    }
+                                  >
+                                    <Trash2 size={16} />
+                                  </IconButton>
+                                )}
+                              </div>
+                              <OrganizationTags item={slide} />
+                              {slide.readOnly && (
+                                <div className="slide-read-only">View only</div>
+                              )}
+                              <ManageAccessButton
+                                resourceName={slide.name}
+                                tags={slide.accessTags}
+                                onClick={() =>
+                                  setAccessResource({
+                                    kind: 'slide',
+                                    id: slide.id,
+                                    name: slide.name,
                                   })
                                 }
-                              >
-                                <Trash2 size={16} />
-                              </IconButton>
-                            )}
-                          </div>
-                          <OrganizationTags item={slide} />
-                          {slide.readOnly && (
-                            <div className="slide-read-only">View only</div>
-                          )}
-                          <ManageAccessButton
-                            resourceName={slide.name}
-                            tags={slide.accessTags}
-                            onClick={() =>
-                              setAccessResource({
-                                kind: 'slide',
-                                id: slide.id,
-                                name: slide.name,
-                              })
-                            }
-                          />
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <LayoutTemplate size={38} strokeWidth={1.4} />
-                      <h2>Your first slide starts here.</h2>
-                      <button onClick={() => run(createSlide)} disabled={busy}>
-                        <Plus size={18} />
-                        Create a slide
-                      </button>
-                    </div>
+                              />
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state">
+                          <LayoutTemplate size={38} strokeWidth={1.4} />
+                          <h2>Your first slide starts here.</h2>
+                          <button
+                            onClick={() => run(createSlide)}
+                            disabled={busy}
+                          >
+                            <Plus size={18} />
+                            Create a slide
+                          </button>
+                        </div>
+                      )}
+                    </>,
                   )}
                 </>
               )}
@@ -1118,161 +1130,168 @@ export default function App() {
                     { value: 'published', label: 'Published' },
                     { value: 'draft', label: 'Draft' },
                   ])}
-                  {organizationBar('playlists')}
-                  {!!library.playlists.length && !visiblePlaylists.length && (
-                    <p className="empty-filter-results">
-                      No results match these filters. Try another group or clear
-                      the filters.
-                    </p>
-                  )}
-                  {library.playlists.length ? (
-                    <div className="playlist-list">
-                      {visiblePlaylists.map((p) => (
-                        <article
-                          className="playlist-row"
-                          data-library-organized="true"
-                          key={p.id}
-                        >
-                          {!p.readOnly && (
-                            <Checkbox
-                              className="library-item-select"
-                              aria-label={`Select ${p.name}`}
-                              checked={selectedItems.playlists.includes(p.id)}
-                              onCheckedChange={(checked) =>
-                                selectItem('playlists', p.id, checked)
-                              }
-                            />
-                          )}
-                          <div className="playlist-thumb">
-                            {library.slides.find(
-                              (s) => s.id === p.items[0]?.slideId,
-                            ) ? (
-                              <SlideCanvas
-                                slide={library.slides.find(
-                                  (s) => s.id === p.items[0].slideId,
-                                )!}
-                                assets={library.assets}
-                              />
-                            ) : (
-                              <ListVideo size={24} />
-                            )}
-                          </div>
-                          <div className="playlist-name-info">
-                            <button
-                              className="title-button"
-                              draggable={!p.readOnly}
-                              onDragStart={(event) =>
-                                startLibraryDrag(
-                                  event,
-                                  'playlists',
-                                  selectedItems.playlists.includes(p.id)
-                                    ? selectedItems.playlists.filter((id) =>
-                                        library.playlists.some(
-                                          (p) => p.id === id && !p.readOnly,
-                                        ),
-                                      )
-                                    : [p.id],
-                                )
-                              }
-                              onClick={() => setPlaylist(p)}
+                  {organizationBar(
+                    'playlists',
+                    <>
+                      {!!library.playlists.length &&
+                        !visiblePlaylists.length && (
+                          <p className="empty-filter-results">
+                            No results match these filters. Try another group or
+                            clear the filters.
+                          </p>
+                        )}
+                      {library.playlists.length ? (
+                        <div className="playlist-list">
+                          {visiblePlaylists.map((p) => (
+                            <article
+                              className="playlist-row"
+                              data-library-organized="true"
+                              key={p.id}
                             >
-                              <strong>{p.name}</strong>
-                              <span>
-                                {p.items.length} slides{' '}
-                                <span className="dot-separator">/</span>{' '}
-                                {playlistDuration(p)} seconds
-                                {p.fork ? ' / Linked fork' : ''}
-                                {p.readOnly ? ' / View only' : ''}
+                              {!p.readOnly && (
+                                <Checkbox
+                                  className="library-item-select"
+                                  aria-label={`Select ${p.name}`}
+                                  checked={selectedItems.playlists.includes(
+                                    p.id,
+                                  )}
+                                  onCheckedChange={(checked) =>
+                                    selectItem('playlists', p.id, checked)
+                                  }
+                                />
+                              )}
+                              <div className="playlist-thumb">
+                                {library.slides.find(
+                                  (s) => s.id === p.items[0]?.slideId,
+                                ) ? (
+                                  <SlideCanvas
+                                    slide={library.slides.find(
+                                      (s) => s.id === p.items[0].slideId,
+                                    )!}
+                                    assets={library.assets}
+                                  />
+                                ) : (
+                                  <ListVideo size={24} />
+                                )}
+                              </div>
+                              <div className="playlist-name-info">
+                                <button
+                                  className="title-button"
+                                  draggable={!p.readOnly}
+                                  onDragStart={(event) =>
+                                    startLibraryDrag(
+                                      event,
+                                      'playlists',
+                                      selectedItems.playlists.includes(p.id)
+                                        ? selectedItems.playlists.filter((id) =>
+                                            library.playlists.some(
+                                              (p) => p.id === id && !p.readOnly,
+                                            ),
+                                          )
+                                        : [p.id],
+                                    )
+                                  }
+                                  onClick={() => setPlaylist(p)}
+                                >
+                                  <strong>{p.name}</strong>
+                                  <span>
+                                    {p.items.length} slides{' '}
+                                    <span className="dot-separator">/</span>{' '}
+                                    {playlistDuration(p)} seconds
+                                    {p.fork ? ' / Linked fork' : ''}
+                                    {p.readOnly ? ' / View only' : ''}
+                                  </span>
+                                </button>
+                                <OrganizationTags item={p} />
+                                {p.forkSyncError && (
+                                  <p className="inline-error" role="alert">
+                                    Sync paused: {p.forkSyncError}. The last
+                                    published version stays on screens.
+                                  </p>
+                                )}
+                              </div>
+                              <span
+                                className={`badge ${p.publishedAt ? 'green' : ''}`}
+                              >
+                                {p.publishedAt ? 'Published' : 'Draft'}
                               </span>
-                            </button>
-                            <OrganizationTags item={p} />
-                            {p.forkSyncError && (
-                              <p className="inline-error" role="alert">
-                                Sync paused: {p.forkSyncError}. The last
-                                published version stays on screens.
-                              </p>
-                            )}
-                          </div>
-                          <span
-                            className={`badge ${p.publishedAt ? 'green' : ''}`}
+                              <div className="row-actions">
+                                <IconButton
+                                  label={`Preview ${p.name}`}
+                                  disabled={!p.items.length}
+                                  onClick={() => setPreview(p.id)}
+                                >
+                                  <Play size={18} />
+                                </IconButton>
+                                {!p.readOnly && (
+                                  <IconButton
+                                    label={`Edit ${p.name}`}
+                                    onClick={() => setPlaylist(p)}
+                                  >
+                                    <Pencil size={18} />
+                                  </IconButton>
+                                )}
+                                {p.publishedAt && (
+                                  <IconButton
+                                    label={`Fork ${p.name}`}
+                                    onClick={() => setForkMaster(p)}
+                                  >
+                                    <GitFork size={18} />
+                                  </IconButton>
+                                )}
+                                <ManageAccessButton
+                                  resourceName={p.name}
+                                  tags={p.accessTags}
+                                  onClick={() =>
+                                    setAccessResource({
+                                      kind: 'playlist',
+                                      id: p.id,
+                                      name: p.name,
+                                    })
+                                  }
+                                />
+                                {!p.readOnly && (
+                                  <IconButton
+                                    label={`Delete ${p.name}`}
+                                    onClick={() =>
+                                      setConfirm({
+                                        title: `Delete "${p.name}"?`,
+                                        action: async () => {
+                                          await api(
+                                            `/api/playlists/${p.id}`,
+                                            'DELETE',
+                                          );
+                                          await refresh();
+                                        },
+                                      })
+                                    }
+                                  >
+                                    <Trash2 size={16} />
+                                  </IconButton>
+                                )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state">
+                          <ListVideo size={38} strokeWidth={1.4} />
+                          <h2>A sequence for every screen.</h2>
+                          <button
+                            onClick={() =>
+                              setPlaylist({
+                                id: '',
+                                name: 'Untitled playlist',
+                                items: [],
+                              })
+                            }
                           >
-                            {p.publishedAt ? 'Published' : 'Draft'}
-                          </span>
-                          <div className="row-actions">
-                            <IconButton
-                              label={`Preview ${p.name}`}
-                              disabled={!p.items.length}
-                              onClick={() => setPreview(p.id)}
-                            >
-                              <Play size={18} />
-                            </IconButton>
-                            {!p.readOnly && (
-                              <IconButton
-                                label={`Edit ${p.name}`}
-                                onClick={() => setPlaylist(p)}
-                              >
-                                <Pencil size={18} />
-                              </IconButton>
-                            )}
-                            {p.publishedAt && (
-                              <IconButton
-                                label={`Fork ${p.name}`}
-                                onClick={() => setForkMaster(p)}
-                              >
-                                <GitFork size={18} />
-                              </IconButton>
-                            )}
-                            <ManageAccessButton
-                              resourceName={p.name}
-                              tags={p.accessTags}
-                              onClick={() =>
-                                setAccessResource({
-                                  kind: 'playlist',
-                                  id: p.id,
-                                  name: p.name,
-                                })
-                              }
-                            />
-                            {!p.readOnly && (
-                              <IconButton
-                                label={`Delete ${p.name}`}
-                                onClick={() =>
-                                  setConfirm({
-                                    title: `Delete "${p.name}"?`,
-                                    action: async () => {
-                                      await api(
-                                        `/api/playlists/${p.id}`,
-                                        'DELETE',
-                                      );
-                                      await refresh();
-                                    },
-                                  })
-                                }
-                              >
-                                <Trash2 size={16} />
-                              </IconButton>
-                            )}
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <ListVideo size={38} strokeWidth={1.4} />
-                      <h2>A sequence for every screen.</h2>
-                      <button
-                        onClick={() =>
-                          setPlaylist({
-                            id: '',
-                            name: 'Untitled playlist',
-                            items: [],
-                          })
-                        }
-                      >
-                        <Plus size={18} />
-                        Create a playlist
-                      </button>
-                    </div>
+                            <Plus size={18} />
+                            Create a playlist
+                          </button>
+                        </div>
+                      )}
+                    </>,
                   )}
                 </>
               )}

@@ -1,6 +1,16 @@
-import { useState, type DragEvent } from 'react';
+import {
+  useId,
+  useState,
+  type DragEvent,
+  type ReactNode,
+  type CSSProperties,
+} from 'react';
 import {
   Folder,
+  ChevronDown,
+  ChevronRight,
+  LayoutTemplate,
+  ListVideo,
   FolderPlus,
   Pencil,
   Shield,
@@ -16,6 +26,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from './components/ui/dialog';
+import './media-library.css';
 import './library-organization.css';
 
 export type OrganizationFilter = { folder: string; tag: string };
@@ -63,7 +74,9 @@ export function LibraryOrganizationToolbar({
   onSelect,
   refresh,
   onAccess,
+  children,
 }: {
+  children: ReactNode;
   kind: 'slides' | 'playlists';
   items: Item[];
   folders: LibraryFolder[];
@@ -77,6 +90,47 @@ export function LibraryOrganizationToolbar({
   onAccess: (folder: LibraryFolder) => void;
 }) {
   const [error, setError] = useState('');
+  const [foldersOpen, setFoldersOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
+  const navigationId = useId();
+  const currentFolder = folders.find((f) => f.id === filter.folder);
+  const currentName =
+    currentFolder?.name ||
+    (filter.folder === 'none' ? 'Unfiled' : `All ${kind}`);
+  const rows = orderedTree(folders);
+  const branches = new Set(folders.map((f) => f.parentId).filter(Boolean));
+  const paths = new Map<string, string>();
+  const visible = rows.filter(({ item }) => {
+    let id = item.parentId;
+    const seen = new Set<string>();
+    while (id && !seen.has(id)) {
+      if (collapsed.has(id)) return false;
+      seen.add(id);
+      id = folders.find((f) => f.id === id)?.parentId || null;
+    }
+    return true;
+  });
+  for (const { item } of rows) {
+    paths.set(
+      item.id,
+      [paths.get(item.parentId || ''), item.name].filter(Boolean).join(' / '),
+    );
+  }
+  function choose(value: string) {
+    onFilter({ ...filter, folder: value });
+    setFoldersOpen(false);
+  }
+  function toggle(id: string, expand = false) {
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (expand || next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  const LibraryIcon = kind === 'slides' ? LayoutTemplate : ListVideo;
   const [busy, setBusy] = useState(false);
   const [folder, setFolder] = useState<LibraryFolder | 'new' | null>(null);
   const [organize, setOrganize] = useState(false);
@@ -99,6 +153,8 @@ export function LibraryOrganizationToolbar({
   }
   function drop(event: DragEvent, target: LibraryFolder | null) {
     event.preventDefault();
+    setDropTarget(null);
+    if (busy) return;
     try {
       const data = JSON.parse(event.dataTransfer.getData(dragType));
       if (data.kind !== kind) return;
@@ -106,6 +162,11 @@ export function LibraryOrganizationToolbar({
         const moved = folders.find((f) => f.id === data.folderId);
         if (!moved || moved.readOnly || target?.readOnly)
           throw new Error('Edit permission is required to move folders.');
+        if (target && isWithin(folders, target.id, moved.id))
+          throw new Error(
+            'A folder cannot contain itself or one of its enclosing folders.',
+          );
+        if ((moved.parentId || null) === (target?.id || null)) return;
         void run(async () => {
           await api(`/api/library-folders/${kind}/${moved.id}`, 'PUT', {
             ...moved,
@@ -124,63 +185,114 @@ export function LibraryOrganizationToolbar({
       setError((e as Error).message);
     }
   }
-  const allowDrop = (event: DragEvent) => {
-    if (event.dataTransfer.types.includes(dragType) && !busy)
+  const allowDrop = (event: DragEvent, target: string) => {
+    if (event.dataTransfer.types.includes(dragType) && !busy) {
       event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setDropTarget(target);
+    }
   };
   return (
     <section className="library-organization" aria-label={`Organize ${kind}`}>
-      <div className="organization-tools">
-        <details className="library-folder-menu">
-          <summary
-            onDragOver={allowDrop}
-            onDragEnter={(event) => {
-              (event.currentTarget.parentElement as HTMLDetailsElement).open =
-                true;
+      <div className="media-library-body library-browser-body">
+        <div className="media-folder-sidebar">
+          <button
+            type="button"
+            className="media-folder-picker"
+            aria-label={`Choose ${kind} folder: ${currentName}`}
+            aria-expanded={foldersOpen}
+            aria-controls={navigationId}
+            onClick={() => setFoldersOpen(!foldersOpen)}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes(dragType)) {
+                event.preventDefault();
+                setFoldersOpen(true);
+              }
             }}
           >
-            <Folder size={16} />
-            {filter.folder === 'all'
-              ? 'All folders'
-              : filter.folder === 'none'
-                ? 'No folder'
-                : folders.find((f) => f.id === filter.folder)?.name || 'Folder'}
-          </summary>
-          <div className="library-folder-tree">
-            <button
-              type="button"
-              className="folder-filter-button"
-              aria-pressed={filter.folder === 'all'}
-              onClick={() => onFilter({ ...filter, folder: 'all' })}
-            >
-              All folders
-            </button>
-            <button
-              type="button"
-              className="folder-filter-button"
-              aria-pressed={filter.folder === 'none'}
-              onClick={() => onFilter({ ...filter, folder: 'none' })}
-              onDragOver={allowDrop}
-              onDrop={(e) => drop(e, null)}
-            >
-              No folder <span>Drop to move out</span>
-            </button>
-            {orderedTree(folders).map(({ item: f, depth }) => (
-              <div
-                key={f.id}
-                className="library-folder-row"
-                style={{ paddingLeft: depth * 18 }}
-                onDragOver={allowDrop}
-                onDrop={(e) => {
-                  e.stopPropagation();
-                  drop(e, f);
-                }}
+            <Folder size={18} />
+            <span>{currentName}</span>
+            <ChevronDown size={18} />
+          </button>
+          {foldersOpen && currentFolder?.parentId && (
+            <p className="mobile-folder-context">
+              {paths.get(currentFolder.id)}
+            </p>
+          )}
+          <nav
+            id={navigationId}
+            className={`folder-navigation ${foldersOpen ? 'is-open' : ''}`}
+            aria-label={`${kind === 'slides' ? 'Slide' : 'Playlist'} folders`}
+          >
+            <div className="folder-navigation-heading">
+              <strong>Folders</strong>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setFolder('new')}
               >
+                <FolderPlus size={16} />
+                New folder
+              </button>
+            </div>
+            <button
+              type="button"
+              className={`${filter.folder === 'all' ? 'chosen' : ''} ${dropTarget === 'all' ? 'folder-drop-target' : ''}`}
+              aria-current={filter.folder === 'all' ? 'page' : undefined}
+              onClick={() => choose('all')}
+              onDragOver={(event) => allowDrop(event, 'all')}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => drop(event, null)}
+              title="Drop a folder to move it to the top level"
+            >
+              <LibraryIcon size={16} />
+              <span>All {kind}</span>
+              <small>{items.length}</small>
+            </button>
+            <button
+              type="button"
+              className={`${filter.folder === 'none' ? 'chosen' : ''} ${dropTarget === 'none' ? 'folder-drop-target' : ''}`}
+              aria-current={filter.folder === 'none' ? 'page' : undefined}
+              onClick={() => choose('none')}
+              onDragOver={(event) => allowDrop(event, 'none')}
+              onDragLeave={() => setDropTarget(null)}
+              onDrop={(event) => drop(event, null)}
+            >
+              <Folder size={16} />
+              <span>Unfiled</span>
+              <small>{items.filter((item) => !item.folderId).length}</small>
+            </button>
+            {visible.map(({ item: f, depth }) => (
+              <div className="folder-tree-row" key={f.id}>
+                {branches.has(f.id) && (
+                  <button
+                    type="button"
+                    className="folder-branch-toggle"
+                    style={{ left: depth * 16 }}
+                    aria-label={`${collapsed.has(f.id) ? 'Expand' : 'Collapse'} ${f.name}`}
+                    aria-expanded={!collapsed.has(f.id)}
+                    onClick={() => toggle(f.id)}
+                  >
+                    {collapsed.has(f.id) ? (
+                      <ChevronRight size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="folder-filter-button"
-                  aria-pressed={filter.folder === f.id}
-                  onClick={() => onFilter({ ...filter, folder: f.id })}
+                  className={`${filter.folder === f.id ? 'chosen' : ''} ${dropTarget === f.id ? 'folder-drop-target' : ''}`}
+                  aria-label={f.name}
+                  aria-current={filter.folder === f.id ? 'page' : undefined}
+                  title={paths.get(f.id)}
+                  style={
+                    {
+                      paddingLeft: 30 + depth * 16,
+                      '--folder-depth': depth,
+                    } as CSSProperties
+                  }
+                  onClick={() => choose(f.id)}
                   draggable={!f.readOnly && !busy}
                   onDragStart={(event) => {
                     event.dataTransfer.setData(
@@ -188,109 +300,131 @@ export function LibraryOrganizationToolbar({
                       JSON.stringify({ kind, folderId: f.id }),
                     );
                     event.dataTransfer.effectAllowed = 'move';
+                    setDraggedFolder(f.id);
                   }}
+                  onDragEnd={() => {
+                    setDropTarget(null);
+                    setDraggedFolder(null);
+                  }}
+                  onDragOver={(event) =>
+                    (!draggedFolder ||
+                      (!f.readOnly &&
+                        !isWithin(folders, f.id, draggedFolder))) &&
+                    allowDrop(event, f.id)
+                  }
+                  onDragEnter={(event) => {
+                    if (event.dataTransfer.types.includes(dragType))
+                      toggle(f.id, true);
+                  }}
+                  onDragLeave={() => setDropTarget(null)}
+                  onDrop={(event) => drop(event, f)}
                 >
-                  <Folder size={14} />
+                  <Folder size={16} />
                   <span>{f.name}</span>
+                  <small>
+                    {items.filter((item) => item.folderId === f.id).length}
+                  </small>
                 </button>
-                {!f.pathOnly && (
-                  <>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      title={`Access to ${f.name}`}
-                      aria-label={`Access to ${f.name}`}
-                      onClick={() => onAccess(f)}
-                    >
-                      <Shield size={14} />
-                    </button>
-                  </>
-                )}
-                {!f.readOnly && (
-                  <>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      title={`Edit folder ${f.name}`}
-                      aria-label={`Edit folder ${f.name}`}
-                      onClick={() => setFolder(f)}
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      title={`Delete folder ${f.name}`}
-                      aria-label={`Delete folder ${f.name}`}
-                      onClick={() => setDeleting(f)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </>
-                )}
               </div>
             ))}
-            <button
-              type="button"
-              className="folder-filter-button"
-              disabled={busy}
-              onClick={() => setFolder('new')}
-            >
-              <FolderPlus size={16} />
-              New folder
-            </button>
-            <p>
-              Drag items here to move them. Folders include their subfolders
-              when filtering.
-            </p>
+          </nav>
+        </div>
+        <div className="library-results">
+          <div className="media-results-heading library-results-heading">
+            <div className="media-folder-title">
+              <strong>{currentName}</strong>
+              {currentFolder?.parentId && (
+                <span className="media-folder-path">
+                  {paths.get(currentFolder.id)}
+                </span>
+              )}
+            </div>
+            {currentFolder && !currentFolder.pathOnly && (
+              <button
+                type="button"
+                className="icon-button"
+                title={`Access to ${currentFolder.name}`}
+                aria-label={`Access to ${currentFolder.name}`}
+                onClick={() => onAccess(currentFolder)}
+              >
+                <Shield size={16} />
+              </button>
+            )}
+            {currentFolder && !currentFolder.readOnly && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setFolder(currentFolder)}
+                >
+                  <Pencil size={15} />
+                  Edit folder
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  disabled={busy}
+                  title={`Delete folder ${currentFolder.name}`}
+                  aria-label={`Delete folder ${currentFolder.name}`}
+                  onClick={() => setDeleting(currentFolder)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
           </div>
-        </details>
-        <label className="organization-tag-filter">
-          <Tags size={16} />
-          <select
-            aria-label={`Filter ${kind} by tag`}
-            value={filter.tag}
-            onChange={(e) => onFilter({ ...filter, tag: e.target.value })}
-          >
-            <option value="">All tags</option>
-            {tags.map((tag) => (
-              <option key={tag} value={tag}>
-                {tag}
-              </option>
-            ))}
-          </select>
-        </label>
-        {(filter.folder !== 'all' || filter.tag) && (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Clear folder and tag filters"
-            onClick={() => onFilter({ folder: 'all', tag: '' })}
-          >
-            <X size={16} />
-          </button>
-        )}
-        {!!selection.length && (
-          <>
-            <span className="selection-count">{selection.length} selected</span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setOrganize(true)}
-            >
+          <div className="organization-tools">
+            <label className="organization-tag-filter">
               <Tags size={16} />
-              Move / tag
-            </button>
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Clear selection"
-              onClick={() => onSelect([])}
-            >
-              <X size={16} />
-            </button>
-          </>
-        )}
+              <select
+                aria-label={`Filter ${kind} by tag`}
+                value={filter.tag}
+                onChange={(e) => onFilter({ ...filter, tag: e.target.value })}
+              >
+                <option value="">All tags</option>
+                {tags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {(filter.folder !== 'all' || filter.tag) && (
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Clear folder and tag filters"
+                onClick={() => onFilter({ folder: 'all', tag: '' })}
+              >
+                <X size={16} />
+              </button>
+            )}
+            {!!selection.length && (
+              <>
+                <span className="selection-count">
+                  {selection.length} selected
+                </span>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setOrganize(true)}
+                >
+                  <Tags size={16} />
+                  Move / tag
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Clear selection"
+                  onClick={() => onSelect([])}
+                >
+                  <X size={16} />
+                </button>
+              </>
+            )}
+          </div>
+          {children}
+        </div>
       </div>
       {error && (
         <p className="inline-error" role="alert">
@@ -346,7 +480,11 @@ export function LibraryOrganizationToolbar({
                 Inside folder
                 <select
                   name="folder"
-                  defaultValue={folder === 'new' ? '' : folder.parentId || ''}
+                  defaultValue={
+                    folder === 'new'
+                      ? currentFolder?.id || ''
+                      : folder.parentId || ''
+                  }
                 >
                   <option value="">Top level</option>
                   {orderedTree(folders)

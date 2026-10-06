@@ -152,7 +152,6 @@ try {
   await page
     .getByRole('button', { name: 'Clear folder and tag filters', exact: true })
     .click();
-  await page.locator('.library-folder-menu summary').click();
   await page.getByRole('button', { name: 'New folder', exact: true }).click();
   await dialog.getByLabel('Name', { exact: true }).fill('Local folder');
   await dialog
@@ -181,7 +180,6 @@ try {
       .folderId,
     folder.id,
   );
-  await page.locator('.library-folder-menu summary').click();
   await page.getByRole('button', { name: /^Playlists/ }).click();
   assert.equal(
     await page
@@ -251,6 +249,157 @@ try {
       fullPage: true,
     });
   }
+  // The same folder interactions are available in both libraries, including phones.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const [kind, noun, item, dragName] of [
+    ['slides', 'Slide', local, 'Edit Local announcement'],
+    ['playlists', 'Playlist', fork, 'Edit Local safety fork'],
+  ]) {
+    const outer = await api(page, `/api/library-folders/${kind}`, 'POST', {
+      name: `${noun} outer folder`,
+    });
+    const inner = await api(page, `/api/library-folders/${kind}`, 'POST', {
+      name: `${noun} inner folder`,
+      parentId: outer.id,
+    });
+    await page.goto(`${base}/dashboard`);
+    if (kind === 'playlists')
+      await page.getByRole('button', { name: /^Playlists/ }).click();
+    const nav = page.getByRole('navigation', {
+      name: `${noun} folders`,
+      exact: true,
+    });
+    const innerButton = nav.getByRole('button', {
+      name: inner.name,
+      exact: true,
+    });
+    const outerButton = nav.getByRole('button', {
+      name: outer.name,
+      exact: true,
+    });
+    assert.ok(
+      Number.parseInt(
+        await innerButton.evaluate((el) => getComputedStyle(el).paddingLeft),
+      ) >
+        Number.parseInt(
+          await outerButton.evaluate((el) => getComputedStyle(el).paddingLeft),
+        ),
+    );
+    await nav
+      .getByRole('button', { name: `Collapse ${outer.name}`, exact: true })
+      .click();
+    assert.equal(await innerButton.count(), 0);
+    await nav
+      .getByRole('button', { name: `Expand ${outer.name}`, exact: true })
+      .click();
+    const transfer = await page.evaluateHandle(() => new DataTransfer());
+    const dragSource =
+      kind === 'playlists'
+        ? page
+            .locator('.playlist-name-info .title-button')
+            .filter({ hasText: item.name })
+        : page.getByRole('button', { name: dragName, exact: true });
+    await dragSource.dispatchEvent('dragstart', { dataTransfer: transfer });
+    await innerButton.dispatchEvent('drop', { dataTransfer: transfer });
+    await page.waitForFunction(
+      async ({ kind, id, folderId }) =>
+        (await (await fetch('/api/library')).json())[kind].some(
+          (entry) => entry.id === id && entry.folderId === folderId,
+        ),
+      { kind, id: item.id, folderId: inner.id },
+    );
+    await outerButton.click();
+    await page.getByRole('button', { name: dragName, exact: true }).waitFor();
+    await page
+      .getByRole('button', { name: 'Edit folder', exact: true })
+      .click();
+    await dialog
+      .getByLabel('Name', { exact: true })
+      .fill(`${outer.name} renamed`);
+    await dialog
+      .getByRole('button', { name: 'Save folder', exact: true })
+      .click();
+    await dialog.waitFor({ state: 'hidden' });
+    await page.screenshot({
+      path: path.join(root, 'work', `${kind}-folders-desktop.png`),
+      fullPage: true,
+    });
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      assert.equal(await nav.isVisible(), false);
+      await page
+        .getByRole('button', { name: new RegExp(`^Choose ${kind} folder:`) })
+        .click();
+      await innerButton.click();
+      assert.equal(await nav.isVisible(), false);
+      await page.getByRole('button', { name: dragName, exact: true }).waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+        true,
+        `${kind} folder overflow at ${width}px`,
+      );
+      await page.screenshot({
+        path: path.join(root, 'work', `${kind}-folders-${width}.png`),
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const moved = await page.evaluateHandle(() => new DataTransfer());
+    await innerButton.dispatchEvent('dragstart', { dataTransfer: moved });
+    await nav
+      .getByRole('button', { name: new RegExp(`^All ${kind}`) })
+      .dispatchEvent('drop', { dataTransfer: moved });
+    await page.waitForFunction(
+      async ({ kind, id }) =>
+        (await (await fetch('/api/library')).json())[
+          kind === 'slides' ? 'slideFolders' : 'playlistFolders'
+        ].some((entry) => entry.id === id && !entry.parentId),
+      { kind, id: inner.id },
+    );
+  }
+  // Moving feeds into Settings preserves existing non-admin View/Edit permissions.
+  const inheritedFeed = await api(adminPage, '/api/data-feeds', 'POST', {
+    name: 'Regional data',
+    managingGroupId: top.id,
+    fields: [{ key: 'value', type: 'number' }],
+  });
+  await page.goto(`${base}/dashboard`);
+  await page.getByRole('button', { name: /^Settings/ }).click();
+  assert.equal(
+    await page
+      .getByRole('heading', { name: 'Stock quotes', exact: true })
+      .count(),
+    0,
+  );
+  await page.getByRole('button', { name: /Regional data.*field/ }).click();
+  await dialog
+    .getByText('View only. The managing group controls this feed.', {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await dialog
+      .getByRole('button', { name: 'Generate API key', exact: true })
+      .count(),
+    0,
+  );
+  assert.equal(
+    (await api(page, `/api/data-feeds/${inheritedFeed.id}`)).readOnly,
+    true,
+  );
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'New feed', exact: true }).click();
+  await dialog.getByLabel('Name', { exact: true }).fill('Local data');
+  await dialog
+    .getByRole('button', { name: 'Create feed', exact: true })
+    .click();
+  await page.getByRole('button', { name: /Local data.*field/ }).click();
+  await dialog
+    .getByRole('button', { name: 'Generate API key', exact: true })
+    .waitFor();
+  await page.keyboard.press('Escape');
   await adminPage.goto(`${base}/dashboard`);
   await adminPage
     .getByRole('button', {

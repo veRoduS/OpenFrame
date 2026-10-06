@@ -52,6 +52,14 @@ export function exampleData(feed: DataFeed) {
     ]),
   );
 }
+function exampleRequest(feed: DataFeed, url: string) {
+  return [
+    `curl --request PUT '${url}'`,
+    "  --header 'Authorization: Bearer YOUR_API_KEY'",
+    "  --header 'Content-Type: application/json'",
+    `  --data '${JSON.stringify(exampleData(feed))}'`,
+  ].join(' \\' + '\n');
+}
 export function DataFeeds({
   feeds,
   groups = [],
@@ -152,7 +160,12 @@ export function DataFeeds({
     }
   }
   return (
-    <section className="data-feeds-page">
+    <section className="data-feeds-page" aria-labelledby="data-feeds-heading">
+      <h2 id="data-feeds-heading">Data feeds</h2>
+      <p className="muted">
+        Connect an application with an API key and send data to metrics,
+        progress bars, graphs, and charts across your slides.
+      </p>
       <div className="data-feed-toolbar">
         <label>
           Find a feed
@@ -175,17 +188,13 @@ export function DataFeeds({
           <Plus size={18} /> New feed
         </button>
       </div>
-      <p className="muted">
-        Send data once and reuse it in metrics, progress bars, graphs, and
-        charts across your slides.
-      </p>
       {!feeds.length && (
         <div className="data-feed-empty">
           <Database size={32} />
           <h2>Connect your data</h2>
           <p>
             Create a feed, define its fields, then give your integration a
-            scoped update token.
+            feed-specific API key.
           </p>
         </div>
       )}
@@ -381,7 +390,7 @@ export function DataFeeds({
           <DialogDescription>
             {selected?.readOnly
               ? 'View only. The managing group controls this feed.'
-              : 'Manage updates and integration tokens for this feed.'}
+              : 'Manage updates and application API keys for this feed.'}
           </DialogDescription>
           {selected && (
             <>
@@ -433,7 +442,7 @@ export function DataFeeds({
                           url: `${location.origin}${base}/data`,
                         },
                         authentication:
-                          'Scoped bearer token, supplied separately',
+                          'API key in Authorization: Bearer YOUR_API_KEY, supplied separately',
                         guide: `${location.origin}/api/data-feeds/guide`,
                         openapi: `${location.origin}/api/data-feeds/openapi.json`,
                       },
@@ -461,11 +470,14 @@ export function DataFeeds({
               {!selected.readOnly && (
                 <>
                   <h3>
-                    <KeyRound size={18} /> Update tokens
+                    <KeyRound size={18} /> API keys
                   </h3>
                   <p className="muted">
-                    Write only, scoped to this feed. Tokens also stop working if
-                    their creator loses Edit access.
+                    Generate a separate key for each application that sends data
+                    to this feed. Keys can update only this feed; they cannot
+                    read data or edit slides. They expire and can be revoked at
+                    any time. Keys also stop working if their creator loses Edit
+                    access.
                   </p>
                   {tokens.map((token) => (
                     <div className="data-feed-token" key={token.id}>
@@ -511,13 +523,13 @@ export function DataFeeds({
                   >
                     <fieldset disabled={busy}>
                       <label>
-                        Integration name
+                        Application name
                         <input
                           required
                           value={tokenName}
                           maxLength={80}
                           onChange={(e) => setTokenName(e.target.value)}
-                          placeholder="Sales dashboard"
+                          placeholder="Sales dashboard integration"
                         />
                       </label>
                       <label>
@@ -531,27 +543,76 @@ export function DataFeeds({
                           onChange={(e) => setExpires(Number(e.target.value))}
                         />
                       </label>
-                      <button>Create token</button>
+                      <button>Generate API key</button>
                     </fieldset>
                   </form>
-                  {secret && (
-                    <output className="data-feed-secret">
-                      <strong>
-                        Copy this token now. It is shown only once.
-                      </strong>
-                      <code>{secret}</code>
-                      <button onClick={() => void copy(secret)}>
-                        <Copy size={16} /> Copy token
+                  <Dialog
+                    open={!!secret}
+                    onOpenChange={(open) => !open && setSecret('')}
+                  >
+                    <DialogContent className="of-modal data-feed-modal">
+                      <DialogTitle>API key generated</DialogTitle>
+                      <DialogDescription>
+                        Copy this key now. You will not be able to see it again.
+                        Store it in the application’s secrets configuration.
+                      </DialogDescription>
+                      <output className="data-feed-secret">
+                        <code>{secret}</code>
+                        <button onClick={() => void copy(secret)}>
+                          <Copy size={16} /> Copy API key
+                        </button>
+                      </output>
+                      <p className="muted">
+                        This key can send updates only to {selected.name}.
+                      </p>
+                      <label className="data-feed-endpoint">
+                        Update URL
+                        <input
+                          readOnly
+                          value={`${location.origin}${base}/data`}
+                          onFocus={(event) => event.target.select()}
+                        />
+                      </label>
+                      <pre className="data-feed-code">{`Authorization: Bearer YOUR_API_KEY`}</pre>
+                      <p>
+                        Use PUT with Content-Type: application/json and the
+                        example payload in this feed’s integration details.
+                      </p>
+                      <button
+                        className="ghost"
+                        onClick={() =>
+                          void copy(`${location.origin}${base}/data`)
+                        }
+                      >
+                        <Copy size={16} /> Copy update URL
                       </button>
-                      <button className="ghost" onClick={() => setSecret('')}>
-                        Hide token
-                      </button>
-                    </output>
-                  )}
+                      {notice && <output>{notice}</output>}
+                      {error && (
+                        <p className="inline-error" role="alert">
+                          {error}
+                        </p>
+                      )}
+                      <div className="data-feed-actions">
+                        <button onClick={() => setSecret('')}>Done</button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </>
               )}
               <h3>Send an update</h3>
-              <pre className="data-feed-code">{`curl --request PUT '${location.origin}${base}/data' \\\n  --header 'Authorization: Bearer YOUR_FEED_TOKEN' \\\n  --header 'Content-Type: application/json' \\\n  --data '${JSON.stringify(exampleData(selected))}'`}</pre>
+              <pre className="data-feed-code">
+                {exampleRequest(selected, `${location.origin}${base}/data`)}
+              </pre>
+              <button
+                className="ghost"
+                onClick={() =>
+                  void copy(
+                    exampleRequest(selected, `${location.origin}${base}/data`),
+                  )
+                }
+              >
+                <Copy size={16} /> Copy request example
+              </button>
               <button
                 className="ghost"
                 onClick={() =>
@@ -570,7 +631,7 @@ export function DataFeeds({
                 <div className="data-feed-actions">
                   {deleting ? (
                     <>
-                      <span>Delete feed and all its tokens?</span>
+                      <span>Delete feed and all its API keys?</span>
                       <button
                         className="ghost"
                         disabled={busy}
@@ -665,7 +726,9 @@ export function DataWidgetOptions({
         </select>
       </label>
       {!feeds.length && (
-        <p className="muted">Create a feed on the Data feeds page first.</p>
+        <p className="muted">
+          Create a feed under Settings → Data feeds first.
+        </p>
       )}
       <label>
         Title

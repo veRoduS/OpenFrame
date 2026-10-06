@@ -6,20 +6,22 @@ This guide is a complete handoff for a developer or AI building an integration. 
 **Contract:** download `GET /api/data-feeds/openapi.json` (OpenAPI 3.1), or share [the JSON file](../server/data-feeds.openapi.json).
 **Requirements:** server 0.20.0+, player 0.10.13+ for data widgets. Existing slides remain compatible with older players. Use HTTPS outside a trusted local network.
 
+API keys are feed-specific credentials for external applications. They work without a browser session or OpenFrame password. Send a key in the `Authorization: Bearer YOUR_API_KEY` header. The management API retains its existing `/tokens` routes and `token` response field for compatibility; these tokens are the API keys shown in Settings. Existing keys continue working.
+
 ## Quick start
 
-1. In OpenFrame, open **Data feeds → New feed**. Give it a name and a managing group. Add field keys and types. For the example below use `completed` (number), `goal` (number), `hourly` (time series), and `departments` (categories).
-2. Open that feed, create a named update token, and copy it immediately. Choose an expiry, 1–365 days (90 by default). The token is shown once; OpenFrame stores only its SHA-256 hash. If lost, create a replacement and revoke the old token.
+1. In OpenFrame, open **Settings → Data feeds → New feed**. Give it a name and a managing group. Add field keys and types. For the example below use `completed` (number), `goal` (number), `hourly` (time series), and `departments` (categories).
+2. Open that feed, enter an application name, select **Generate API key**, and copy the key from the one-time pop-up. The pop-up also provides the exact update URL. Choose an expiry, 1–365 days (90 by default). The token is shown once; OpenFrame stores only its SHA-256 hash. If lost, create a replacement and revoke the old token.
 3. Use **Copy integration details** in the feed dialog to copy its base URL, feed ID, exact field definitions, update URL, and documentation links. Give the integration this handoff and provide the token separately through a secret store. Tokens are feed-specific and write-only. They cannot read data, manage feeds, edit slides, or access other feeds. Do not include a token in slides, public code, browser JavaScript, or logs.
 4. Send a snapshot using the request below.
 5. In a slide's **Widgets** section add a Metric, Progress bar, Line graph, or Bar chart. Select this feed and a compatible field. For a progress bar select `completed` and target field `goal`, or set a positive fixed target. Publish the playlist layout once and assign it to your screens.
 
-Replace `FEED_ID` and `YOUR_FEED_TOKEN`. These are placeholders; no real credentials appear in this guide.
+Replace `FEED_ID` and `YOUR_API_KEY`. These are placeholders; no real credentials appear in this guide.
 
 ```sh
 curl --fail-with-body --request PUT \
   'https://openframe.blackfalcon.cloud/api/data-feeds/FEED_ID/data' \
-  --header 'Authorization: Bearer YOUR_FEED_TOKEN' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
   --header 'Content-Type: application/json' \
   --data '{
     "completed": 75,

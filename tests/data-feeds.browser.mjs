@@ -75,7 +75,17 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}/dashboard`);
-  await page.getByRole('button', { name: /Data feeds/ }).click();
+  await page.getByRole('button', { name: /^Settings/ }).click();
+  assert.equal(
+    await page
+      .locator('[data-sidebar="menu-button"]')
+      .filter({ hasText: 'Data feeds' })
+      .count(),
+    0,
+  );
+  await page
+    .getByRole('heading', { name: 'Data feeds', exact: true })
+    .waitFor();
   await page.getByRole('button', { name: 'New feed', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name', { exact: true }).fill('Daily total');
@@ -85,19 +95,48 @@ try {
     .click();
   await page.getByRole('button', { name: /Daily total.*field/ }).click();
   await dialog
-    .getByLabel('Integration name', { exact: true })
+    .getByLabel('Application name', { exact: true })
     .fill('Simple integration');
   await dialog
-    .getByRole('button', { name: 'Create token', exact: true })
+    .getByRole('button', { name: 'Generate API key', exact: true })
     .click();
   await page.locator('.data-feed-secret code').waitFor();
   const secret = await page.locator('.data-feed-secret code').textContent();
   assert.match(secret, /^ofd_[A-Za-z0-9_-]{43}$/);
-  await dialog.getByRole('button', { name: 'Hide token' }).click();
+  const keyDialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', {
+      name: 'API key generated',
+      exact: true,
+    }),
+  });
+  await keyDialog
+    .getByLabel('Update URL')
+    .inputValue()
+    .then((url) => assert.match(url, /\/api\/data-feeds\/[a-f0-9-]+\/data$/));
+  await keyDialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await page.locator('.data-feed-secret').waitFor({ state: 'detached' });
   assert.equal(await page.locator('.data-feed-secret').count(), 0);
+  assert.equal(
+    await page
+      .getByRole('heading', { name: 'API key generated', exact: true })
+      .count(),
+    0,
+  );
   await page.keyboard.press('Escape');
   const library = await api('/api/library');
   const simple = library.dataFeeds.find((f) => f.name === 'Daily total');
+  // A generated key works from an application without an OpenFrame login cookie.
+  const integration = await browser.newContext();
+  const sent = await integration.request.put(
+    `${base}/api/data-feeds/${simple.id}/data`,
+    { headers: { Authorization: `Bearer ${secret}` }, data: { completed: 42 } },
+  );
+  assert.equal(sent.status(), 200);
+  const sessionOnly = await integration.request.get(
+    `${base}/api/data-feeds/${simple.id}`,
+  );
+  assert.equal(sessionOnly.status(), 401);
+  await integration.close();
   await api(
     `/api/data-feeds/${simple.id}/data`,
     'PUT',
@@ -208,7 +247,17 @@ try {
     path: path.join(root, 'work/data-feeds-player.png'),
   });
   await page.goto(`${base}/dashboard`);
-  await page.getByRole('button', { name: /Data feeds/ }).click();
+  await page.getByRole('button', { name: /^Settings/ }).click();
+  assert.equal(
+    await page
+      .locator('[data-sidebar="menu-button"]')
+      .filter({ hasText: 'Data feeds' })
+      .count(),
+    0,
+  );
+  await page
+    .getByRole('heading', { name: 'Data feeds', exact: true })
+    .waitFor();
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 950 });
     if (width < 700) {
@@ -227,6 +276,12 @@ try {
       await dialog.evaluate((e) => e.scrollWidth > e.clientWidth + 1),
       false,
     );
+    const request = await dialog
+      .locator('.data-feed-code')
+      .last()
+      .textContent();
+    assert.equal(request.split('\n').length, 4);
+    assert.match(request, /Authorization: Bearer YOUR_API_KEY/);
     await dialog.evaluate(async (element) => {
       await Promise.all(
         element
