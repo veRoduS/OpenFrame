@@ -2,6 +2,14 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.20.0] - 2026-10-06
+
+- Add reusable live data feeds with per-feed write-only API tokens, expiry, revocation, validation, and bounded update rates.
+- Add metric, horizontal/vertical progress, line graph, and bar chart widgets with live updates and offline snapshots.
+- Enforce group View/Edit permissions for feeds and validate dependencies when sharing or publishing slides, playlists, and screens.
+- Provide a standalone API guide, OpenAPI contract, dependency-free Python client, and copyable per-feed integration handoff.
+- Require player 0.10.13+ for data widgets (manifest schema 4); existing slides and publications retain their compatible schemas.
+
 ## [0.19.1] - 2026-10-06
 
 - Add reusable live data feeds, scoped integration tokens, dashboard widgets, and shareable API documentation

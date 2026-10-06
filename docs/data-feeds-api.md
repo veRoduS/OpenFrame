@@ -4,7 +4,7 @@ This guide is a complete handoff for a developer or AI building an integration. 
 
 **Base URL:** your OpenFrame server, for example `https://openframe.blackfalcon.cloud`.
 **Contract:** download `GET /api/data-feeds/openapi.json` (OpenAPI 3.1), or share [the JSON file](../server/data-feeds.openapi.json).
-**Requirements:** server 0.19.1+, player 0.10.13+ for data widgets. Existing slides remain compatible with older players. Use HTTPS outside a trusted local network.
+**Requirements:** server 0.20.0+, player 0.10.13+ for data widgets. Existing slides remain compatible with older players. Use HTTPS outside a trusted local network.
 
 ## Quick start
 
