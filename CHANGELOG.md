@@ -2,6 +2,16 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.19.0] - 2026-10-06
+
+- Inherited access, linked playlist forks, library folders and tags, and grouped editor controls
+- Add View/Edit access with managing groups: inherited hierarchy access is View, existing direct grants retain Edit, and global admins remain unrestricted.
+- Let local groups fork master playlists with independent additions, timing, speed, and order; master publications refresh forks without publishing local drafts or changing upstream playlists.
+- Add nested folders, tags, drag/drop moves, bulk organization, and combined filters to Slides and Playlists.
+- Separate slide insertion controls into Content and Widgets, with responsive icon layouts.
+- Update Express's transitive proxy-addr dependency to 2.0.8 to address GHSA-jqcg-44mw-7w3h.
+- Keep player 0.10.12 and the existing sync/publication contracts unchanged; see the release notes for access migration and backup guidance.
+
 ## [0.18.2] - 2026-10-05
 
 - Separate slide editor content and widget controls

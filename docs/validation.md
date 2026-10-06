@@ -1,5 +1,15 @@
 # Validation record
 
+## GitHub milestone 0.19.0: inherited access and library organization
+
+Checked on 2026-10-06: all 179 Node tests passed, including real Python-agent integration, and all 91 Python tests passed. Organization, library-access, and editor-lock browser checks passed using installed Chromium against disposable databases. These cover desktop/phone group and folder management, inherited View access, independent playlist forks, timing/order, bulk tags, image insertion/replacement, and layer locks. Lint, typecheck, formatting of the changed implementation files, the production web build, version/repository/compatibility checks, and three Pi shell syntax checks passed.
+
+A clean frozen-lockfile dependency install passed. The production audit initially identified GHSA-jqcg-44mw-7w3h in proxy-addr 2.0.7; only that transitive dependency was updated to 2.0.8. The repeated 179-test Node suite passed and the repeated production audit reported no known vulnerabilities. Player source and version remain 0.10.12, with unchanged sync and schema 2/3 publication contracts.
+
+A local Docker build passed with a temporary, ignored Dockerfile that mounts the cloud proxy CA during networked steps and normalizes public source-file read permissions to match a normal Git checkout. The production Dockerfile is unchanged. Isolated containers passed health/version/UI checks, seeded-admin login, image upload/WebP decoding, account/media persistence after replacement, and stopped-volume backup/restore into a fresh volume. Requests ran over the container's own loopback interface with its external network disabled. Disposable containers and volumes were removed; no production data was used.
+
+The tagged GitHub workflow must independently validate the original Dockerfile on native AMD64/ARM64 and finish image publication before the registry latest alias advances. Physical Pi/Android playback, manufacturer power behavior, and long-run performance were not retested. No live application deployment or Android Play Store submission is included.
+
 ## Local server revision 0.18.1: inherited access and linked playlists
 
 Checked on 2026-10-05: 52 Node server/access checks passed; two optional Python-agent integration checks were skipped because OPENFRAME_PYTHON was not enabled. Lint, typecheck, the production web build, and version/repository/compatibility checks passed. Both organization and library-access browser checks passed using installed Chromium, including desktop/phone layouts, inherited read-only views, user-local forks, timing/order, tagging, folder moves, and access dialog controls. Screenshots were visually reviewed at 1280 and 390 pixels.
