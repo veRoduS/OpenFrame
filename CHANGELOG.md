@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.21.0] - 2026-10-06
+
+- Match Slides and Playlists folder navigation to Media, with indented collapsible branches, item counts, drag/drop, selected-folder actions, and a mobile folder picker.
+- Move Data feeds into Settings while preserving existing feed View/Edit permissions; stock and font settings remain admin-only.
+- Clarify per-application API key generation with a one-time copy pop-up, exact update URL, and copyable request examples. Existing keys and API endpoints remain compatible.
+- Update the integration handoff and user documentation; no player or manifest changes.
+
 ## [0.20.1] - 2026-10-06
 
 - Match library folder sidebars to Media, move data feeds into Settings, and clarify application API key generation
