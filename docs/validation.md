@@ -1,5 +1,15 @@
 # Validation record
 
+## GitHub milestone 0.22.0: shared folders, upload progress, and library fixes
+
+Checked on 2026-10-06: all 189 Node tests and 92 Python tests pass, including real Python-agent integration. The five browser suites for library access, media uploads, tag selection, playlist picking, and populated responsive UI layouts use disposable or mocked content. They verify global folder navigation with admin-only folder controls, protected read-only content, actual sequential upload progress and confirmations, cancellation/partial failures, visible-tag catalogs and bulk changes, and 30-slide preview sizing/scrolling at 1280×900, 1280×720, 390×844, and 320×568. Static checks, production build, versions, compatibility, repository hygiene, and Pi shell syntax pass.
+
+The production advisory audit identified GHSA-wq5f-xc86-pv6w in Sharp 0.35.4. Sharp is pinned to 0.35.5 with its patched native libraries; the repeated audit reports zero known vulnerabilities, and the repeated Node/media/browser checks pass. A clean frozen-lockfile install passes. No other dependency families were updated.
+
+A local Docker build uses a temporary ignored copy of the production Dockerfile, mounting the cloud proxy CA for networked steps and normalizing public source read permissions to match a normal Git checkout. Isolated containers verify health/version/UI, generated administrator login, synthetic image upload/WebP decoding, account/media persistence after container replacement, and stopped-volume backup/restore to a fresh volume. External networking is disabled for the smoke checks; disposable containers and volumes are removed.
+
+The existing compatible engineering review remains current: these changes affect management folder permissions and media upload UI, not player sync, published manifests, or Android updates. Player source and version remain 0.10.13. The GitHub tag workflow independently verifies the original Dockerfile on native AMD64/ARM64 before publishing the versioned and latest images. This milestone includes no live deployment, new APK, or physical-player/long-run performance claim.
+
 ## Local server 0.19.1 / player 0.10.13: live data feeds
 
 Checked on 2026-10-06: all 188 Node tests, 92 Python tests, and 28 native Java agent/updater tests passed. Node tests include the real Python-agent integration and feed payload/authentication/permissions, expiry/revocation, limits, publication recipients, and handoff documentation. Python and Android tests verify schema 4, data snapshots after offline restart, and clearing revoked values following a successful online sync. Java tests used the existing host JDK/JUnit fixture, including real Express enrollment.

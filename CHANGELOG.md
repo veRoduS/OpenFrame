@@ -2,6 +2,15 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.22.0] - 2026-10-06
+
+- Show the same nested Slides, Playlists, and Media folders to every signed-in user, including empty folders. Restrict folder creation, renaming, moving, deletion, and access management to admins; users can organize content they can edit in any folder.
+- Add a persistent bottom-right panel for multiple media uploads, with actual transfer progress, processing states, confirmed results, partial-failure handling, and cancellation.
+- Select existing tags or type new ones in Slides, Playlists, and Media tagging forms, including bulk removal, with choices limited to visible content and duplicate selections excluded.
+- Fix compressed Add Slides previews in the playlist editor: preserve preview proportions and readable labels, and scroll large libraries.
+- Preserve accounts, content permissions, media URLs, publications, and player 0.10.13 compatibility. No new APK or player protocol is required.
+- Update Sharp to 0.35.5 and its bundled native image libraries to address GHSA-wq5f-xc86-pv6w.
+
 ## [0.21.3] - 2026-10-06
 
 - Keep playlist Add Slides previews readable in large scrolling libraries

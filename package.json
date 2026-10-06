@@ -1,6 +1,6 @@
 {
   "name": "openframe",
-  "version": "0.21.3",
+  "version": "0.22.0",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.19.0",
@@ -33,7 +33,7 @@
     "express": "^5.2.1",
     "fflate": "0.8.3",
     "multer": "^2.4.0",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "zod": "^4.5.4"
   },
   "devDependencies": {
