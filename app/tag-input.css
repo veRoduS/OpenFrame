@@ -1,0 +1,10 @@
+.tag-input {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.tag-input input,
+.tag-input select {
+  min-width: 0;
+  width: 100%;
+}

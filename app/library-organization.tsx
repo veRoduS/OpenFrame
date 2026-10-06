@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { api, type LibraryFolder, type LibraryOrganization } from './types';
 import { orderedTree, indentedName, isWithin } from './hierarchy';
+import { TagInput } from './tag-input';
 import {
   Dialog,
   DialogContent,
@@ -581,14 +582,19 @@ export function LibraryOrganizationToolbar({
                 ))}
               </select>
             </label>
-            <label>
-              Add tags
-              <input name="add" placeholder="safety, announcements" />
-            </label>
-            <label>
-              Remove tags
-              <input name="remove" placeholder="Separate tags with commas" />
-            </label>
+            <TagInput
+              label="Add tags"
+              existingLabel="Choose existing tags to add"
+              existingTags={tags}
+              name="add"
+              placeholder="safety, announcements"
+            />
+            <TagInput
+              label="Remove tags"
+              existingLabel="Choose existing tags to remove"
+              existingTags={tags}
+              name="remove"
+            />
             <p className="muted">
               Up to 30 tags per item, 40 characters each. Tags are shared within
               this library.

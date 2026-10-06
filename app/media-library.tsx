@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/tooltip';
 import { api, type Asset, type MediaFolder } from './types';
 import { visibleMedia, parseTags } from './media-utils.mjs';
+import { TagInput } from './tag-input';
 import { ManageAccessButton } from './resource-access';
 
 function Tool({
@@ -923,17 +924,20 @@ export function MediaLibrary({
               </label>
             )}
             {(mode === 'tags' || mode === 'asset') && (
-              <label>
-                Tags, separated by commas
-                <input
-                  value={tags}
-                  disabled={readOnlyAsset}
-                  onChange={(e) => setTags(e.target.value)}
-                  placeholder="lobby, summer, events"
-                  maxLength={1230}
-                  required={mode === 'tags'}
-                />
-              </label>
+              <TagInput
+                label="Tags, separated by commas"
+                existingLabel={
+                  mode === 'tags' && tagAction === 'remove'
+                    ? 'Choose existing tags to remove'
+                    : 'Choose existing tags to add'
+                }
+                existingTags={allTags}
+                value={tags}
+                onChange={setTags}
+                disabled={readOnlyAsset}
+                placeholder="lobby, summer, events"
+                required={mode === 'tags'}
+              />
             )}
             {error && (
               <p className="inline-error" role="alert">
