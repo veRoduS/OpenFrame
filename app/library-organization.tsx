@@ -160,7 +160,7 @@ export function LibraryOrganizationToolbar({
       if (data.kind !== kind) return;
       if (data.folderId) {
         const moved = folders.find((f) => f.id === data.folderId);
-        if (!moved || moved.readOnly || target?.readOnly)
+        if (!isAdmin || !moved || moved.readOnly || target?.readOnly)
           throw new Error('Edit permission is required to move folders.');
         if (target && isWithin(folders, target.id, moved.id))
           throw new Error(
@@ -226,14 +226,16 @@ export function LibraryOrganizationToolbar({
           >
             <div className="folder-navigation-heading">
               <strong>Folders</strong>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setFolder('new')}
-              >
-                <FolderPlus size={16} />
-                New folder
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setFolder('new')}
+                >
+                  <FolderPlus size={16} />
+                  New folder
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -293,7 +295,7 @@ export function LibraryOrganizationToolbar({
                     } as CSSProperties
                   }
                   onClick={() => choose(f.id)}
-                  draggable={!f.readOnly && !busy}
+                  draggable={isAdmin && !f.readOnly && !busy}
                   onDragStart={(event) => {
                     event.dataTransfer.setData(
                       dragType,
@@ -339,7 +341,7 @@ export function LibraryOrganizationToolbar({
                 </span>
               )}
             </div>
-            {currentFolder && !currentFolder.pathOnly && (
+            {isAdmin && currentFolder && !currentFolder.pathOnly && (
               <button
                 type="button"
                 className="icon-button"
@@ -350,7 +352,7 @@ export function LibraryOrganizationToolbar({
                 <Shield size={16} />
               </button>
             )}
-            {currentFolder && !currentFolder.readOnly && (
+            {isAdmin && currentFolder && !currentFolder.readOnly && (
               <>
                 <button
                   type="button"

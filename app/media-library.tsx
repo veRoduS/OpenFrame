@@ -1,3 +1,4 @@
+import type { MediaUploadBatch } from './media-uploads';
 import { orderedTree, isWithin, indentedName } from './hierarchy';
 import { useId, useRef, useState, type ReactNode } from 'react';
 import './media-library.css';
@@ -77,21 +78,21 @@ function Tool({
 type FormMode = 'folder' | 'rename-folder' | 'asset' | 'move' | 'tags' | null;
 export function MediaLibrary({
   assets,
+  isAdmin = false,
   folders,
   onRefresh,
   onUpload,
+  uploading = false,
   onPick,
   onManageAccess,
   shareWithSlideId,
 }: {
   assets: Asset[];
+  isAdmin?: boolean;
   folders: MediaFolder[];
   onRefresh: () => Promise<void>;
-  onUpload: (
-    file: File,
-    folderId?: string | null,
-    shareWithSlideId?: string,
-  ) => Promise<Asset>;
+  onUpload: MediaUploadBatch;
+  uploading?: boolean;
   onPick?: (asset: Asset) => void;
   onManageAccess?: (asset: Asset) => void;
   shareWithSlideId?: string;
@@ -193,6 +194,7 @@ export function MediaLibrary({
   }
   function canDrop(target: string | null) {
     return (
+      isAdmin &&
       !busy &&
       !onPick &&
       !!draggedFolder &&
@@ -425,7 +427,7 @@ export function MediaLibrary({
         <button
           className="primary media-upload"
           onClick={() => uploadInput.current?.click()}
-          disabled={busy}
+          disabled={busy || uploading}
         >
           <Upload size={17} />
           Upload
@@ -441,16 +443,11 @@ export function MediaLibrary({
             e.target.value = '';
             if (files.length)
               run(async () => {
-                let completed = 0;
-                for (const file of files) {
-                  await onUpload(
-                    file,
-                    currentFolder?.id || null,
-                    shareUpload ? shareWithSlideId : undefined,
-                  );
-                  completed++;
-                  setNotice(`Uploaded ${completed} of ${files.length}`);
-                }
+                await onUpload(
+                  files,
+                  currentFolder?.id || null,
+                  shareUpload ? shareWithSlideId : undefined,
+                );
               });
           }}
         />
@@ -479,7 +476,7 @@ export function MediaLibrary({
           >
             <div className="folder-navigation-heading">
               <strong>Folders</strong>
-              {!onPick && (
+              {isAdmin && !onPick && (
                 <button
                   type="button"
                   onClick={() => open('folder')}
@@ -564,7 +561,7 @@ export function MediaLibrary({
                           } as React.CSSProperties
                         }
                         title={folderPaths.get(f.id)}
-                        draggable={!busy && !onPick}
+                        draggable={isAdmin && !busy && !onPick}
                         onDragStart={(event) => {
                           event.dataTransfer.setData(
                             'application/x-openframe-folder',
@@ -616,7 +613,7 @@ export function MediaLibrary({
               )}
             </div>
             <span>{filtered.length} images</span>
-            {currentFolder && !onPick && (
+            {isAdmin && currentFolder && !onPick && (
               <>
                 <button disabled={busy} onClick={() => open('rename-folder')}>
                   <Pencil size={15} />

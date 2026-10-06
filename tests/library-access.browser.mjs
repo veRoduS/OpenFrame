@@ -152,15 +152,14 @@ try {
   await page
     .getByRole('button', { name: 'Clear folder and tag filters', exact: true })
     .click();
-  await page.getByRole('button', { name: 'New folder', exact: true }).click();
-  await dialog.getByLabel('Name', { exact: true }).fill('Local folder');
-  await dialog
-    .getByRole('button', { name: 'Save folder', exact: true })
-    .click();
-  await dialog.waitFor({ state: 'hidden' });
-  const folder = (await api(page, '/api/library')).slideFolders.find(
-    (f) => f.name === 'Local folder',
+  assert.equal(
+    await page.getByRole('button', { name: 'New folder', exact: true }).count(),
+    0,
   );
+  const folder = await api(adminPage, '/api/library-folders/slides', 'POST', {
+    name: 'Local folder',
+  });
+  await page.reload();
   const drag = await page.evaluateHandle(() => new DataTransfer());
   await page
     .getByRole('button', { name: 'Edit Local announcement', exact: true })
@@ -255,10 +254,10 @@ try {
     ['slides', 'Slide', local, 'Edit Local announcement'],
     ['playlists', 'Playlist', fork, 'Edit Local safety fork'],
   ]) {
-    const outer = await api(page, `/api/library-folders/${kind}`, 'POST', {
+    const outer = await api(adminPage, `/api/library-folders/${kind}`, 'POST', {
       name: `${noun} outer folder`,
     });
-    const inner = await api(page, `/api/library-folders/${kind}`, 'POST', {
+    const inner = await api(adminPage, `/api/library-folders/${kind}`, 'POST', {
       name: `${noun} inner folder`,
       parentId: outer.id,
     });
@@ -310,16 +309,22 @@ try {
     );
     await outerButton.click();
     await page.getByRole('button', { name: dragName, exact: true }).waitFor();
-    await page
-      .getByRole('button', { name: 'Edit folder', exact: true })
+    assert.equal(
+      await page
+        .getByRole('button', { name: 'Edit folder', exact: true })
+        .count(),
+      0,
+    );
+    await api(adminPage, `/api/library-folders/${kind}/${outer.id}`, 'PUT', {
+      ...outer,
+      name: `${outer.name} renamed`,
+    });
+    await page.reload();
+    if (kind === 'playlists')
+      await page.getByRole('button', { name: /^Playlists/ }).click();
+    await nav
+      .getByRole('button', { name: `${outer.name} renamed`, exact: true })
       .click();
-    await dialog
-      .getByLabel('Name', { exact: true })
-      .fill(`${outer.name} renamed`);
-    await dialog
-      .getByRole('button', { name: 'Save folder', exact: true })
-      .click();
-    await dialog.waitFor({ state: 'hidden' });
     await page.screenshot({
       path: path.join(root, 'work', `${kind}-folders-desktop.png`),
       fullPage: true,
@@ -346,11 +351,11 @@ try {
       });
     }
     await page.setViewportSize({ width: 1280, height: 900 });
-    const moved = await page.evaluateHandle(() => new DataTransfer());
-    await innerButton.dispatchEvent('dragstart', { dataTransfer: moved });
-    await nav
-      .getByRole('button', { name: new RegExp(`^All ${kind}`) })
-      .dispatchEvent('drop', { dataTransfer: moved });
+    assert.equal(await innerButton.getAttribute('draggable'), 'false');
+    await api(adminPage, `/api/library-folders/${kind}/${inner.id}`, 'PUT', {
+      ...inner,
+      parentId: null,
+    });
     await page.waitForFunction(
       async ({ kind, id }) =>
         (await (await fetch('/api/library')).json())[

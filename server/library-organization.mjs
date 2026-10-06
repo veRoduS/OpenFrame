@@ -6,7 +6,7 @@ const kinds = { slides: 'slide', playlists: 'playlist' };
 
 export function mountLibraryOrganization(
   app,
-  { db, admin, accounts, allRecords, put, remove, requireEditable },
+  { db, admin, administrator, allRecords, put, remove, requireEditable },
 ) {
   const kindFor = (req) => {
     const kind = kinds[req.params.kind];
@@ -14,32 +14,15 @@ export function mountLibraryOrganization(
     return kind;
   };
   function visibleFolders(kind, user) {
-    const folders = allRecords(`${kind}-folder`);
-    const visible = new Set(
-      allRecords(kind)
-        .filter((i) => accounts.can(user, kind, i.id))
-        .map((i) => i.folderId)
-        .filter(Boolean),
-    );
-    for (const f of folders)
-      if (accounts.can(user, `${kind}-folder`, f.id)) visible.add(f.id);
-    for (const id of visible) {
-      let f = folders.find((f) => f.id === id);
-      const seen = new Set();
-      while (f && !seen.has(f.id)) {
-        seen.add(f.id);
-        visible.add(f.id);
-        f = folders.find((parent) => parent.id === f.parentId);
-      }
-    }
-    return folders
-      .filter((f) => visible.has(f.id))
-      .map((f) => ({
-        ...f,
-        readOnly: !accounts.canEdit(user, `${kind}-folder`, f.id),
-        pathOnly: !accounts.can(user, `${kind}-folder`, f.id),
-      }));
+    return allRecords(`${kind}-folder`).map((f) => ({
+      ...(user.role === 'admin'
+        ? f
+        : { id: f.id, name: f.name, parentId: f.parentId || null }),
+      readOnly: user.role !== 'admin',
+      pathOnly: false,
+    }));
   }
+
   function validateFolder(kind, folderId, user) {
     if (folderId && !visibleFolders(kind, user).some((f) => f.id === folderId))
       throw fail(404, 'Folder not found');
@@ -62,7 +45,7 @@ export function mountLibraryOrganization(
     }
     return input;
   }
-  app.post('/api/library-folders/:kind', admin, (req, res) => {
+  app.post('/api/library-folders/:kind', administrator, (req, res) => {
     const kind = kindFor(req);
     const f = put(`${kind}-folder`, {
       ...folderInput(req, kind, null),
@@ -70,7 +53,7 @@ export function mountLibraryOrganization(
     });
     res.status(201).json(f);
   });
-  app.put('/api/library-folders/:kind/:id', admin, (req, res) => {
+  app.put('/api/library-folders/:kind/:id', administrator, (req, res) => {
     const kind = kindFor(req);
     const current = requireEditable(`${kind}-folder`, req.params.id);
     res.json(
@@ -81,7 +64,7 @@ export function mountLibraryOrganization(
       }),
     );
   });
-  app.delete('/api/library-folders/:kind/:id', admin, (req, res) => {
+  app.delete('/api/library-folders/:kind/:id', administrator, (req, res) => {
     const kind = kindFor(req);
     requireEditable(`${kind}-folder`, req.params.id);
     if (

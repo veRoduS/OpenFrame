@@ -1,0 +1,96 @@
+.media-upload-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 500;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 18px;
+  background: var(--card, #fff);
+  color: var(--foreground, #233029);
+  border: 1px solid var(--of-control-border, #829187);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #14291d26;
+}
+.media-upload-panel header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.media-upload-panel header strong {
+  flex: 1;
+  font-size: 15px;
+}
+.media-upload-panel header > svg {
+  color: #17613d;
+  flex-shrink: 0;
+}
+.media-upload-panel p {
+  font-size: 13px;
+  margin: 10px 0;
+  color: var(--of-text-muted);
+}
+.media-upload-panel progress {
+  display: block;
+  width: 100%;
+  height: 7px;
+  accent-color: #17613d;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.media-upload-panel progress::-webkit-progress-bar {
+  background: #e5eee8;
+}
+.media-upload-panel progress::-webkit-progress-value {
+  background: #17613d;
+}
+.media-upload-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  max-height: 200px;
+  overflow: auto;
+}
+.media-upload-panel li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  padding: 10px 0;
+  border-top: 1px solid #e5eee8;
+  font-size: 12px;
+}
+.media-upload-panel li strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.media-upload-panel li span {
+  color: var(--of-text-muted);
+}
+.media-upload-panel li[data-status='done'] span {
+  color: #17613d;
+}
+.media-upload-panel li[data-status='error'] span,
+.media-upload-panel li small {
+  color: #a03043;
+}
+.media-upload-panel li progress,
+.media-upload-panel li small {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+}
+.media-upload-panel > button {
+  margin-top: 12px;
+}
+@media (max-width: 767px) {
+  .media-upload-panel {
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    padding: 14px;
+  }
+  .media-upload-panel ul {
+    max-height: 160px;
+  }
+}

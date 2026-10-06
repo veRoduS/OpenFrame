@@ -278,14 +278,12 @@ export function createApp({
         ? new URL(process.env.PUBLIC_URL).origin
         : `${req.protocol}://${req.get('host')}`;
       if (req.headers.origin !== expected)
-        return res
-          .status(403)
-          .json({
-            error: 'Origin not allowed',
-            ...(req.path.startsWith('/api/data-feeds')
-              ? { code: 'REQUEST_FAILED' }
-              : {}),
-          });
+        return res.status(403).json({
+          error: 'Origin not allowed',
+          ...(req.path.startsWith('/api/data-feeds')
+            ? { code: 'REQUEST_FAILED' }
+            : {}),
+        });
     }
     next();
   });
@@ -438,6 +436,8 @@ export function createApp({
       )
       .all(kind, id);
   function canShare(user, kind, id) {
+    if (['folder', 'slide-folder', 'playlist-folder'].includes(kind))
+      return user.role === 'admin';
     return (
       user.role === 'admin' ||
       !!db
@@ -632,6 +632,11 @@ export function createApp({
     )
       throw fail(400, 'Invalid resource');
     requireRecord(kind, id);
+    if (
+      ['folder', 'slide-folder', 'playlist-folder'].includes(kind) &&
+      req.user.role !== 'admin'
+    )
+      throw fail(403, 'Admin access required');
     res.json({
       canShare: !!canShare(req.user, kind, id),
       grants: grants(kind, id),
@@ -726,7 +731,7 @@ export function createApp({
   const organization = mountLibraryOrganization(app, {
     db,
     admin,
-    accounts,
+    administrator,
     allRecords,
     put,
     remove,
@@ -895,7 +900,12 @@ export function createApp({
           ...withGroups('asset', publicAsset(asset)),
           readOnly: !accounts.can(req.user, 'asset', asset.id),
         })),
-      folders: list('folder').map((item) => withGroups('folder', item)),
+      folders: allRecords('folder').map((item) => ({
+        id: item.id,
+        name: item.name,
+        parentId: item.parentId || null,
+        readOnly: req.user.role !== 'admin',
+      })),
       devices: list('device').map((item) =>
         withGroups('device', publicDevice(item)),
       ),
@@ -1802,12 +1812,12 @@ export function createApp({
       throw fail(409, 'A folder with that name already exists');
     return folder;
   }
-  app.post('/api/folders', admin, (req, res) =>
+  app.post('/api/folders', administrator, (req, res) =>
     res
       .status(201)
       .json(put('folder', { ...folderName(req.body), id: randomUUID() })),
   );
-  app.put('/api/folders/:id', admin, (req, res) => {
+  app.put('/api/folders/:id', administrator, (req, res) => {
     requireRecord('folder', req.params.id);
     res.json(
       put('folder', {
@@ -1816,7 +1826,7 @@ export function createApp({
       }),
     );
   });
-  app.delete('/api/folders/:id', admin, (req, res) => {
+  app.delete('/api/folders/:id', administrator, (req, res) => {
     requireRecord('folder', req.params.id);
     if (allRecords('folder').some((f) => f.parentId === req.params.id))
       throw fail(409, 'Move subfolders out of this folder before deleting it');

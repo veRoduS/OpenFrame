@@ -1231,11 +1231,10 @@ void test('existing superadmin identities migrate to admin without changing cred
   assert.equal((await admin('/api/users')).status, 200);
 });
 
-void test('folder moves reject cycles across hidden ancestors and preserve descendants and grants', async (t) => {
+void test('admin folder moves reject cycles and preserve descendants and grants', async (t) => {
   const { admin, user, db } = await fixture(t);
   const alice = await user('alice');
-  const parent = (await alice.call('/api/folders', 'POST', { name: 'Parent' }))
-    .data;
+  const parent = (await admin('/api/folders', 'POST', { name: 'Parent' })).data;
   const hidden = (
     await admin('/api/folders', 'POST', { name: 'Hidden', parentId: parent.id })
   ).data;
@@ -1247,7 +1246,7 @@ void test('folder moves reject cycles across hidden ancestors and preserve desce
   });
   assert.equal(
     (
-      await alice.call(`/api/folders/${parent.id}`, 'PUT', {
+      await admin(`/api/folders/${parent.id}`, 'PUT', {
         name: parent.name,
         parentId: deep.id,
       })
@@ -1255,18 +1254,18 @@ void test('folder moves reject cycles across hidden ancestors and preserve desce
     400,
   );
   assert.equal(
-    (await alice.call(`/api/folders/${parent.id}`, 'DELETE')).status,
+    (await admin(`/api/folders/${parent.id}`, 'DELETE')).status,
     409,
   );
   const other = (await admin('/api/folders', 'POST', { name: 'Other' })).data;
   assert.equal(
     (
-      await alice.call(`/api/folders/${parent.id}`, 'PUT', {
+      await admin(`/api/folders/${parent.id}`, 'PUT', {
         name: parent.name,
         parentId: other.id,
       })
     ).status,
-    404,
+    200,
   );
   const saved = db
     .prepare("SELECT * FROM resource_grants WHERE kind='folder' AND id=?")
@@ -2033,50 +2032,180 @@ void test('a fork retains its last valid publication when master viewing access 
   assert.notEqual(record().published.revision, initial.revision);
 });
 
-void test('editable folders can be renamed inside a read-only ancestor without gaining ancestor permissions', async (t) => {
+void test('folders are globally visible but only admins can change even legacy owned or granted folders', async (t) => {
+  const { admin, user, db, client } = await fixture(t);
+  const member = await user('folder-user');
+  const outsider = await user('folder-outsider');
+  const privateGroup = (
+    await admin('/api/groups', 'POST', { name: 'Private folder managers' })
+  ).data;
+  for (const [route, kind, collection] of [
+    ['/api/folders', 'folder', 'folders'],
+    ['/api/library-folders/slides', 'slide-folder', 'slideFolders'],
+    ['/api/library-folders/playlists', 'playlist-folder', 'playlistFolders'],
+  ]) {
+    const root = (
+      await admin(route, 'POST', {
+        name: `${kind} root`,
+        ...(kind !== 'folder' ? { managingGroupId: privateGroup.id } : {}),
+      })
+    ).data;
+    const nested = (
+      await admin(route, 'POST', { name: `${kind} nested`, parentId: root.id })
+    ).data;
+    // Older installations may have user-owned folders and explicit Edit grants.
+    db.prepare(
+      'UPDATE resource_access SET ownerId=? WHERE kind=? AND id=?',
+    ).run(member.user.id, kind, nested.id);
+    await admin(`/api/access/${kind}/${nested.id}`, 'POST', {
+      userId: member.user.id,
+      permission: 'edit',
+    });
+    for (const person of [member, outsider]) {
+      const navigation = (await person.call('/api/library')).data[collection];
+      assert.ok(navigation.some((f) => f.id === root.id));
+      assert.equal(
+        navigation.find((f) => f.id === nested.id).parentId,
+        root.id,
+      );
+      assert.ok(navigation.every((f) => f.readOnly));
+      assert.ok(!JSON.stringify(navigation).includes(privateGroup.id));
+      assert.equal(
+        (await person.call(route, 'POST', { name: 'Forbidden new folder' }))
+          .status,
+        403,
+      );
+      assert.equal(
+        (
+          await person.call(`${route}/${nested.id}`, 'PUT', {
+            name: 'Forbidden rename',
+            parentId: null,
+          })
+        ).status,
+        403,
+      );
+      assert.equal(
+        (await person.call(`${route}/${nested.id}`, 'DELETE')).status,
+        403,
+      );
+      assert.equal(
+        (
+          await person.call(`/api/access/${kind}/${nested.id}`, 'POST', {
+            userId: outsider.user.id,
+          })
+        ).status,
+        403,
+      );
+      assert.equal(
+        (await person.call(`/api/access/${kind}/${nested.id}`)).status,
+        403,
+      );
+    }
+    assert.equal(
+      (
+        await admin(`${route}/${nested.id}`, 'PUT', {
+          name: 'Admin renamed',
+          parentId: null,
+        })
+      ).status,
+      200,
+    );
+    assert.equal((await admin(`${route}/${nested.id}`, 'DELETE')).status, 200);
+  }
+  assert.equal((await client()('/api/library')).status, 401);
+});
+
+void test('users move editable content and upload into any shared folder without gaining access to private contents', async (t) => {
   const { admin, user } = await fixture(t);
-  const member = await user('folder-manager');
-  const group = (await admin('/api/groups', 'POST', { name: 'Folder group' }))
+  const member = await user('shared-folder-organizer');
+  const outsider = await user('shared-folder-outsider');
+  for (const kind of ['slides', 'playlists']) {
+    const folder = (
+      await admin(`/api/library-folders/${kind}`, 'POST', {
+        name: 'Shared destination',
+      })
+    ).data;
+    const body =
+      kind === 'slides' ? slide : { name: 'Local playlist', items: [] };
+    const own = (await member.call(`/api/${kind}`, 'POST', body)).data;
+    const secret = (await admin(`/api/${kind}`, 'POST', body)).data;
+    await admin(`/api/organization/${kind}`, 'POST', {
+      ids: [secret.id],
+      folderId: folder.id,
+    });
+    for (const folderId of [folder.id, null]) {
+      assert.equal(
+        (
+          await member.call(`/api/organization/${kind}`, 'POST', {
+            ids: [own.id],
+            folderId,
+          })
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await member.call(`/api/library`)).data[kind].find(
+          (item) => item.id === own.id,
+        ).folderId,
+        folderId,
+      );
+    }
+    assert.equal((await outsider.call('/api/library')).data[kind].length, 0);
+    assert.equal(
+      (
+        await member.call(`/api/organization/${kind}`, 'POST', {
+          ids: [secret.id],
+          folderId: null,
+        })
+      ).status,
+      404,
+    );
+  }
+  const a = (await admin('/api/folders', 'POST', { name: 'Shared media A' }))
     .data;
-  await admin(`/api/groups/${group.id}/members/${member.user.id}`, 'PUT', {
-    role: 'member',
-  });
-  const ancestor = (
-    await admin('/api/library-folders/playlists', 'POST', { name: 'Path only' })
-  ).data;
-  const nested = (
-    await admin('/api/library-folders/playlists', 'POST', {
-      name: 'Managed folder',
-      parentId: ancestor.id,
-      managingGroupId: group.id,
-    })
-  ).data;
-  const folders = (await member.call('/api/library')).data.playlistFolders;
-  assert.equal(folders.find((f) => f.id === ancestor.id).pathOnly, true);
-  const renamed = await member.call(
-    `/api/library-folders/playlists/${nested.id}`,
-    'PUT',
-    { ...nested, name: 'Renamed folder' },
+  const b = (await admin('/api/folders', 'POST', { name: 'Shared media B' }))
+    .data;
+  const form = new FormData();
+  form.append(
+    'file',
+    new Blob([
+      await sharp({
+        create: { width: 2, height: 2, channels: 3, background: 'blue' },
+      })
+        .png()
+        .toBuffer(),
+    ]),
+    'user-upload.png',
   );
-  assert.equal(renamed.status, 200, JSON.stringify(renamed.data));
-  assert.equal(renamed.data.parentId, ancestor.id);
+  form.append('folderId', a.id);
+  const uploaded = await member.call('/api/assets', 'POST', form);
+  assert.equal(uploaded.status, 201);
+  assert.equal(uploaded.data.folderId, a.id);
+  const secret = await uploadImage(admin);
+  await admin(`/api/assets/${secret.id}`, 'PATCH', { folderId: a.id });
   assert.equal(
     (
-      await member.call(
-        `/api/library-folders/playlists/${ancestor.id}`,
-        'PUT',
-        { name: 'Forbidden' },
-      )
-    ).status,
-    404,
-  );
-  assert.equal(
-    (
-      await member.call(`/api/library-folders/playlists/${nested.id}`, 'PUT', {
-        ...nested,
-        parentId: null,
+      await member.call('/api/assets/batch', 'POST', {
+        ids: [uploaded.data.id],
+        folderId: b.id,
       })
     ).status,
     200,
   );
+  assert.equal(
+    (await member.call('/api/library')).data.assets.find(
+      (item) => item.id === uploaded.data.id,
+    ).folderId,
+    b.id,
+  );
+  assert.equal(
+    (
+      await member.call('/api/assets/batch', 'POST', {
+        ids: [secret.id],
+        folderId: b.id,
+      })
+    ).status,
+    404,
+  );
+  assert.equal((await outsider.call('/api/library')).data.assets.length, 0);
 });

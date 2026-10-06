@@ -1,3 +1,4 @@
+import { useMediaUploads, type MediaUploadBatch } from './media-uploads';
 import { DataFeeds, DataWidgetOptions, dataModes } from './data-feeds';
 import { Checkbox } from './components/ui/checkbox';
 import {
@@ -413,19 +414,11 @@ export default function App() {
     const t = setTimeout(() => setNotice(''), 4500);
     return () => clearTimeout(t);
   }, [notice]);
-  async function upload(
-    file: File,
-    folderId: string | null = null,
-    shareWithSlideId?: string,
-  ): Promise<Asset> {
-    const form = new FormData();
-    form.append('file', file);
-    if (folderId) form.append('folderId', folderId);
-    if (shareWithSlideId) form.append('shareWithSlideId', shareWithSlideId);
-    const asset = await api<Asset>('/api/assets', 'POST', form);
-    await refresh();
-    return asset;
-  }
+  const {
+    uploadBatch: upload,
+    uploading,
+    uploadNotice,
+  } = useMediaUploads(auth?.authenticated ? auth.user?.id : null, refresh);
   async function createSlide() {
     const slide = await api<Slide>('/api/slides', 'POST', {
       name: 'Untitled slide',
@@ -1423,10 +1416,12 @@ export default function App() {
               )}
               {view === 'media' && (
                 <MediaLibrary
+                  isAdmin={auth.user?.role === 'admin'}
                   assets={library.assets}
                   folders={library.folders}
                   onRefresh={refresh}
                   onUpload={upload}
+                  uploading={uploading}
                   onManageAccess={(asset) =>
                     setAccessResource({
                       kind: 'asset',
@@ -1462,6 +1457,7 @@ export default function App() {
               folders={library.folders}
               onRefresh={refresh}
               onUpload={upload}
+              uploading={uploading}
               onClose={() => setEditing(null)}
               onSave={async (slide) => {
                 const saved = await api<Slide>(
@@ -1725,6 +1721,7 @@ export default function App() {
           )}
         </SidebarProvider>
       )}
+      {auth?.authenticated && uploadNotice}
     </TooltipProvider>
   );
 }
@@ -2022,7 +2019,9 @@ function Editor({
   onClose,
   onSave,
   onUpload,
+  uploading,
 }: {
+  uploading: boolean;
   feeds: import('./types').DataFeed[];
   initial: Slide;
   assets: Asset[];
@@ -2031,11 +2030,7 @@ function Editor({
   onRefresh: () => Promise<void>;
   onClose: () => void;
   onSave: (s: Slide) => Promise<Slide>;
-  onUpload: (
-    f: File,
-    folderId?: string | null,
-    shareWithSlideId?: string,
-  ) => Promise<Asset>;
+  onUpload: MediaUploadBatch;
 }) {
   const [slide, setSlide] = useState<Slide>(structuredClone(initial));
   const [saved, setSaved] = useState(JSON.stringify(initial));
@@ -3460,6 +3455,7 @@ function Editor({
           folders={folders}
           onRefresh={onRefresh}
           onUpload={onUpload}
+          uploading={uploading}
           shareWithSlideId={slide.id}
           onPick={(asset) => chooseImage(asset.id)}
         />

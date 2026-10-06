@@ -36,7 +36,7 @@ Global admins can select **Add existing user** on a group without generating an 
 
 ### View and Edit
 
-For slides, playlists, and their organization folders, **Manage access** offers a **Managing group** and separate **View** / **Edit** grants. Direct members of the managing group can edit; inherited access is View only, regardless of a group's grant being Edit. A direct Edit grant to a user or a group they directly belong to can elevate access. Admins always have unrestricted access.
+For slides and playlists, **Manage access** offers a **Managing group** and separate **View** / **Edit** grants. Direct members of the managing group can edit; inherited access is View only, regardless of a group's grant being Edit. A direct Edit grant to a user or a group they directly belong to can elevate access. Admins always have unrestricted access.
 
 Without a managing group, the original creator remains the personal owner and can edit. Assigning a managing group replaces this ownership-based editing permission; being the original creator no longer overrides that group. The managing group, personal owner, or global admin controls sharing and management. An explicit Edit recipient can edit content but cannot change its managing group or grant access.
 
@@ -48,7 +48,7 @@ Removing a membership or grant removes only that source of access. Ownership, ma
 
 ## Screen assignments and sharing
 
-Select **Manage access** on a slide, playlist, screen, or media item to open its access settings in place. Slides and media have a labeled access footer; playlists and screens have a button beside their other controls. Use the separate **Groups** and **Users** dropdowns; only admins can assign individual users. Tags beside Manage access summarize current group grants and directly assigned users who do not already inherit access through a granted group. At most two tags appear, with a **+N more** control opening the full access dialog; compact Media cards show one tag. When both groups and direct users are present, the standard summary includes one of each. The dialog keeps its separate grant dropdowns above a scrollable list of existing Groups and Users, with full group paths and named removal controls. Admin access is automatic and does not require a grant. For individual user access to folders and other content, click a user under **Users & Groups > Users**. Users & Groups contains Groups, Users, and My password; the Sharing & assignments tab is removed.
+Select **Manage access** on a slide, playlist, screen, or media item to open its access settings in place. Slides and media have a labeled access footer; playlists and screens have a button beside their other controls. Use the separate **Groups** and **Users** dropdowns; only admins can assign individual users. Tags beside Manage access summarize current group grants and directly assigned users who do not already inherit access through a granted group. At most two tags appear, with a **+N more** control opening the full access dialog; compact Media cards show one tag. When both groups and direct users are present, the standard summary includes one of each. The dialog keeps its separate grant dropdowns above a scrollable list of existing Groups and Users, with full group paths and named removal controls. Admin access is automatic and does not require a grant. For individual user access to content, click a user under **Users & Groups > Users**. Users & Groups contains Groups, Users, and My password; the Sharing & assignments tab is removed.
 
 - Admins can assign screens and other resources to individual users or groups.
 - Personal owners and direct managing-group members can share with groups they belong to. Only global admins assign individual users.
@@ -82,3 +82,5 @@ The command uses `DATA_DIR`, refuses an existing username, and prints a randomly
 Rolling back to a release without user management removes these access protections. Restore the matching pre-upgrade data backup and server version together; do not run an old server against the upgraded database.
 
 The sidebar footer shows the signed-in name beside the version and sign-out control. Hover or focus a slide’s **Live** badge to see the published playlists assigned to online screens that make the slide live.
+
+Folders on Slides, Playlists, and Media are shared navigation metadata: all signed-in users can see every folder and its nesting, but only global admins can create, edit, reparent, delete, or manage access to folders. Legacy folder owners and Edit recipients no longer have folder management permission. Users can move their editable content into any existing folder; private and inherited read-only contents stay protected. No existing folder, content record, or grant is deleted by this policy change.

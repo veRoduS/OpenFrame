@@ -137,6 +137,8 @@ export function createAccounts(db) {
   function permission(user, kind, id) {
     if (!user || user.disabled) return null;
     if (user.role === 'admin') return 'edit';
+    if (['folder', 'slide-folder', 'playlist-folder'].includes(kind))
+      return 'view';
     if (!libraryKinds.has(kind))
       return legacyCan(user, kind, id) ? 'edit' : null;
     const management = db

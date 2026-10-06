@@ -174,6 +174,7 @@ export type Asset = {
   readOnly?: boolean;
 };
 export type MediaFolder = {
+  readOnly?: boolean;
   accessTags?: AccessTag[];
   id: string;
   name: string;

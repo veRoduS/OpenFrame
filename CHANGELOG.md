@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.21.1] - 2026-10-06
+
+- Share folder navigation with all users, restrict folder management to admins, and add multi-file upload progress notifications
+
 ## [0.21.0] - 2026-10-06
 
 - Match Slides and Playlists folder navigation to Media, with indented collapsible branches, item counts, drag/drop, selected-folder actions, and a mobile folder picker.
