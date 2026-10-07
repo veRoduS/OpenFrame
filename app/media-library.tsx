@@ -1,13 +1,14 @@
 import type { MediaUploadBatch } from './media-uploads';
 import { orderedTree, isWithin, indentedName } from './hierarchy';
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { IconButton as Tool } from './components/ui/icon-button';
+import { LibraryFilters } from './library-filters';
 import './media-library.css';
 import {
   Folder,
   FolderPlus,
   Images,
   Upload,
-  Search,
   Grid2X2,
   List,
   Pencil,
@@ -18,7 +19,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -43,39 +43,6 @@ import { visibleMedia, parseTags } from './media-utils.mjs';
 import { TagInput } from './tag-input';
 import { ManageAccessButton } from './resource-access';
 
-function Tool({
-  label,
-  children,
-  onClick,
-  active,
-  disabled,
-}: {
-  label: string;
-  children: ReactNode;
-  onClick: () => void;
-  active?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            className={`icon-button ${active ? 'active' : ''}`}
-            aria-label={label}
-            aria-pressed={active}
-            onClick={onClick}
-            disabled={disabled}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
 type FormMode = 'folder' | 'rename-folder' | 'asset' | 'move' | 'tags' | null;
 export function MediaLibrary({
   assets,
@@ -101,18 +68,56 @@ export function MediaLibrary({
   const [draggedAssets, setDraggedAssets] = useState<string[]>([]);
   const [draggedFolder, setDraggedFolder] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [folder, setFolder] = useState('all');
-  const [search, setSearch] = useState('');
-  const [tag, setTag] = useState('');
-  const [sort, setSort] = useState('newest');
-  const [display, setDisplay] = useState('grid');
+  const routeParam = useCallback(
+    (key: string, fallback = '') =>
+      !onPick
+        ? new URLSearchParams(location.search).get(key) || fallback
+        : fallback,
+    [onPick],
+  );
+  const [folder, setFolder] = useState(() => routeParam('folder', 'all'));
+  const [search, setSearch] = useState(() => routeParam('q'));
+  const [tag, setTag] = useState(() => routeParam('tag'));
+  const [sort, setSort] = useState(() => routeParam('sort', 'newest'));
+  const [display, setDisplay] = useState(() => routeParam('layout', 'grid'));
   const [foldersOpen, setFoldersOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => {
+    if (onPick) return;
+    const params = new URLSearchParams();
+    for (const [key, value, fallback] of [
+      ['folder', folder, 'all'],
+      ['q', search, ''],
+      ['tag', tag, ''],
+      ['sort', sort, 'newest'],
+      ['layout', display, 'grid'],
+    ])
+      if (value !== fallback) params.set(key, value);
+    const route = '/dashboard/media' + (params.size ? `?${params}` : '');
+    history.replaceState(history.state, '', route);
+    try {
+      sessionStorage.setItem('openframe.media.route', route);
+    } catch {
+      /* Storage is optional. */
+    }
+  }, [folder, search, tag, sort, display, onPick]);
+  useEffect(() => {
+    if (onPick) return;
+    function restore() {
+      if (location.pathname !== '/dashboard/media') return;
+      setFolder(routeParam('folder', 'all'));
+      setSearch(routeParam('q'));
+      setTag(routeParam('tag'));
+      setSort(routeParam('sort', 'newest'));
+      setDisplay(routeParam('layout', 'grid'));
+      setSelected(new Set());
+    }
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, [onPick, routeParam]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     new Set(),
   );
   const folderNavigationId = useId();
-  const filtersId = useId();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<FormMode>(null);
   const [activeAsset, setActiveAsset] = useState<Asset | null>(null);
@@ -320,47 +325,57 @@ export function MediaLibrary({
   const readOnlyAsset = mode === 'asset' && !!activeAsset?.readOnly;
   return (
     <div className={`media-library ${onPick ? 'picker-library' : ''}`}>
-      <div className="media-toolbar">
-        <label className="media-search">
-          <Search size={17} />
-          <input
-            aria-label="Search media"
-            placeholder="Search images or tags"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setSelected(new Set());
-            }}
-          />
-        </label>
-        <div className="media-toolbar-options">
-          <label
-            className="sr-only"
-            htmlFor={onPick ? 'picker-sort' : 'media-sort'}
-          >
-            Sort images
-          </label>
-          <select
-            id={onPick ? 'picker-sort' : 'media-sort'}
-            className="media-sort"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="name">Name A-Z</option>
-            <option value="name-desc">Name Z-A</option>
-            <option value="largest">Largest first</option>
-            <option value="smallest">Smallest first</option>
-          </select>
-          <div className="media-display">
-            <Tool
-              label="Grid view"
-              active={display === 'grid'}
-              onClick={() => setDisplay('grid')}
+      <LibraryFilters
+        noun="Media"
+        shown={filtered.length}
+        total={assets.length}
+        groups={[]}
+        statuses={[]}
+        filter={{ query: search, group: '', status: tag }}
+        searchPlaceholder="Search images or tags"
+        onChange={(next) => {
+          setSearch(next.query);
+          setTag(next.status);
+          setSelected(new Set());
+        }}
+        filterControls={
+          <label>
+            Tags
+            <select
+              aria-label="Filter by tag"
+              value={tag}
+              onChange={(e) => {
+                setTag(e.target.value);
+                setSelected(new Set());
+              }}
             >
-              <Grid2X2 size={18} />
-            </Tool>
+              <option value="">All tags</option>
+              {allTags.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+        }
+      >
+        <div className="slide-library-tools">
+          <label className="slide-sort-control">
+            Sort by
+            <select
+              aria-label="Sort images"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="name">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="largest">Largest first</option>
+              <option value="smallest">Smallest first</option>
+            </select>
+          </label>
+          <fieldset className="slide-view-controls" aria-label="Media view">
             <Tool
               label="List view"
               active={display === 'list'}
@@ -368,53 +383,27 @@ export function MediaLibrary({
             >
               <List size={18} />
             </Tool>
-          </div>
-          <button
-            type="button"
-            className="media-filter-toggle"
-            aria-label={`Tags${tag ? ' (1)' : ''}`}
-            title="Filter by tag"
-            aria-expanded={filtersOpen}
-            aria-controls={filtersId}
-            onClick={() => setFiltersOpen(!filtersOpen)}
-          >
-            <SlidersHorizontal size={17} />
-            <span className="media-filter-toggle-label">
-              Tags{tag ? ' (1)' : ''}
-            </span>
-          </button>
-        </div>
-        <div
-          id={filtersId}
-          className={`media-filter-options ${filtersOpen ? 'is-open' : ''}`}
-        >
-          <select
-            aria-label="Filter by tag"
-            value={tag}
-            onChange={(e) => {
-              setTag(e.target.value);
-              setSelected(new Set());
-            }}
-          >
-            <option value="">All tags</option>
-            {allTags.map((t) => (
-              <option value={t} key={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          {tag && (
-            <button
-              type="button"
-              onClick={() => {
-                setTag('');
-                setSelected(new Set());
-              }}
+            <Tool
+              label="Grid view"
+              active={display === 'grid'}
+              onClick={() => setDisplay('grid')}
             >
-              Clear tag
+              <Grid2X2 size={18} />
+            </Tool>
+          </fieldset>
+          {onPick && (
+            <button
+              className="primary"
+              onClick={() => uploadInput.current?.click()}
+              disabled={busy || uploading}
+            >
+              <Upload size={17} />
+              Upload
             </button>
           )}
         </div>
+      </LibraryFilters>
+      <div className="media-upload-inputs">
         {onPick && shareWithSlideId && (
           <label className="media-share-upload">
             <input
@@ -425,16 +414,9 @@ export function MediaLibrary({
             Share uploaded images with this slide’s audience
           </label>
         )}
-        <button
-          className="primary media-upload"
-          onClick={() => uploadInput.current?.click()}
-          disabled={busy || uploading}
-        >
-          <Upload size={17} />
-          Upload
-        </button>
         <input
           ref={uploadInput}
+          id={onPick ? undefined : 'workspace-media-upload'}
           type="file"
           multiple
           accept="image/*"
@@ -755,6 +737,7 @@ export function MediaLibrary({
                   <div className="media-entry-info">
                     <button
                       className="media-name"
+                      title={a.name}
                       disabled={a.readOnly && !!onPick}
                       onClick={() => (onPick ? onPick(a) : open('asset', a))}
                     >
@@ -763,7 +746,10 @@ export function MediaLibrary({
                     <span className="media-dimensions">
                       {a.width} x {a.height} / {(a.bytes / 1024).toFixed(0)} KB
                     </span>
-                    <span className="media-folder-name">
+                    <span
+                      className="media-folder-name"
+                      title={folderPaths.get(a.folderId || '') || 'Unfiled'}
+                    >
                       {folders.find((f) => f.id === a.folderId)?.name ||
                         'Unfiled'}
                     </span>
@@ -813,7 +799,18 @@ export function MediaLibrary({
                   ? 'No matching images.'
                   : 'No images in this folder.'}
               </p>
+              {(search || tag) && (
+                <button
+                  onClick={() => {
+                    setSearch('');
+                    setTag('');
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
               <button
+                className="primary"
                 onClick={() => uploadInput.current?.click()}
                 disabled={busy}
               >

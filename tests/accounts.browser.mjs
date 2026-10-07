@@ -194,6 +194,25 @@ try {
     await member.getByRole('button', { name: 'Settings', exact: true }).count(),
     0,
   );
+  await member.goto(`${base}/dashboard/settings`);
+  await member.waitForURL(`${base}/dashboard`);
+  await member.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
+  assert.equal(
+    await member
+      .getByRole('heading', { name: /^(Data feeds|Stock quotes|Fonts)$/ })
+      .count(),
+    0,
+  );
+  await member.setViewportSize({ width: 390, height: 844 });
+  await member
+    .getByRole('button', { name: 'Toggle Sidebar', exact: true })
+    .click();
+  assert.equal(
+    await member.getByRole('button', { name: 'Settings', exact: true }).count(),
+    0,
+  );
+  await member.keyboard.press('Escape');
+  await member.setViewportSize({ width: 1280, height: 900 });
   assert.equal((await member.request.get(`${base}/api/users`)).status(), 403);
   assert.equal(
     await member
@@ -214,8 +233,12 @@ try {
   await member
     .getByLabel('Current password', { exact: true })
     .fill(generatedPassword);
-  await member.getByLabel('New password', { exact: true }).fill('changed8');
-  await member.getByLabel('Confirm new password').fill('changed8');
+  await member
+    .getByLabel('New password', { exact: true })
+    .fill('changed-password-long-enough');
+  await member
+    .getByLabel('Confirm new password')
+    .fill('changed-password-long-enough');
   await member
     .getByRole('button', { name: 'Change password', exact: true })
     .click();

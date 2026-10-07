@@ -247,13 +247,15 @@ try {
       .click();
     await nav.getByRole('button', { name: 'All media 4', exact: true }).click();
     assert.equal(await nav.isVisible(), false);
-    await page.getByRole('button', { name: 'Tags', exact: true }).click();
+    await page.getByRole('button', { name: 'Filters', exact: true }).click();
     await page
       .getByLabel('Filter by tag', { exact: true })
       .selectOption('safety');
     assert.equal(await page.locator('.media-entry').count(), 1);
-    await page.getByRole('button', { name: 'Clear tag', exact: true }).click();
-    await page.getByRole('button', { name: 'Tags', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Clear filters', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Filters', exact: true }).click();
     assert.equal(await page.locator('.media-entry').count(), 4);
     assert.ok(
       await page.evaluate(

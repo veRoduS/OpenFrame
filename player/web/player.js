@@ -9,6 +9,10 @@ const stage = document.getElementById('stage'),
 const heading = document.getElementById('heading'),
   detail = document.getElementById('detail');
 const preview = new URLSearchParams(location.search).get('preview');
+const previewVersion =
+  new URLSearchParams(location.search).get('version') === 'published'
+    ? '?version=published'
+    : '';
 const connectionStatus = document.getElementById('connection-status');
 let lastState = null,
   lastStatus = null,
@@ -92,7 +96,9 @@ async function poll() {
   const timeout = setTimeout(() => abort.abort(), 8000);
   try {
     const response = await fetch(
-      preview ? `/api/preview/${encodeURIComponent(preview)}` : '/local/state',
+      preview
+        ? `/api/preview/${encodeURIComponent(preview)}${previewVersion}`
+        : '/local/state',
       { cache: 'no-store', signal: abort.signal },
     );
     if (!response.ok)

@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.10.13'
+VERSION = '0.10.14'
 HOSTED_SERVER_CODE = '1962'
 HOSTED_SERVER_ORIGIN = 'https://openframe.blackfalcon.cloud'
 

@@ -1,4 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { Button } from './components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from './components/ui/alert-dialog';
 import {
   Database,
   Plus,
@@ -93,6 +100,9 @@ export function DataFeeds({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [revoking, setRevoking] = useState<Token | null>(null);
+  const keyHelpId = useId();
+  const [keyErrors, setKeyErrors] = useState<Record<number, string>>({});
   async function run(action: () => Promise<void>) {
     setError('');
     setBusy(true);
@@ -176,8 +186,9 @@ export function DataFeeds({
             placeholder="Search by name"
           />
         </label>
-        <button
+        <Button
           onClick={() => {
+            setKeyErrors({});
             setCreating(true);
             setName('');
             setGroup('');
@@ -186,7 +197,7 @@ export function DataFeeds({
           }}
         >
           <Plus size={18} /> New feed
-        </button>
+        </Button>
       </div>
       {!feeds.length && (
         <div className="data-feed-empty">
@@ -248,11 +259,47 @@ export function DataFeeds({
           OpenAPI contract
         </a>
       </p>
+      <AlertDialog
+        open={!!revoking}
+        onOpenChange={(open) => !open && !busy && setRevoking(null)}
+      >
+        <AlertDialogContent className="of-modal">
+          <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {revoking?.name} will immediately lose permission to update this
+            feed. Create a replacement key and update the application to
+            reconnect.
+          </AlertDialogDescription>
+          <div className="dialog-actions">
+            <button disabled={busy} onClick={() => setRevoking(null)}>
+              Cancel
+            </button>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await api(`${base}/tokens/${revoking!.id}`, 'DELETE');
+                  setTokens(await api<Token[]>(`${base}/tokens`));
+                  setRevoking(null);
+                })
+              }
+            >
+              Revoke API key
+            </Button>
+          </div>
+          {error && (
+            <p role="alert" className="inline-error">
+              {error}
+            </p>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog
         open={creating}
         onOpenChange={(open) => !busy && setCreating(open)}
       >
-        <DialogContent className="of-modal data-feed-modal">
+        <DialogContent size="standard" className="of-modal data-feed-modal">
           <DialogTitle>New data feed</DialogTitle>
           <DialogDescription>
             Field keys are fixed once created. Use short names your integration
@@ -261,6 +308,19 @@ export function DataFeeds({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              const duplicate = fields.findIndex((field, i) =>
+                fields.some((other, j) => i !== j && other.key === field.key),
+              );
+              if (duplicate >= 0) {
+                setKeyErrors({ [duplicate]: 'Each field needs a unique key.' });
+                const keys =
+                  e.currentTarget.querySelectorAll<HTMLInputElement>(
+                    'input[pattern]',
+                  );
+                keys[duplicate]?.focus();
+                return;
+              }
+              setKeyErrors({});
               void run(async () => {
                 await api('/api/data-feeds', 'POST', {
                   name,
@@ -299,23 +359,53 @@ export function DataFeeds({
                 </select>
               </label>
               <div className="data-feed-field-heading">Fields</div>
+              <p className="field-help" id={keyHelpId}>
+                Start each unique key with a letter. Use only letters, numbers,
+                and underscores, up to 40 characters.
+              </p>
               {fields.map((f, i) => (
                 <div className="data-feed-field" key={i}>
                   <label>
                     Key
                     <input
                       value={f.key}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setKeyErrors((current) => {
+                          const next = { ...current };
+                          delete next[i];
+                          return next;
+                        });
                         setFields(
                           fields.map((v, j) =>
                             j === i ? { ...v, key: e.target.value } : v,
                           ),
-                        )
+                        );
+                      }}
+                      aria-invalid={!!keyErrors[i]}
+                      aria-describedby={
+                        keyErrors[i]
+                          ? `${keyHelpId} ${keyHelpId}-${i}`
+                          : keyHelpId
+                      }
+                      onInvalid={() =>
+                        setKeyErrors((current) => ({
+                          ...current,
+                          [i]: 'Enter a key that matches the requirements above.',
+                        }))
                       }
                       pattern="[A-Za-z][A-Za-z0-9_]{0,39}"
                       required
                       maxLength={40}
                     />
+                    {keyErrors[i] && (
+                      <p
+                        className="field-error"
+                        id={`${keyHelpId}-${i}`}
+                        role="alert"
+                      >
+                        {keyErrors[i]}
+                      </p>
+                    )}
                   </label>
                   <label>
                     Type
@@ -370,7 +460,7 @@ export function DataFeeds({
                 >
                   Cancel
                 </button>
-                <button>Create feed</button>
+                <Button type="submit">Create feed</Button>
               </div>
             </fieldset>
           </form>
@@ -385,7 +475,7 @@ export function DataFeeds({
           }
         }}
       >
-        <DialogContent className="of-modal data-feed-modal">
+        <DialogContent size="standard" className="of-modal data-feed-modal">
           <DialogTitle>{selected?.name}</DialogTitle>
           <DialogDescription>
             {selected?.readOnly
@@ -495,12 +585,7 @@ export function DataFeeds({
                       <button
                         className="ghost"
                         disabled={busy || !!token.revokedAt}
-                        onClick={() =>
-                          void run(async () => {
-                            await api(`${base}/tokens/${token.id}`, 'DELETE');
-                            setTokens(await api<Token[]>(`${base}/tokens`));
-                          })
-                        }
+                        onClick={() => setRevoking(token)}
                       >
                         Revoke
                       </button>
@@ -543,14 +628,17 @@ export function DataFeeds({
                           onChange={(e) => setExpires(Number(e.target.value))}
                         />
                       </label>
-                      <button>Generate API key</button>
+                      <Button type="submit">Generate API key</Button>
                     </fieldset>
                   </form>
                   <Dialog
                     open={!!secret}
                     onOpenChange={(open) => !open && setSecret('')}
                   >
-                    <DialogContent className="of-modal data-feed-modal">
+                    <DialogContent
+                      size="standard"
+                      className="of-modal data-feed-modal"
+                    >
                       <DialogTitle>API key generated</DialogTitle>
                       <DialogDescription>
                         Copy this key now. You will not be able to see it again.

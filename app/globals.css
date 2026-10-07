@@ -898,18 +898,21 @@ small {
 }
 .of-modal {
   box-sizing: border-box;
-  width: calc(100vw - 32px) !important;
-  border-radius: 8px !important;
-  max-width: 440px !important;
-  max-height: calc(100dvh - 32px);
+  width: calc(100vw - 32px);
+  border-radius: 8px;
+  max-width: var(--of-dialog-width, 440px);
+  top: calc(
+    var(--of-viewport-offset, 0px) + var(--of-viewport-height, 100dvh) / 2
+  );
+  max-height: calc(var(--of-viewport-height, 100dvh) - 32px);
   overflow: auto;
-  padding: 24px !important;
-  gap: 18px !important;
+  padding: 24px;
+  gap: 18px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .of-modal.wide {
-  max-width: min(860px, calc(100vw - 32px)) !important;
+  --of-dialog-width: 860px;
 }
 .of-modal [data-slot='dialog-title'],
 .of-modal [data-slot='dialog-description'],
@@ -2045,8 +2048,8 @@ input[type='color'] {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   }
   .of-modal {
-    max-width: calc(100% - 24px) !important;
-    padding: 20px !important;
+    max-width: min(var(--of-dialog-width, 440px), calc(100vw - 32px));
+    padding: 20px;
   }
   .auth-form h1 {
     font-size: 34px;
@@ -2325,14 +2328,16 @@ input[type='color'] {
   font-size: 13px;
   margin-right: auto;
 }
-.media-library [data-slot='checkbox'] {
+.media-library [data-slot='checkbox'],
+.library-item-select[data-slot='checkbox'] {
   padding: 0;
   width: 18px;
   height: 18px;
   min-width: 18px;
   background: #fff;
 }
-.media-library [data-slot='checkbox'][data-checked] {
+.media-library [data-slot='checkbox'][data-checked],
+.library-item-select[data-slot='checkbox'][data-checked] {
   background: #216c49;
   color: #fff;
   border-color: #216c49;

@@ -40,6 +40,11 @@ export function LibraryFilters({
   total,
   noun,
   children,
+  filterControls,
+  additionalFilters,
+  searchPlaceholder = 'Search by name',
+  onReset,
+  additionalActive = 0,
 }: {
   filter: LibraryFilter;
   onChange: (filter: LibraryFilter) => void;
@@ -49,10 +54,16 @@ export function LibraryFilters({
   total: number;
   noun: string;
   children?: ReactNode;
+  filterControls?: ReactNode;
+  additionalFilters?: ReactNode;
+  searchPlaceholder?: string;
+  onReset?: () => void;
+  additionalActive?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const controlsId = useId();
-  const active = Number(!!filter.group) + Number(!!filter.status);
+  const active =
+    Number(!!filter.group) + Number(!!filter.status) + additionalActive;
   return (
     <section className="library-filters" aria-label={`${noun} filters`}>
       <label className="library-search">
@@ -61,7 +72,7 @@ export function LibraryFilters({
           aria-label={`Search ${noun.toLowerCase()}`}
           type="search"
           value={filter.query}
-          placeholder="Search by name"
+          placeholder={searchPlaceholder}
           onChange={(event) =>
             onChange({ ...filter, query: event.target.value })
           }
@@ -80,41 +91,46 @@ export function LibraryFilters({
         id={controlsId}
         className={`library-filter-options ${expanded ? 'is-open' : ''}`}
       >
-        <label>
-          Group
-          <select
-            aria-label="Group"
-            value={filter.group}
-            onChange={(event) =>
-              onChange({ ...filter, group: event.target.value })
-            }
-          >
-            <option value="">All groups</option>
-            <option value="ungrouped">No visible group</option>
-            {orderedTree(groups).map(({ item, depth }) => (
-              <option key={item.id} value={item.id}>
-                {indentedName(item.name, depth)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Status
-          <select
-            aria-label="Status"
-            value={filter.status}
-            onChange={(event) =>
-              onChange({ ...filter, status: event.target.value })
-            }
-          >
-            <option value="">All statuses</option>
-            {statuses.map((status) => (
-              <option key={status.value} value={status.value}>
-                {status.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {filterControls || (
+          <>
+            <label>
+              Group
+              <select
+                aria-label="Group"
+                value={filter.group}
+                onChange={(event) =>
+                  onChange({ ...filter, group: event.target.value })
+                }
+              >
+                <option value="">All groups</option>
+                <option value="ungrouped">No visible group</option>
+                {orderedTree(groups).map(({ item, depth }) => (
+                  <option key={item.id} value={item.id}>
+                    {indentedName(item.name, depth)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Status
+              <select
+                aria-label="Status"
+                value={filter.status}
+                onChange={(event) =>
+                  onChange({ ...filter, status: event.target.value })
+                }
+              >
+                <option value="">All statuses</option>
+                {statuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+        {additionalFilters}
       </div>
       <div className="library-filter-meta">
         <output>
@@ -123,8 +139,11 @@ export function LibraryFilters({
         <button
           type="button"
           className="library-filter-reset"
-          disabled={!filter.query && !filter.group && !filter.status}
-          onClick={() => onChange({ ...clearLibraryFilter })}
+          disabled={!filter.query && !active}
+          onClick={() => {
+            onChange({ ...clearLibraryFilter });
+            onReset?.();
+          }}
         >
           Clear filters
         </button>

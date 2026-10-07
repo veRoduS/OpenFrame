@@ -18,6 +18,62 @@ const slide = {
   layers: [],
 };
 
+void test('publishing shared view-only starter text cleans the publication without editing another owner’s slide', async (t) => {
+  const { admin, user } = await fixture(t);
+  const publisher = await user('starter-publisher');
+  const source = (
+    await admin('/api/slides', 'POST', {
+      ...slide,
+      layers: [
+        {
+          id: randomUUID(),
+          type: 'text',
+          x: 10,
+          y: 10,
+          width: 80,
+          height: 40,
+          text: 'Something worth\nsharing.',
+          starterText: true,
+        },
+      ],
+    })
+  ).data;
+  await admin(`/api/access/slide/${source.id}`, 'POST', {
+    userId: publisher.user.id,
+    permission: 'view',
+  });
+  const playlist = (
+    await publisher.call('/api/playlists', 'POST', {
+      name: 'Shared starter',
+      items: [{ slideId: source.id, duration: 10 }],
+    })
+  ).data;
+  assert.equal(
+    (await publisher.call(`/api/playlists/${playlist.id}/publish`, 'POST'))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await publisher.call(`/api/preview/${playlist.id}?version=published`)).data
+      .items[0].slide.layers.length,
+    0,
+  );
+  const original = (await admin('/api/library')).data.slides.find(
+    (s) => s.id === source.id,
+  );
+  assert.equal(original.layers.length, 1);
+  assert.equal(original.layers[0].starterText, true);
+  await admin(`/api/slides/${source.id}`, 'PUT', {
+    ...original,
+    background: '#202923',
+  });
+  assert.equal(
+    (await publisher.call(`/api/preview/${playlist.id}?version=published`)).data
+      .items[0].slide.layers.length,
+    0,
+  );
+});
+
 void test('library filter metadata exposes only accessible resources and visible groups', async (t) => {
   const { admin, user } = await fixture(t);
   const alice = await user('filter-alice');

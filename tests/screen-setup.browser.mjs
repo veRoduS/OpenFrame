@@ -59,6 +59,13 @@ try {
     exact: true,
   });
   await dialog.getByLabel('Screen name', { exact: true }).waitFor();
+  assert.equal(
+    await dialog.getByRole('tab', { name: 'Managed VPN', exact: true }).count(),
+    0,
+  );
+  await dialog
+    .getByRole('button', { name: 'Advanced setup: VPN and network management' })
+    .click();
   await dialog.getByRole('tab', { name: 'Managed VPN', exact: true }).click();
   await dialog.getByText('Not enabled', { exact: true }).waitFor();
   await dialog.getByRole('tab', { name: 'Build config', exact: true }).click();
@@ -180,6 +187,9 @@ try {
     path: path.join(root, 'work/screen-setup-screens-320.png'),
   });
   await page.getByRole('button', { name: 'Screen setup', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: 'Advanced setup: VPN and network management' })
+    .click();
   await dialog.getByRole('tab', { name: 'VPN configs', exact: true }).click();
   await dialog.getByText('Allocated: Offsite lobby', { exact: true }).waitFor();
   assert.equal(

@@ -103,7 +103,10 @@ try {
     await editor.waitFor();
     await page.setViewportSize({ width, height });
     await editor.getByRole('tab', { name: 'Add slides', exact: true }).click();
-    const card = (index) => page.locator('.add-slide-grid > button').nth(index);
+    const card = (index) =>
+      page.locator(
+        `.add-slide-grid > button[data-slide-id="${slides[index].id}"]`,
+      );
     const grid = page.locator('.add-slide-grid');
     assert.equal(await grid.locator('button').count(), 30);
     const geometry = await grid.evaluate((el) => ({

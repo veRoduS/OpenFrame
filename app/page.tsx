@@ -1,3 +1,5 @@
+import { ANDROID_GITHUB_APK } from '../server/android-release-config.mjs';
+import { IconButton } from './components/ui/icon-button';
 import { useMediaUploads, type MediaUploadBatch } from './media-uploads';
 import { DataFeeds, DataWidgetOptions, dataModes } from './data-feeds';
 import { Checkbox } from './components/ui/checkbox';
@@ -18,6 +20,8 @@ import {
 import { StockSettings } from './stock-settings';
 import {
   useEffect,
+  useCallback,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -48,6 +52,7 @@ import {
   Grid3X3,
   ListVideo,
   Images,
+  Upload,
   Plus,
   ArrowLeft,
   Play,
@@ -116,7 +121,6 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import {
@@ -140,41 +144,14 @@ import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 import { localDateTime } from '../player/web/counter.js';
 import { playlistItemStatus } from './playlist-status.mjs';
 import { v4 as uuid } from 'uuid';
+import { connectionState, playbackState } from './device-status';
+import {
+  WorkspaceNavigationButton,
+  workspaceRoutes,
+  workspaceView,
+} from './workspace-navigation';
 import { customFontAlias, systemFonts, type CustomFont } from './font-utils';
 
-function IconButton({
-  label,
-  children,
-  onClick,
-  disabled,
-  active,
-}: {
-  label: string;
-  children: ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  active?: boolean;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            className={`icon-button ${active ? 'active' : ''}`}
-            aria-label={label}
-            aria-pressed={active}
-            disabled={disabled}
-            onClick={onClick}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
 function Modal({
   title,
   description,
@@ -182,6 +159,7 @@ function Modal({
   onClose,
   children,
   wide,
+  footer,
   destructive = false,
 }: {
   title: string;
@@ -190,6 +168,7 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  footer?: ReactNode;
   destructive?: boolean;
 }) {
   if (destructive)
@@ -216,10 +195,15 @@ function Modal({
         if (!v) onClose();
       }}
     >
-      <DialogContent className={`of-modal ${wide ? 'wide' : ''}`}>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description || title}</DialogDescription>
-        {children}
+      <DialogContent className={`of-modal modal-frame ${wide ? 'wide' : ''}`}>
+        <div className="modal-header">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className={description ? undefined : 'sr-only'}>
+            {description || title}
+          </DialogDescription>
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-footer">{footer}</div>}
       </DialogContent>
     </Dialog>
   );
@@ -242,6 +226,21 @@ const viewInfo = {
   settings: { title: 'Settings', icon: Settings },
 };
 type View = keyof typeof viewInfo;
+function readRouteFilter(): LibraryFilter {
+  const params = new URLSearchParams(location.search);
+  return {
+    query: params.get('q') || '',
+    group: params.get('group') || '',
+    status: params.get('status') || '',
+  };
+}
+function readRouteOrganization(): OrganizationFilter {
+  const params = new URLSearchParams(location.search);
+  return {
+    folder: params.get('folder') || 'all',
+    tag: params.get('tag') || '',
+  };
+}
 
 export default function App() {
   const [auth, setAuth] = useState<Auth | null>(null);
@@ -250,7 +249,11 @@ export default function App() {
   );
   const [library, setLibrary] = useState<Library>(emptyLibrary);
   const [fonts, setFonts] = useState<CustomFont[]>([]);
-  const [view, setView] = useState<View>('slides');
+  const [view, setView] = useState<View>(workspaceView);
+  const [libraryState, setLibraryState] = useState<
+    'loading' | 'ready' | 'failed'
+  >('loading');
+  const [libraryError, setLibraryError] = useState('');
   const [slideLayout, setSlideLayout] = useState<
     'list' | 'small' | 'medium' | 'large'
   >(() => {
@@ -298,23 +301,34 @@ export default function App() {
     if (
       auth?.authenticated &&
       auth.user?.role !== 'admin' &&
-      view === 'accounts'
+      (view === 'accounts' || view === 'settings')
     )
       setView('slides');
   }, [auth, view]);
   const [filters, setFilters] = useState<
     Record<'slides' | 'playlists' | 'devices', LibraryFilter>
-  >({
+  >(() => ({
     slides: { ...clearLibraryFilter },
     playlists: { ...clearLibraryFilter },
     devices: { ...clearLibraryFilter },
-  });
+    ...(['slides', 'playlists', 'devices'].includes(workspaceView())
+      ? {
+          [workspaceView()]: readRouteFilter(),
+        }
+      : {}),
+  }));
   const [organizationFilters, setOrganizationFilters] = useState<
     Record<'slides' | 'playlists', OrganizationFilter>
-  >({
+  >(() => ({
     slides: { folder: 'all', tag: '' },
     playlists: { folder: 'all', tag: '' },
-  });
+    ...(['slides', 'playlists'].includes(workspaceView())
+      ? {
+          [workspaceView()]: readRouteOrganization(),
+        }
+      : {}),
+  }));
+  const [playlistSort, setPlaylistSort] = useState('name');
   const [selectedItems, setSelectedItems] = useState<
     Record<'slides' | 'playlists', string[]>
   >({ slides: [], playlists: [] });
@@ -335,18 +349,91 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<Slide | null>(null);
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{
+    id: string;
+    version: 'draft' | 'published';
+  } | null>(null);
   const [confirm, setConfirm] = useState<{
     title: string;
     action: () => Promise<void>;
+    description?: string;
+    actionLabel?: string;
+    dependencies?: Playlist[];
   } | null>(null);
   const [pairCode, setPairCode] = useState('');
   const [pairOpen, setPairOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [addScreenOpen, setAddScreenOpen] = useState(false);
+  const [screenPlatform, setScreenPlatform] = useState('');
   const [accessResource, setAccessResource] = useState<SharedResource | null>(
     null,
   );
-  const refresh = async () => setLibrary(await api<Library>('/api/library'));
+  const refresh = async () => {
+    try {
+      setLibrary(await api<Library>('/api/library'));
+      setLibraryState('ready');
+      setLibraryError('');
+    } catch (error) {
+      setLibraryError((error as Error).message);
+      setLibraryState((previous) =>
+        previous === 'ready' ? 'ready' : 'failed',
+      );
+      throw error;
+    }
+  };
+  const routeFor = useCallback(
+    (key: View) => {
+      if (key === 'media') {
+        try {
+          const saved = sessionStorage.getItem('openframe.media.route');
+          if (saved?.startsWith('/dashboard/media?')) return saved;
+        } catch {
+          /* Storage is optional. */
+        }
+      }
+      const params = new URLSearchParams();
+      if (key === 'slides' || key === 'playlists' || key === 'devices') {
+        const filter = filters[key];
+        if (filter.query) params.set('q', filter.query);
+        if (filter.group) params.set('group', filter.group);
+        if (filter.status) params.set('status', filter.status);
+        if (key !== 'devices') {
+          if (organizationFilters[key].folder !== 'all')
+            params.set('folder', organizationFilters[key].folder);
+          if (organizationFilters[key].tag)
+            params.set('tag', organizationFilters[key].tag);
+        }
+      }
+      return workspaceRoutes[key] + (params.size ? `?${params}` : '');
+    },
+    [filters, organizationFilters],
+  );
+  function navigateView(key: View) {
+    if (key !== view) history.pushState(null, '', routeFor(key));
+    setView(key);
+  }
+  useEffect(() => {
+    function onPop() {
+      if (history.state?.openframeEditor) return;
+      const key = workspaceView();
+      setView(key);
+      if (key === 'slides' || key === 'playlists' || key === 'devices')
+        setFilters((current) => ({ ...current, [key]: readRouteFilter() }));
+      if (key === 'slides' || key === 'playlists')
+        setOrganizationFilters((current) => ({
+          ...current,
+          [key]: readRouteOrganization(),
+        }));
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  useEffect(() => {
+    if (!auth?.authenticated || editing || playlist || preview) return;
+    // Media owns its folder/search parameters and persists them independently.
+    if (view !== 'media')
+      history.replaceState(history.state, '', routeFor(view));
+  }, [auth, view, routeFor, editing, playlist, preview]);
   const refreshFonts = async () =>
     setFonts(await api<CustomFont[]>('/api/fonts'));
   const run = (action: () => Promise<void>, message = '') => {
@@ -370,7 +457,11 @@ export default function App() {
           history.replaceState(
             history.state,
             '',
-            next.authenticated ? '/dashboard' : '/login',
+            next.authenticated
+              ? location.pathname.startsWith('/dashboard')
+                ? location.pathname + location.search
+                : '/dashboard'
+              : '/login',
           );
         setAuth(next);
       })
@@ -431,6 +522,7 @@ export default function App() {
           y: 32,
           height: 36,
           text: 'Something worth\nsharing.',
+          starterText: true,
           fontSize: 144,
           bold: true,
         },
@@ -462,19 +554,19 @@ export default function App() {
     setPairCode('');
   }
   const groups = library.groups || [];
-  const screenStatus = (device: Device) =>
-    !device.approved
-      ? 'pending'
-      : device.lastSeen && Date.now() - Date.parse(device.lastSeen) < 90000
-        ? 'online'
-        : 'offline';
+  const screenStatus = connectionState;
   const liveSlides = new Set(
     library.playlists
       .filter(
         (p) =>
           p.publishedAt &&
           library.devices.some(
-            (d) => d.playlistId === p.id && screenStatus(d) === 'online',
+            (d) =>
+              d.playlistId === p.id &&
+              screenStatus(d) === 'online' &&
+              !d.blank &&
+              !d.status?.error &&
+              !d.status?.playback?.error,
           ),
       )
       .flatMap((p) => p.publishedSlideIds || []),
@@ -512,7 +604,7 @@ export default function App() {
         item,
         filters.playlists,
         groups,
-        item.publishedAt ? 'published' : 'draft',
+        item.publicationState || (item.publishedAt ? 'published' : 'draft'),
         true,
       ) &&
       matchesOrganization(
@@ -520,6 +612,13 @@ export default function App() {
         organizationFilters.playlists,
         library.playlistFolders || [],
       ),
+  );
+  const sortedPlaylists = [...visiblePlaylists].sort((a, b) =>
+    playlistSort === 'name'
+      ? a.name.localeCompare(b.name, undefined, { numeric: true })
+      : ((Date.parse(a.updatedAt || '') || 0) -
+          (Date.parse(b.updatedAt || '') || 0)) *
+        (playlistSort === 'newest' ? -1 : 1),
   );
   const visibleDevices = library.devices.filter((item) =>
     matchesLibraryFilter(item, filters.devices, groups, screenStatus(item)),
@@ -535,11 +634,47 @@ export default function App() {
       onChange={(filter) =>
         setFilters((current) => ({ ...current, [key]: filter }))
       }
+      additionalActive={
+        key !== 'devices' ? Number(!!organizationFilters[key].tag) : 0
+      }
+      onReset={() => {
+        if (key !== 'devices')
+          setOrganizationFilters((current) => ({
+            ...current,
+            [key]: { ...current[key], tag: '' },
+          }));
+      }}
       groups={groups}
       statuses={statuses}
       shown={shown}
       total={library[key]?.length || 0}
       noun={viewInfo[key].title}
+      additionalFilters={
+        key !== 'devices' ? (
+          <label>
+            Tags
+            <select
+              aria-label={`Filter ${key} by tag`}
+              value={organizationFilters[key].tag}
+              onChange={(e) =>
+                setOrganizationFilters((current) => ({
+                  ...current,
+                  [key]: { ...current[key], tag: e.target.value },
+                }))
+              }
+            >
+              <option value="">All tags</option>
+              {[...new Set(library[key].flatMap((item) => item.tags || []))]
+                .sort()
+                .map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+            </select>
+          </label>
+        ) : undefined
+      }
     >
       {tools}
     </LibraryFilters>
@@ -550,6 +685,7 @@ export default function App() {
   ) => (
     <LibraryOrganizationToolbar
       kind={kind}
+      showTagFilter={false}
       items={library[kind]}
       folders={
         kind === 'slides'
@@ -621,6 +757,7 @@ export default function App() {
                 );
                 const signedIn = await api<Auth>('/api/auth');
                 setLibrary(emptyLibrary);
+                setLibraryState('loading');
                 setEditing(null);
                 setPlaylist(null);
                 setPreview(null);
@@ -728,15 +865,14 @@ export default function App() {
                   .filter(([key]) =>
                     key === 'password'
                       ? auth.user?.role !== 'admin'
-                      : key !== 'accounts' || auth.user?.role === 'admin',
+                      : !['accounts', 'settings'].includes(key) ||
+                        auth.user?.role === 'admin',
                   )
                   .map(([key, item]) => (
                     <SidebarMenuItem key={key}>
-                      <SidebarMenuButton
-                        isActive={view === key}
-                        onClick={() => {
-                          setView(key);
-                        }}
+                      <WorkspaceNavigationButton
+                        active={view === key}
+                        onNavigate={() => navigateView(key)}
                       >
                         <item.icon size={18} />
                         <span>{item.title}</span>
@@ -749,7 +885,7 @@ export default function App() {
                               ? library.assets.length
                               : library[key]?.length || 0}
                         </span>
-                      </SidebarMenuButton>
+                      </WorkspaceNavigationButton>
                     </SidebarMenuItem>
                   ))}
               </SidebarMenu>
@@ -772,7 +908,14 @@ export default function App() {
                   onClick={() =>
                     run(async () => {
                       await api('/api/logout', 'POST');
+                      try {
+                        sessionStorage.removeItem('openframe.media.route');
+                      } catch {
+                        /* Storage is optional. */
+                      }
                       setLibrary(emptyLibrary);
+                      setLibraryState('loading');
+                      setView('slides');
                       history.replaceState(null, '', '/login');
                       setAuth({ setup: false, authenticated: false });
                     })
@@ -825,6 +968,20 @@ export default function App() {
                       New slide
                     </button>
                   )}
+                  {view === 'media' && (
+                    <button
+                      className="primary"
+                      disabled={uploading || libraryState !== 'ready'}
+                      onClick={() =>
+                        document
+                          .getElementById('workspace-media-upload')
+                          ?.click()
+                      }
+                    >
+                      <Upload size={18} />
+                      Upload
+                    </button>
+                  )}
                   {view === 'playlists' && (
                     <button
                       className="primary"
@@ -854,10 +1011,13 @@ export default function App() {
                       </IconButton>
                       <button
                         className="primary"
-                        onClick={() => setPairOpen(true)}
+                        onClick={() => {
+                          setScreenPlatform('');
+                          setAddScreenOpen(true);
+                        }}
                       >
                         <Plus size={18} />
-                        Pair screen
+                        Add screen
                       </button>
                     </>
                   )}
@@ -874,562 +1034,698 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {view === 'accounts' && auth.user?.role === 'admin' && (
-                <Accounts user={auth.user} refresh={refresh} />
+              {libraryError && libraryState === 'ready' && (
+                <div className="inline-error" role="alert">
+                  Could not refresh your workspace. Showing the last loaded
+                  content.
+                  <button onClick={() => run(refresh)}>Retry</button>
+                </div>
               )}
-              {view === 'password' && auth.user && (
-                <PasswordSettings user={auth.user} />
-              )}
-              {view === 'settings' && (
-                <div className="account-section workspace-settings">
-                  <DataFeeds
-                    feeds={library.dataFeeds || []}
-                    groups={library.groups}
-                    isAdmin={auth.user?.role === 'admin'}
-                    onRefresh={refresh}
-                    onAccess={setAccessResource}
-                  />
-                  {auth.user?.role === 'admin' && (
+              {libraryState !== 'ready' && (
+                <div
+                  className="library-load-state"
+                  role={libraryState === 'failed' ? 'alert' : 'status'}
+                >
+                  {libraryState === 'loading' ? (
                     <>
-                      <StockSettings />
-                      <FontSettings fonts={fonts} refresh={refreshFonts} />
+                      <RefreshCw size={24} />
+                      <p>Loading your workspace…</p>
+                    </>
+                  ) : (
+                    <>
+                      <h2>Could not load your workspace</h2>
+                      <p>{libraryError}</p>
+                      <button
+                        className="primary"
+                        onClick={() => {
+                          setLibraryState('loading');
+                          run(refresh);
+                        }}
+                      >
+                        Retry
+                      </button>
                     </>
                   )}
                 </div>
               )}
-              {view === 'slides' && (
+              {libraryState === 'ready' && (
                 <>
-                  {filterBar(
-                    'slides',
-                    visibleSlides.length,
-                    [
-                      { value: 'live', label: 'Live' },
-                      { value: 'not-live', label: 'Not live' },
-                    ],
-                    <div className="slide-library-tools">
-                      <label className="slide-sort-control">
-                        Sort by
-                        <select
-                          aria-label="Sort slides"
-                          value={slideSort}
-                          onChange={(event) =>
-                            setSlideSort(event.target.value as typeof slideSort)
-                          }
-                        >
-                          <option value="name">Slide name A–Z</option>
-                          <option value="oldest">
-                            Modified time (oldest first)
-                          </option>
-                          <option value="newest">
-                            Modified time (newest first)
-                          </option>
-                        </select>
-                      </label>
-                      <fieldset
-                        className="slide-view-controls"
-                        aria-label="Slide view"
-                      >
-                        {(
-                          [
-                            ['list', 'List view', List],
-                            ['small', 'Small grid', Grid3X3],
-                            ['medium', 'Medium grid', Grid2X2],
-                            ['large', 'Large grid', Square],
-                          ] as const
-                        ).map(([layout, label, Icon]) => (
-                          <IconButton
-                            key={layout}
-                            label={label}
-                            active={slideLayout === layout}
-                            onClick={() => setSlideLayout(layout)}
-                          >
-                            <Icon size={18} />
-                          </IconButton>
-                        ))}
-                      </fieldset>
-                    </div>,
+                  {view === 'accounts' && auth.user?.role === 'admin' && (
+                    <Accounts user={auth.user} refresh={refresh} />
                   )}
-                  {organizationBar(
-                    'slides',
+                  {view === 'password' && auth.user && (
+                    <PasswordSettings user={auth.user} />
+                  )}
+                  {view === 'settings' && auth.user?.role === 'admin' && (
+                    <div className="account-section workspace-settings">
+                      <DataFeeds
+                        feeds={library.dataFeeds || []}
+                        groups={library.groups}
+                        isAdmin
+                        onRefresh={refresh}
+                        onAccess={setAccessResource}
+                      />
+                      <StockSettings />
+                      <FontSettings fonts={fonts} refresh={refreshFonts} />
+                    </div>
+                  )}
+                  {view === 'slides' && (
                     <>
-                      {!!library.slides.length && !visibleSlides.length && (
+                      {filterBar(
+                        'slides',
+                        visibleSlides.length,
+                        [
+                          {
+                            value: 'live',
+                            label: 'Assigned to connected screen',
+                          },
+                          {
+                            value: 'not-live',
+                            label: 'No connected screen assignment',
+                          },
+                        ],
+                        <div className="slide-library-tools">
+                          <label className="slide-sort-control">
+                            Sort by
+                            <select
+                              aria-label="Sort slides"
+                              value={slideSort}
+                              onChange={(event) =>
+                                setSlideSort(
+                                  event.target.value as typeof slideSort,
+                                )
+                              }
+                            >
+                              <option value="name">Slide name A–Z</option>
+                              <option value="oldest">
+                                Modified time (oldest first)
+                              </option>
+                              <option value="newest">
+                                Modified time (newest first)
+                              </option>
+                            </select>
+                          </label>
+                          <fieldset
+                            className="slide-view-controls"
+                            aria-label="Slide view"
+                          >
+                            {(
+                              [
+                                ['list', 'List view', List],
+                                ['small', 'Small grid', Grid3X3],
+                                ['medium', 'Medium grid', Grid2X2],
+                                ['large', 'Large grid', Square],
+                              ] as const
+                            ).map(([layout, label, Icon]) => (
+                              <IconButton
+                                key={layout}
+                                label={label}
+                                active={slideLayout === layout}
+                                onClick={() => setSlideLayout(layout)}
+                              >
+                                <Icon size={18} />
+                              </IconButton>
+                            ))}
+                          </fieldset>
+                        </div>,
+                      )}
+                      {organizationBar(
+                        'slides',
+                        <>
+                          {!!library.slides.length && !visibleSlides.length && (
+                            <p className="empty-filter-results">
+                              No results match these filters. Try another group
+                              or clear the filters.
+                            </p>
+                          )}
+                          {library.slides.length ? (
+                            <div
+                              className="slide-grid"
+                              data-layout={slideLayout}
+                            >
+                              {visibleSlides.map((slide) => (
+                                <article className="slide-card" key={slide.id}>
+                                  {!slide.readOnly && (
+                                    <Checkbox
+                                      className="library-item-select"
+                                      aria-label={`Select ${slide.name}`}
+                                      checked={selectedItems.slides.includes(
+                                        slide.id,
+                                      )}
+                                      onCheckedChange={(checked) =>
+                                        selectItem('slides', slide.id, checked)
+                                      }
+                                    />
+                                  )}
+                                  {liveSlides.has(slide.id) && (
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        render={
+                                          <button
+                                            type="button"
+                                            aria-label={`Screen assignments for ${slide.name}`}
+                                            className="slide-live-tag"
+                                          />
+                                        }
+                                      >
+                                        <span>Assigned</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="live-playlist-tooltip">
+                                        <strong>
+                                          Assigned to connected screens
+                                        </strong>
+                                        <p>
+                                          Connection does not confirm that a
+                                          physical display is showing this
+                                          slide.
+                                        </p>
+                                        <ul className="live-playlist-list">
+                                          {library.playlists
+                                            .filter(
+                                              (p) =>
+                                                p.publishedAt &&
+                                                p.publishedSlideIds?.includes(
+                                                  slide.id,
+                                                ) &&
+                                                library.devices.some(
+                                                  (d) =>
+                                                    d.playlistId === p.id &&
+                                                    screenStatus(d) ===
+                                                      'online' &&
+                                                    !d.blank &&
+                                                    !d.status?.error &&
+                                                    !d.status?.playback?.error,
+                                                ),
+                                            )
+                                            .map((p) => (
+                                              <li key={p.id}>{p.name}</li>
+                                            ))}
+                                        </ul>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  <button
+                                    className="thumbnail-button"
+                                    draggable={!slide.readOnly}
+                                    onDragStart={(event) =>
+                                      startLibraryDrag(
+                                        event,
+                                        'slides',
+                                        selectedItems.slides.includes(slide.id)
+                                          ? selectedItems.slides.filter((id) =>
+                                              library.slides.some(
+                                                (s) =>
+                                                  s.id === id && !s.readOnly,
+                                              ),
+                                            )
+                                          : [slide.id],
+                                      )
+                                    }
+                                    onClick={() => setEditing(slide)}
+                                    aria-label={`${slide.readOnly ? 'View' : 'Edit'} ${slide.name}`}
+                                  >
+                                    <SlideCanvas
+                                      slide={slide}
+                                      assets={library.assets}
+                                    />
+                                  </button>
+                                  <div className="slide-card-info">
+                                    <button
+                                      className="title-button"
+                                      onClick={() => setEditing(slide)}
+                                    >
+                                      <strong title={slide.name}>
+                                        {slide.name}
+                                      </strong>
+                                      <span>
+                                        {slide.width} x {slide.height}{' '}
+                                        <span className="dot-separator">/</span>{' '}
+                                        {slide.layers.length} layers
+                                      </span>
+                                    </button>
+                                    <IconButton
+                                      label={`Duplicate ${slide.name}`}
+                                      onClick={() =>
+                                        run(async () => {
+                                          await api('/api/slides', 'POST', {
+                                            ...slide,
+                                            managingGroupId: null,
+                                            folderId: null,
+                                            name: `${slide.name.slice(0, 90)} copy`,
+                                          });
+                                          await refresh();
+                                        }, 'Slide duplicated')
+                                      }
+                                    >
+                                      <Copy size={16} />
+                                    </IconButton>
+                                    {!slide.readOnly && (
+                                      <IconButton
+                                        label={`Delete ${slide.name}`}
+                                        onClick={() =>
+                                          setConfirm({
+                                            title: `Delete "${slide.name}"?`,
+                                            description:
+                                              'The slide will be permanently removed. Download or duplicate anything you want to keep first.',
+                                            dependencies:
+                                              library.playlists.filter(
+                                                (p) =>
+                                                  p.items.some(
+                                                    (item) =>
+                                                      item.slideId === slide.id,
+                                                  ) ||
+                                                  p.publishedSlideIds?.includes(
+                                                    slide.id,
+                                                  ),
+                                              ),
+                                            actionLabel: 'Delete slide',
+                                            action: async () => {
+                                              await api(
+                                                `/api/slides/${slide.id}`,
+                                                'DELETE',
+                                              );
+                                              await refresh();
+                                            },
+                                          })
+                                        }
+                                      >
+                                        <Trash2 size={16} />
+                                      </IconButton>
+                                    )}
+                                  </div>
+                                  <OrganizationTags item={slide} />
+                                  {slide.readOnly && (
+                                    <div className="slide-read-only">
+                                      View only
+                                    </div>
+                                  )}
+                                  <ManageAccessButton
+                                    resourceName={slide.name}
+                                    tags={slide.accessTags}
+                                    onClick={() =>
+                                      setAccessResource({
+                                        kind: 'slide',
+                                        id: slide.id,
+                                        name: slide.name,
+                                      })
+                                    }
+                                  />
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="empty-state">
+                              <LayoutTemplate size={38} strokeWidth={1.4} />
+                              <h2>Your first slide starts here.</h2>
+                              <button
+                                onClick={() => run(createSlide)}
+                                disabled={busy}
+                              >
+                                <Plus size={18} />
+                                Create a slide
+                              </button>
+                            </div>
+                          )}
+                        </>,
+                      )}
+                    </>
+                  )}
+                  {view === 'playlists' && (
+                    <>
+                      {filterBar(
+                        'playlists',
+                        visiblePlaylists.length,
+                        [
+                          { value: 'published', label: 'Published' },
+                          { value: 'changes', label: 'Unpublished changes' },
+                          { value: 'draft', label: 'Draft' },
+                        ],
+                        <div className="slide-library-tools">
+                          <label className="slide-sort-control">
+                            Sort by
+                            <select
+                              aria-label="Sort playlists"
+                              value={playlistSort}
+                              onChange={(e) => setPlaylistSort(e.target.value)}
+                            >
+                              <option value="name">Playlist name A–Z</option>
+                              <option value="newest">
+                                Modified time (newest first)
+                              </option>
+                              <option value="oldest">
+                                Modified time (oldest first)
+                              </option>
+                            </select>
+                          </label>
+                        </div>,
+                      )}
+                      {organizationBar(
+                        'playlists',
+                        <>
+                          {!!library.playlists.length &&
+                            !visiblePlaylists.length && (
+                              <p className="empty-filter-results">
+                                No results match these filters. Try another
+                                group or clear the filters.
+                              </p>
+                            )}
+                          {library.playlists.length ? (
+                            <div className="playlist-list">
+                              {sortedPlaylists.map((p) => (
+                                <article
+                                  className="playlist-row"
+                                  data-library-organized="true"
+                                  key={p.id}
+                                >
+                                  {!p.readOnly && (
+                                    <Checkbox
+                                      className="library-item-select"
+                                      aria-label={`Select ${p.name}`}
+                                      checked={selectedItems.playlists.includes(
+                                        p.id,
+                                      )}
+                                      onCheckedChange={(checked) =>
+                                        selectItem('playlists', p.id, checked)
+                                      }
+                                    />
+                                  )}
+                                  <div className="playlist-thumb">
+                                    {library.slides.find(
+                                      (s) => s.id === p.items[0]?.slideId,
+                                    ) ? (
+                                      <SlideCanvas
+                                        slide={library.slides.find(
+                                          (s) => s.id === p.items[0].slideId,
+                                        )!}
+                                        assets={library.assets}
+                                      />
+                                    ) : (
+                                      <ListVideo size={24} />
+                                    )}
+                                  </div>
+                                  <div className="playlist-name-info">
+                                    <button
+                                      className="title-button"
+                                      draggable={!p.readOnly}
+                                      onDragStart={(event) =>
+                                        startLibraryDrag(
+                                          event,
+                                          'playlists',
+                                          selectedItems.playlists.includes(p.id)
+                                            ? selectedItems.playlists.filter(
+                                                (id) =>
+                                                  library.playlists.some(
+                                                    (p) =>
+                                                      p.id === id &&
+                                                      !p.readOnly,
+                                                  ),
+                                              )
+                                            : [p.id],
+                                        )
+                                      }
+                                      onClick={() => setPlaylist(p)}
+                                    >
+                                      <strong title={p.name}>{p.name}</strong>
+                                      <span>
+                                        {p.items.length} slides{' '}
+                                        <span className="dot-separator">/</span>{' '}
+                                        {playlistDuration(p)} seconds
+                                        {p.fork ? ' / Linked fork' : ''}
+                                        {p.readOnly ? ' / View only' : ''}
+                                      </span>
+                                    </button>
+                                    <OrganizationTags item={p} />
+                                    {p.forkSyncError && (
+                                      <p className="inline-error" role="alert">
+                                        Sync paused: {p.forkSyncError}. The last
+                                        published version stays on screens.
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span
+                                    className={`badge ${p.publicationState === 'changes' ? 'amber' : p.publishedAt ? 'green' : ''}`}
+                                    title={
+                                      p.publishedAt
+                                        ? `Last published ${new Date(p.publishedAt).toLocaleString()}`
+                                        : undefined
+                                    }
+                                  >
+                                    {p.publicationState === 'changes'
+                                      ? 'Unpublished changes'
+                                      : p.publishedAt
+                                        ? 'Published'
+                                        : 'Draft'}
+                                  </span>
+                                  <div className="row-actions">
+                                    <IconButton
+                                      label={`Preview draft ${p.name}`}
+                                      disabled={!p.items.length}
+                                      onClick={() =>
+                                        setPreview({
+                                          id: p.id,
+                                          version: 'draft',
+                                        })
+                                      }
+                                    >
+                                      <Play size={18} />
+                                    </IconButton>
+                                    {!p.readOnly && (
+                                      <IconButton
+                                        label={`Edit ${p.name}`}
+                                        onClick={() => setPlaylist(p)}
+                                      >
+                                        <Pencil size={18} />
+                                      </IconButton>
+                                    )}
+                                    {p.publishedAt && (
+                                      <IconButton
+                                        label={`Fork ${p.name}`}
+                                        onClick={() => setForkMaster(p)}
+                                      >
+                                        <GitFork size={18} />
+                                      </IconButton>
+                                    )}
+                                    <ManageAccessButton
+                                      resourceName={p.name}
+                                      tags={p.accessTags}
+                                      onClick={() =>
+                                        setAccessResource({
+                                          kind: 'playlist',
+                                          id: p.id,
+                                          name: p.name,
+                                        })
+                                      }
+                                    />
+                                    {!p.readOnly && (
+                                      <IconButton
+                                        label={`Delete ${p.name}`}
+                                        onClick={() =>
+                                          setConfirm({
+                                            title: `Delete "${p.name}"?`,
+                                            description: `This removes the playlist permanently. ${
+                                              library.devices
+                                                .filter(
+                                                  (d) => d.playlistId === p.id,
+                                                )
+                                                .map((d) => d.name)
+                                                .join(', ') ||
+                                              'No visible screens are assigned'
+                                            }. Assign another playlist to affected screens first. ${library.playlists.filter((f) => f.fork?.masterId === p.id).length} visible linked playlists depend on it.`,
+                                            actionLabel: 'Delete playlist',
+                                            action: async () => {
+                                              await api(
+                                                `/api/playlists/${p.id}`,
+                                                'DELETE',
+                                              );
+                                              await refresh();
+                                            },
+                                          })
+                                        }
+                                      >
+                                        <Trash2 size={16} />
+                                      </IconButton>
+                                    )}
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="empty-state">
+                              <ListVideo size={38} strokeWidth={1.4} />
+                              <h2>A sequence for every screen.</h2>
+                              <button
+                                onClick={() =>
+                                  setPlaylist({
+                                    id: '',
+                                    name: 'Untitled playlist',
+                                    items: [],
+                                  })
+                                }
+                              >
+                                <Plus size={18} />
+                                Create a playlist
+                              </button>
+                            </div>
+                          )}
+                        </>,
+                      )}
+                    </>
+                  )}
+                  {view === 'devices' && (
+                    <>
+                      {filterBar('devices', visibleDevices.length, [
+                        { value: 'online', label: 'Connected' },
+                        { value: 'offline', label: 'Offline' },
+                        { value: 'pending', label: 'Awaiting approval' },
+                      ])}
+                      {!!library.devices.length && !visibleDevices.length && (
                         <p className="empty-filter-results">
                           No results match these filters. Try another group or
                           clear the filters.
                         </p>
                       )}
-                      {library.slides.length ? (
-                        <div className="slide-grid" data-layout={slideLayout}>
-                          {visibleSlides.map((slide) => (
-                            <article className="slide-card" key={slide.id}>
-                              {!slide.readOnly && (
-                                <Checkbox
-                                  className="library-item-select"
-                                  aria-label={`Select ${slide.name}`}
-                                  checked={selectedItems.slides.includes(
-                                    slide.id,
-                                  )}
-                                  onCheckedChange={(checked) =>
-                                    selectItem('slides', slide.id, checked)
-                                  }
-                                />
-                              )}
-                              {liveSlides.has(slide.id) && (
-                                <Tooltip>
-                                  <TooltipTrigger
-                                    render={
-                                      <button
-                                        type="button"
-                                        aria-label={`Live playlists for ${slide.name}`}
-                                        className="slide-live-tag"
-                                      />
-                                    }
-                                  >
-                                    <span>Live</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="live-playlist-tooltip">
-                                    <strong>Live in playlists</strong>
-                                    <ul className="live-playlist-list">
-                                      {library.playlists
-                                        .filter(
-                                          (p) =>
-                                            p.publishedAt &&
-                                            p.publishedSlideIds?.includes(
-                                              slide.id,
-                                            ) &&
-                                            library.devices.some(
-                                              (d) =>
-                                                d.playlistId === p.id &&
-                                                screenStatus(d) === 'online',
-                                            ),
-                                        )
-                                        .map((p) => (
-                                          <li key={p.id}>{p.name}</li>
-                                        ))}
-                                    </ul>
-                                  </TooltipContent>
-                                </Tooltip>
-                              )}
-                              <button
-                                className="thumbnail-button"
-                                draggable={!slide.readOnly}
-                                onDragStart={(event) =>
-                                  startLibraryDrag(
-                                    event,
-                                    'slides',
-                                    selectedItems.slides.includes(slide.id)
-                                      ? selectedItems.slides.filter((id) =>
-                                          library.slides.some(
-                                            (s) => s.id === id && !s.readOnly,
-                                          ),
-                                        )
-                                      : [slide.id],
-                                  )
-                                }
-                                onClick={() => setEditing(slide)}
-                                aria-label={`${slide.readOnly ? 'View' : 'Edit'} ${slide.name}`}
-                              >
-                                <SlideCanvas
-                                  slide={slide}
-                                  assets={library.assets}
-                                />
-                              </button>
-                              <div className="slide-card-info">
-                                <button
-                                  className="title-button"
-                                  onClick={() => setEditing(slide)}
-                                >
-                                  <strong>{slide.name}</strong>
-                                  <span>
-                                    {slide.width} x {slide.height}{' '}
-                                    <span className="dot-separator">/</span>{' '}
-                                    {slide.layers.length} layers
-                                  </span>
-                                </button>
-                                <IconButton
-                                  label={`Duplicate ${slide.name}`}
-                                  onClick={() =>
-                                    run(async () => {
-                                      await api('/api/slides', 'POST', {
-                                        ...slide,
-                                        managingGroupId: null,
-                                        folderId: null,
-                                        name: `${slide.name.slice(0, 90)} copy`,
-                                      });
-                                      await refresh();
-                                    }, 'Slide duplicated')
-                                  }
-                                >
-                                  <Copy size={16} />
-                                </IconButton>
-                                {!slide.readOnly && (
-                                  <IconButton
-                                    label={`Delete ${slide.name}`}
-                                    onClick={() =>
-                                      setConfirm({
-                                        title: `Delete "${slide.name}"?`,
-                                        action: async () => {
-                                          await api(
-                                            `/api/slides/${slide.id}`,
-                                            'DELETE',
-                                          );
-                                          await refresh();
-                                        },
-                                      })
-                                    }
-                                  >
-                                    <Trash2 size={16} />
-                                  </IconButton>
-                                )}
-                              </div>
-                              <OrganizationTags item={slide} />
-                              {slide.readOnly && (
-                                <div className="slide-read-only">View only</div>
-                              )}
-                              <ManageAccessButton
-                                resourceName={slide.name}
-                                tags={slide.accessTags}
-                                onClick={() =>
-                                  setAccessResource({
-                                    kind: 'slide',
-                                    id: slide.id,
-                                    name: slide.name,
-                                  })
-                                }
-                              />
-                            </article>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="empty-state">
-                          <LayoutTemplate size={38} strokeWidth={1.4} />
-                          <h2>Your first slide starts here.</h2>
-                          <button
-                            onClick={() => run(createSlide)}
-                            disabled={busy}
-                          >
-                            <Plus size={18} />
-                            Create a slide
-                          </button>
-                        </div>
-                      )}
-                    </>,
-                  )}
-                </>
-              )}
-              {view === 'playlists' && (
-                <>
-                  {filterBar('playlists', visiblePlaylists.length, [
-                    { value: 'published', label: 'Published' },
-                    { value: 'draft', label: 'Draft' },
-                  ])}
-                  {organizationBar(
-                    'playlists',
-                    <>
-                      {!!library.playlists.length &&
-                        !visiblePlaylists.length && (
-                          <p className="empty-filter-results">
-                            No results match these filters. Try another group or
-                            clear the filters.
-                          </p>
-                        )}
-                      {library.playlists.length ? (
-                        <div className="playlist-list">
-                          {visiblePlaylists.map((p) => (
-                            <article
-                              className="playlist-row"
-                              data-library-organized="true"
-                              key={p.id}
-                            >
-                              {!p.readOnly && (
-                                <Checkbox
-                                  className="library-item-select"
-                                  aria-label={`Select ${p.name}`}
-                                  checked={selectedItems.playlists.includes(
-                                    p.id,
-                                  )}
-                                  onCheckedChange={(checked) =>
-                                    selectItem('playlists', p.id, checked)
-                                  }
-                                />
-                              )}
-                              <div className="playlist-thumb">
-                                {library.slides.find(
-                                  (s) => s.id === p.items[0]?.slideId,
-                                ) ? (
-                                  <SlideCanvas
-                                    slide={library.slides.find(
-                                      (s) => s.id === p.items[0].slideId,
-                                    )!}
-                                    assets={library.assets}
-                                  />
-                                ) : (
-                                  <ListVideo size={24} />
-                                )}
-                              </div>
-                              <div className="playlist-name-info">
-                                <button
-                                  className="title-button"
-                                  draggable={!p.readOnly}
-                                  onDragStart={(event) =>
-                                    startLibraryDrag(
-                                      event,
-                                      'playlists',
-                                      selectedItems.playlists.includes(p.id)
-                                        ? selectedItems.playlists.filter((id) =>
-                                            library.playlists.some(
-                                              (p) => p.id === id && !p.readOnly,
-                                            ),
-                                          )
-                                        : [p.id],
-                                    )
-                                  }
-                                  onClick={() => setPlaylist(p)}
-                                >
-                                  <strong>{p.name}</strong>
-                                  <span>
-                                    {p.items.length} slides{' '}
-                                    <span className="dot-separator">/</span>{' '}
-                                    {playlistDuration(p)} seconds
-                                    {p.fork ? ' / Linked fork' : ''}
-                                    {p.readOnly ? ' / View only' : ''}
-                                  </span>
-                                </button>
-                                <OrganizationTags item={p} />
-                                {p.forkSyncError && (
-                                  <p className="inline-error" role="alert">
-                                    Sync paused: {p.forkSyncError}. The last
-                                    published version stays on screens.
-                                  </p>
-                                )}
-                              </div>
-                              <span
-                                className={`badge ${p.publishedAt ? 'green' : ''}`}
-                              >
-                                {p.publishedAt ? 'Published' : 'Draft'}
-                              </span>
-                              <div className="row-actions">
-                                <IconButton
-                                  label={`Preview ${p.name}`}
-                                  disabled={!p.items.length}
-                                  onClick={() => setPreview(p.id)}
-                                >
-                                  <Play size={18} />
-                                </IconButton>
-                                {!p.readOnly && (
-                                  <IconButton
-                                    label={`Edit ${p.name}`}
-                                    onClick={() => setPlaylist(p)}
-                                  >
-                                    <Pencil size={18} />
-                                  </IconButton>
-                                )}
-                                {p.publishedAt && (
-                                  <IconButton
-                                    label={`Fork ${p.name}`}
-                                    onClick={() => setForkMaster(p)}
-                                  >
-                                    <GitFork size={18} />
-                                  </IconButton>
-                                )}
-                                <ManageAccessButton
-                                  resourceName={p.name}
-                                  tags={p.accessTags}
-                                  onClick={() =>
-                                    setAccessResource({
-                                      kind: 'playlist',
-                                      id: p.id,
-                                      name: p.name,
-                                    })
-                                  }
-                                />
-                                {!p.readOnly && (
-                                  <IconButton
-                                    label={`Delete ${p.name}`}
-                                    onClick={() =>
-                                      setConfirm({
-                                        title: `Delete "${p.name}"?`,
-                                        action: async () => {
-                                          await api(
-                                            `/api/playlists/${p.id}`,
-                                            'DELETE',
-                                          );
-                                          await refresh();
-                                        },
-                                      })
-                                    }
-                                  >
-                                    <Trash2 size={16} />
-                                  </IconButton>
-                                )}
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="empty-state">
-                          <ListVideo size={38} strokeWidth={1.4} />
-                          <h2>A sequence for every screen.</h2>
-                          <button
-                            onClick={() =>
-                              setPlaylist({
-                                id: '',
-                                name: 'Untitled playlist',
-                                items: [],
-                              })
+                      <div className="screen-summary">
+                        <div>
+                          <strong>
+                            {
+                              visibleDevices.filter(
+                                (d) =>
+                                  d.approved &&
+                                  d.lastSeen &&
+                                  Date.now() - Date.parse(d.lastSeen) < 90000,
+                              ).length
                             }
-                          >
+                          </strong>
+                          <span>
+                            <span className="status-dot" />
+                            Connected
+                          </span>
+                        </div>
+                        <div>
+                          <strong>
+                            {
+                              visibleDevices.filter(
+                                (d) =>
+                                  d.approved &&
+                                  (!d.lastSeen ||
+                                    Date.now() - Date.parse(d.lastSeen) >=
+                                      90000),
+                              ).length
+                            }
+                          </strong>
+                          <span>Offline</span>
+                        </div>
+                        <div>
+                          <strong>
+                            {visibleDevices.filter((d) => !d.approved).length}
+                          </strong>
+                          <span>Awaiting approval</span>
+                        </div>
+                      </div>
+                      {library.devices.length ? (
+                        <div className="devices-list">
+                          {visibleDevices.map((d) => (
+                            <DeviceRow
+                              key={d.id}
+                              device={d}
+                              canManage={auth.user?.role === 'admin'}
+                              playlists={library.playlists}
+                              busy={busy}
+                              onRename={async (name) => {
+                                await api(`/api/devices/${d.id}`, 'PUT', {
+                                  name,
+                                  playlistId: d.playlistId,
+                                  blank: d.blank,
+                                  rotation: d.rotation,
+                                });
+                                await refresh();
+                                setNotice('Screen renamed');
+                              }}
+                              onSave={(patch) =>
+                                run(async () => {
+                                  await api(
+                                    `/api/devices/${d.id}`,
+                                    'PUT',
+                                    patch,
+                                  );
+                                  await refresh();
+                                }, 'Screen settings saved. Waiting for the player to sync.')
+                              }
+                              onApprove={() => {
+                                setPairCode('');
+                                setPairOpen(true);
+                              }}
+                              onManageAccess={() =>
+                                setAccessResource({
+                                  kind: 'device',
+                                  id: d.id,
+                                  name: d.name,
+                                })
+                              }
+                              onCommand={(type) => {
+                                const action = async () => {
+                                  await api(
+                                    `/api/devices/${d.id}/command`,
+                                    'POST',
+                                    { type },
+                                  );
+                                  await refresh();
+                                };
+                                if (type === 'reboot')
+                                  setConfirm({
+                                    title: `Restart "${d.name}"?`,
+                                    description:
+                                      'Playback will be interrupted while the player restarts and reconnects. The command runs when the screen next connects.',
+                                    actionLabel: 'Restart screen',
+                                    action,
+                                  });
+                                else run(action, 'Refresh queued');
+                              }}
+                              onDelete={() =>
+                                setConfirm({
+                                  title: `Revoke "${d.name}"?`,
+                                  description:
+                                    'The screen loses server access and must be paired again. An offline player may continue showing its cached content until it reconnects.',
+                                  actionLabel: 'Revoke screen',
+                                  action: async () => {
+                                    await api(`/api/devices/${d.id}`, 'DELETE');
+                                    await refresh();
+                                  },
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state">
+                          <Monitor size={38} strokeWidth={1.4} />
+                          <h2>Ready for your first screen.</h2>
+                          <button onClick={() => setPairOpen(true)}>
                             <Plus size={18} />
-                            Create a playlist
+                            Pair a screen
                           </button>
                         </div>
                       )}
-                    </>,
+                    </>
+                  )}
+                  {view === 'media' && (
+                    <MediaLibrary
+                      isAdmin={auth.user?.role === 'admin'}
+                      assets={library.assets}
+                      folders={library.folders}
+                      onRefresh={refresh}
+                      onUpload={upload}
+                      uploading={uploading}
+                      onManageAccess={(asset) =>
+                        setAccessResource({
+                          kind: 'asset',
+                          id: asset.id,
+                          name: asset.name,
+                        })
+                      }
+                    />
                   )}
                 </>
-              )}
-              {view === 'devices' && (
-                <>
-                  {filterBar('devices', visibleDevices.length, [
-                    { value: 'online', label: 'Online' },
-                    { value: 'offline', label: 'Offline' },
-                    { value: 'pending', label: 'Awaiting approval' },
-                  ])}
-                  {!!library.devices.length && !visibleDevices.length && (
-                    <p className="empty-filter-results">
-                      No results match these filters. Try another group or clear
-                      the filters.
-                    </p>
-                  )}
-                  <div className="screen-summary">
-                    <div>
-                      <strong>
-                        {
-                          visibleDevices.filter(
-                            (d) =>
-                              d.approved &&
-                              d.lastSeen &&
-                              Date.now() - Date.parse(d.lastSeen) < 90000,
-                          ).length
-                        }
-                      </strong>
-                      <span>
-                        <span className="status-dot" />
-                        Online
-                      </span>
-                    </div>
-                    <div>
-                      <strong>
-                        {
-                          visibleDevices.filter(
-                            (d) =>
-                              d.approved &&
-                              (!d.lastSeen ||
-                                Date.now() - Date.parse(d.lastSeen) >= 90000),
-                          ).length
-                        }
-                      </strong>
-                      <span>Offline</span>
-                    </div>
-                    <div>
-                      <strong>
-                        {visibleDevices.filter((d) => !d.approved).length}
-                      </strong>
-                      <span>Awaiting approval</span>
-                    </div>
-                  </div>
-                  {library.devices.length ? (
-                    <div className="devices-list">
-                      {visibleDevices.map((d) => (
-                        <DeviceRow
-                          key={d.id}
-                          device={d}
-                          canManage={auth.user?.role === 'admin'}
-                          playlists={library.playlists}
-                          busy={busy}
-                          onRename={async (name) => {
-                            await api(`/api/devices/${d.id}`, 'PUT', {
-                              name,
-                              playlistId: d.playlistId,
-                              blank: d.blank,
-                              rotation: d.rotation,
-                            });
-                            await refresh();
-                            setNotice('Screen renamed');
-                          }}
-                          onSave={(patch) =>
-                            run(async () => {
-                              await api(`/api/devices/${d.id}`, 'PUT', patch);
-                              await refresh();
-                            }, 'Screen updated')
-                          }
-                          onApprove={() => {
-                            setPairCode('');
-                            setPairOpen(true);
-                          }}
-                          onManageAccess={() =>
-                            setAccessResource({
-                              kind: 'device',
-                              id: d.id,
-                              name: d.name,
-                            })
-                          }
-                          onCommand={(type) => {
-                            const action = async () => {
-                              await api(
-                                `/api/devices/${d.id}/command`,
-                                'POST',
-                                { type },
-                              );
-                              await refresh();
-                            };
-                            if (type === 'reboot')
-                              setConfirm({
-                                title: `Restart "${d.name}"?`,
-                                action,
-                              });
-                            else run(action, 'Refresh queued');
-                          }}
-                          onDelete={() =>
-                            setConfirm({
-                              title: `Revoke "${d.name}"?`,
-                              action: async () => {
-                                await api(`/api/devices/${d.id}`, 'DELETE');
-                                await refresh();
-                              },
-                            })
-                          }
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="empty-state">
-                      <Monitor size={38} strokeWidth={1.4} />
-                      <h2>Ready for your first screen.</h2>
-                      <button onClick={() => setPairOpen(true)}>
-                        <Plus size={18} />
-                        Pair a screen
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              {view === 'media' && (
-                <MediaLibrary
-                  isAdmin={auth.user?.role === 'admin'}
-                  assets={library.assets}
-                  folders={library.folders}
-                  onRefresh={refresh}
-                  onUpload={upload}
-                  uploading={uploading}
-                  onManageAccess={(asset) =>
-                    setAccessResource({
-                      kind: 'asset',
-                      id: asset.id,
-                      name: asset.name,
-                    })
-                  }
-                />
               )}
             </div>
             <footer className="workspace-footer">
@@ -1454,6 +1750,10 @@ export default function App() {
               feeds={library.dataFeeds || []}
               assets={library.assets}
               fonts={fonts}
+              publishedPlaylists={library.playlists.filter((p) =>
+                p.publishedSlideIds?.includes(editing.id),
+              )}
+              screens={library.devices}
               folders={library.folders}
               onRefresh={refresh}
               onUpload={upload}
@@ -1503,7 +1803,9 @@ export default function App() {
               </div>
               <div className="dialog-actions">
                 <button
-                  onClick={() => setPreview(playlist.id)}
+                  onClick={() =>
+                    setPreview({ id: playlist.id, version: 'draft' })
+                  }
                   disabled={!playlist.items.length}
                 >
                   <Play size={16} />
@@ -1525,6 +1827,7 @@ export default function App() {
             <PlaylistEditor
               initial={playlist}
               slides={library.slides}
+              folders={library.slideFolders || []}
               assets={library.assets}
               groups={groups}
               isAdmin={auth.user?.role === 'admin'}
@@ -1551,10 +1854,18 @@ export default function App() {
               onPublish={async (p) => {
                 const saved = await savePlaylist(p);
                 await api(`/api/playlists/${saved.id}/publish`, 'POST');
-                await refresh();
-                return { ...saved, publishedAt: new Date().toISOString() };
+                const next = await api<Library>('/api/library');
+                setLibrary(next);
+                const published = next.playlists.find(
+                  (item) => item.id === saved.id,
+                );
+                if (!published)
+                  throw new Error(
+                    'Published playlist is unavailable. Refresh the library.',
+                  );
+                return published;
               }}
-              onPreview={setPreview}
+              onPreview={(id, version = 'draft') => setPreview({ id, version })}
             />
           )}
           {forkMaster && (
@@ -1625,7 +1936,88 @@ export default function App() {
               </form>
             </Modal>
           )}
-          {setupOpen && <ScreenSetup onClose={() => setSetupOpen(false)} />}
+          <Modal
+            title="Add screen"
+            description="Choose the player you want to connect."
+            open={addScreenOpen}
+            onClose={() => setAddScreenOpen(false)}
+          >
+            <div className="setup-paths">
+              <button
+                onClick={() => {
+                  setAddScreenOpen(false);
+                  setPairOpen(true);
+                }}
+              >
+                <strong>Player already running</strong>
+                <span>
+                  Enter the eight-character pairing code shown on its display.
+                </span>
+              </button>
+              <button onClick={() => setScreenPlatform('android')}>
+                <strong>Android TV</strong>
+                <span>
+                  Install the Android player, connect to this server, then pair.
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setAddScreenOpen(false);
+                  setSetupOpen(true);
+                }}
+              >
+                <strong>Raspberry Pi / Linux</strong>
+                <span>
+                  Download a connection configuration and follow the
+                  installation guide.
+                </span>
+              </button>
+            </div>
+            {screenPlatform === 'android' && (
+              <div className="setup-next-steps">
+                <strong>Connect an Android player</strong>
+                <ol>
+                  <li>
+                    <a
+                      href={ANDROID_GITHUB_APK}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download the Android player
+                    </a>{' '}
+                    and install it on your TV.
+                  </li>
+                  <li>
+                    Open the player and enter this server address:{' '}
+                    <code>{window.location.origin}</code>. The TV must be able
+                    to reach this address.
+                  </li>
+                  <li>
+                    Enter the pairing code here, then choose a published
+                    playlist.
+                  </li>
+                </ol>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setAddScreenOpen(false);
+                    setPairOpen(true);
+                  }}
+                >
+                  Pair screen
+                </button>
+              </div>
+            )}
+          </Modal>
+          {setupOpen && (
+            <ScreenSetup
+              onClose={() => setSetupOpen(false)}
+              onPair={() => {
+                setSetupOpen(false);
+                setPairOpen(true);
+              }}
+            />
+          )}
           {auth.user && (
             <ResourceAccessDialog
               resource={accessResource}
@@ -1672,15 +2064,37 @@ export default function App() {
           <Modal
             title={confirm?.title || 'Confirm'}
             destructive
-            description="This action takes effect immediately on the server."
+            description={
+              confirm?.description || 'This action cannot be undone.'
+            }
             open={!!confirm}
             onClose={() => setConfirm(null)}
           >
+            {!!confirm?.dependencies?.length && (
+              <div className="dependency-list">
+                <p>
+                  Remove this slide from these playlists, then save and publish
+                  them before deleting it:
+                </p>
+                {confirm.dependencies.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setConfirm(null);
+                      navigateView('playlists');
+                      setPlaylist(p);
+                    }}
+                  >
+                    Open {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="dialog-actions">
               <button onClick={() => setConfirm(null)}>Cancel</button>
               <button
                 className="danger"
-                disabled={busy}
+                disabled={busy || !!confirm?.dependencies?.length}
                 onClick={() =>
                   run(async () => {
                     await confirm!.action();
@@ -1688,7 +2102,7 @@ export default function App() {
                   })
                 }
               >
-                Confirm
+                {confirm?.actionLabel || 'Delete'}
               </button>
             </div>
             {error && (
@@ -1698,8 +2112,16 @@ export default function App() {
             )}
           </Modal>
           <Modal
-            title="Playlist preview"
-            description="Preview of the saved draft."
+            title={
+              preview?.version === 'published'
+                ? 'Published playlist preview'
+                : 'Draft playlist preview'
+            }
+            description={
+              preview?.version === 'published'
+                ? 'The version sent to screens.'
+                : 'Preview of the saved draft. Playlist edits require publishing to reach screens.'
+            }
             open={!!preview}
             onClose={() => setPreview(null)}
             wide
@@ -1708,7 +2130,7 @@ export default function App() {
               <iframe
                 title="Playlist preview"
                 className="preview-frame"
-                src={`/player/?preview=${preview}`}
+                src={`/player/?preview=${preview.id}&version=${preview.version}`}
                 allow="fullscreen"
               />
             )}
@@ -1770,8 +2192,9 @@ function DeviceRow({
       setSavingName(false);
     }
   };
-  const online =
-    device.lastSeen && Date.now() - Date.parse(device.lastSeen) < 90000;
+  const online = connectionState(device) === 'online';
+  const assignedPlaylist = playlists.find((p) => p.id === device.playlistId);
+  const playback = playbackState(device, assignedPlaylist);
   return (
     <article className="device-row">
       <div className="device-identity">
@@ -1828,7 +2251,11 @@ function DeviceRow({
           </span>
         </div>
         <span className={`badge ${device.approved && online ? 'green' : ''}`}>
-          {!device.approved ? 'Pending' : online ? 'Online' : 'Offline'}
+          {!device.approved
+            ? 'Awaiting approval'
+            : online
+              ? 'Connected'
+              : 'Offline'}
         </span>
       </div>
       {device.approved ? (
@@ -1907,6 +2334,15 @@ function DeviceRow({
               )}
             </div>
           </div>
+          <output
+            className={`device-message playback-state ${playback === 'Playback error' ? 'error' : ''}`}
+          >
+            <strong>{playback}</strong>
+            <span>
+              Connection is based on the player heartbeat. Playback is reported
+              by the player.
+            </span>
+          </output>
           {device.command && (
             <p className="device-message">
               {device.command.type === 'reboot' ? 'Restart' : 'Refresh'} queued
@@ -2010,6 +2446,8 @@ function PropertySection({
 }
 
 function Editor({
+  publishedPlaylists,
+  screens,
   feeds,
   initial,
   assets,
@@ -2023,6 +2461,8 @@ function Editor({
 }: {
   uploading: boolean;
   feeds: import('./types').DataFeed[];
+  publishedPlaylists: Playlist[];
+  screens: Device[];
   initial: Slide;
   assets: Asset[];
   fonts: CustomFont[];
@@ -2037,6 +2477,7 @@ function Editor({
   const [selected, setSelected] = useState<string | null>(
     initial.layers[0]?.id || null,
   );
+  const editedStarterLayers = useRef(new Set<string>());
   const [past, setPast] = useState<Slide[]>([]);
   const [future, setFuture] = useState<Slide[]>([]);
   const [media, setMedia] = useState<'add' | { replace: string } | null>(null);
@@ -2085,12 +2526,22 @@ function Editor({
           ?.focus({ preventScroll: true }),
       );
   }
+  function preserveEditedStarters(next: Slide): Slide {
+    return {
+      ...next,
+      layers: next.layers.map((layer) => {
+        if (!editedStarterLayers.current.has(layer.id)) return layer;
+        const { starterText: _starterText, ...content } = layer;
+        return content;
+      }),
+    };
+  }
   function change(next: Slide, history = true) {
     if (history) {
       setPast((p) => [...p.slice(-49), slide]);
       setFuture([]);
     }
-    setSlide(next);
+    setSlide(preserveEditedStarters(next));
   }
   function patchLayer(patch: Partial<Layer>) {
     if (!current) return;
@@ -2106,6 +2557,10 @@ function Editor({
     )
       return;
     const next = { ...current, ...patch };
+    if (patch.text !== undefined && patch.text !== current.text) {
+      if (current.starterText) editedStarterLayers.current.add(current.id);
+      delete next.starterText;
+    }
     if (
       current.type === 'image' &&
       current.lockAspect !== false &&
@@ -2211,6 +2666,11 @@ function Editor({
     }
     setMedia(null);
   }
+  const affectsPublished = publishedPlaylists.length > 0;
+  const saveLabel = affectsPublished ? 'Save and update screens' : 'Save slide';
+  const affectedScreens = screens.filter((d) =>
+    publishedPlaylists.some((p) => p.id === d.playlistId),
+  );
   async function save() {
     setBusy(true);
     setError('');
@@ -2236,1266 +2696,1341 @@ function Editor({
     change({ ...slide, layers });
   }
   return (
-    <div
-      className="editor-overlay slide-editor"
-      data-mobile-panel={mobilePanel}
-      style={
-        mobileViewport
-          ? {
-              height: mobileViewport.height,
-              top: mobileViewport.top,
-              bottom: 'auto',
-            }
-          : undefined
-      }
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) navigation.requestLeave();
+      }}
     >
-      <header className="editor-header">
-        <IconButton
-          label="Back to slides"
-          onClick={() => navigation.requestLeave()}
-          disabled={busy}
-        >
-          <ArrowLeft size={20} />
-        </IconButton>
-        <div className="editor-title">
-          <input
-            aria-label="Slide name"
+      <DialogContent
+        fullScreen
+        showCloseButton={false}
+        className="editor-overlay slide-editor"
+        data-mobile-panel={mobilePanel}
+        style={
+          mobileViewport
+            ? {
+                height: mobileViewport.height,
+                top: mobileViewport.top,
+                bottom: 'auto',
+              }
+            : undefined
+        }
+      >
+        <DialogTitle className="sr-only">Edit slide</DialogTitle>
+        <DialogDescription className="sr-only">
+          Edit content, layout, appearance, and layer order.
+        </DialogDescription>
+        <header className="editor-header">
+          <IconButton
+            label="Back to slides"
+            onClick={() => navigation.requestLeave()}
             disabled={busy}
-            value={slide.name}
-            onChange={(e) => change({ ...slide, name: e.target.value })}
-            maxLength={100}
-          />
-          <span aria-live="polite">
-            {dirty ? 'Unsaved changes' : 'All changes saved'}
-          </span>
-        </div>
-        <div className="editor-header-actions">
-          <label className="editor-background">
-            Background
+          >
+            <ArrowLeft size={20} />
+          </IconButton>
+          <div className="editor-title">
             <input
-              type="color"
-              aria-label="Slide background"
+              aria-label="Slide name"
               disabled={busy}
-              value={slide.background}
-              onChange={(e) => change({ ...slide, background: e.target.value })}
+              value={slide.name}
+              onChange={(e) => change({ ...slide, name: e.target.value })}
+              maxLength={100}
             />
-          </label>
-          <IconButton
-            label="Undo"
-            disabled={busy || !past.length}
-            onClick={() => {
-              setFuture((f) => [slide, ...f]);
-              setSlide(past[past.length - 1]);
-              setPast((p) => p.slice(0, -1));
-            }}
-          >
-            <Undo2 size={18} />
-          </IconButton>
-          <IconButton
-            label="Redo"
-            disabled={busy || !future.length}
-            onClick={() => {
-              setPast((p) => [...p, slide]);
-              setSlide(future[0]);
-              setFuture((f) => f.slice(1));
-            }}
-          >
-            <Redo2 size={18} />
-          </IconButton>
-          <button
-            className="primary"
-            aria-label="Save slide"
-            disabled={busy || !slide.name.trim()}
-            onClick={save}
-          >
-            <Save size={17} />
-            <span className="editor-save-label">Save slide</span>
-            <span className="editor-save-label-mobile">Save</span>
-          </button>
-        </div>
-      </header>
-      <div className="editor-body" inert={busy}>
-        <nav className="editor-panel-navigation" aria-label="Editor panels">
-          {(
-            [
-              ['canvas', 'Canvas', LayoutTemplate],
-              ['layers', 'Layers', Layers],
-              ['properties', 'Properties', Settings],
-            ] as const
-          ).map(([panel, label, Icon]) => (
-            <button
-              key={panel}
-              type="button"
-              aria-pressed={mobilePanel === panel}
-              aria-controls={`editor-${panel}-panel`}
-              onClick={() => setMobilePanel(panel)}
-            >
-              <Icon size={17} />
-              {label}
-            </button>
-          ))}
-        </nav>
-        <aside
-          className="layer-panel"
-          id="editor-layers-panel"
-          aria-label="Layers and canvas settings"
-        >
-          <h2>
-            <Layers size={16} />
-            Layers <span>{slide.layers.length}</span>
-          </h2>
-          <div className="insert-tools">
-            <section
-              className="insert-tool-group"
-              aria-labelledby="insert-content-heading"
-            >
-              <h3 className="insert-tool-heading" id="insert-content-heading">
-                Content
-              </h3>
-              <div className="insert-tool-buttons">
-                <IconButton label="Add text" onClick={() => add('text')}>
-                  <Type size={20} />
-                </IconButton>
-                <IconButton label="Add image" onClick={() => setMedia('add')}>
-                  <ImagePlus size={20} />
-                </IconButton>
-                <IconButton
-                  label="Add rectangle"
-                  onClick={() => add('shape', undefined, 'rectangle')}
-                >
-                  <Square size={20} />
-                </IconButton>
-                <IconButton
-                  label="Add circle"
-                  onClick={() => add('shape', undefined, 'circle')}
-                >
-                  <Circle size={20} />
-                </IconButton>
-              </div>
-            </section>
-            <section
-              className="insert-tool-group"
-              aria-labelledby="insert-widgets-heading"
-            >
-              <h3 className="insert-tool-heading" id="insert-widgets-heading">
-                Widgets
-              </h3>
-              <div className="insert-tool-buttons">
-                <IconButton
-                  label="Add clock widget"
-                  onClick={() => add('clock')}
-                >
-                  <Clock size={20} />
-                </IconButton>
-                <IconButton
-                  label="Add weather widget"
-                  onClick={() => add('weather')}
-                >
-                  <CloudSun size={20} />
-                </IconButton>
-                <IconButton
-                  label="Add counter widget"
-                  onClick={() => add('counter')}
-                >
-                  <Timer size={20} />
-                </IconButton>
-                <IconButton
-                  label="Add stock tracker"
-                  onClick={() => add('stocks')}
-                >
-                  <TrendingUp size={20} />
-                </IconButton>
-                {dataModes.map(({ mode, label, icon: Icon }) => (
-                  <IconButton
-                    key={mode}
-                    label={`Add ${label.toLowerCase()} widget`}
-                    onClick={() => add('data', undefined, undefined, mode)}
-                  >
-                    <Icon size={20} />
-                  </IconButton>
-                ))}
-              </div>
-            </section>
+            <span aria-live="polite">
+              {dirty ? 'Unsaved changes' : 'All changes saved'}
+            </span>
           </div>
-          <div className="layer-list">
-            {[...slide.layers].reverse().map((layer, i) => (
+          <div className="editor-header-actions">
+            <label className="editor-background">
+              Background
+              <input
+                type="color"
+                aria-label="Slide background"
+                disabled={busy}
+                value={slide.background}
+                onChange={(e) =>
+                  change({ ...slide, background: e.target.value })
+                }
+              />
+            </label>
+            <IconButton
+              label="Undo"
+              disabled={busy || !past.length}
+              onClick={() => {
+                setFuture((f) => [slide, ...f]);
+                setSlide(preserveEditedStarters(past[past.length - 1]));
+                setPast((p) => p.slice(0, -1));
+              }}
+            >
+              <Undo2 size={18} />
+            </IconButton>
+            <IconButton
+              label="Redo"
+              disabled={busy || !future.length}
+              onClick={() => {
+                setPast((p) => [...p, slide]);
+                setSlide(preserveEditedStarters(future[0]));
+                setFuture((f) => f.slice(1));
+              }}
+            >
+              <Redo2 size={18} />
+            </IconButton>
+            <button
+              className="primary"
+              aria-label={saveLabel}
+              disabled={busy || !slide.name.trim()}
+              onClick={save}
+            >
+              <Save size={17} />
+              <span className="editor-save-label">{saveLabel}</span>
+              <span className="editor-save-label-mobile">
+                {affectsPublished ? 'Save & update' : 'Save'}
+              </span>
+            </button>
+          </div>
+        </header>
+        {affectsPublished && (
+          <div className="publication-impact" role="note">
+            <strong>Saving updates published content.</strong>{' '}
+            <span>
+              Playlists: {publishedPlaylists.map((p) => p.name).join(', ')}.
+              {affectedScreens.length
+                ? ` Screens: ${affectedScreens.map((d) => d.name).join(', ')}.`
+                : ' No screens are currently assigned.'}{' '}
+              Connected players receive changes on their next sync. Playlist
+              order and timing still require publishing.
+            </span>
+          </div>
+        )}
+        <div className="editor-body" inert={busy}>
+          <nav className="editor-panel-navigation" aria-label="Editor panels">
+            {(
+              [
+                ['canvas', 'Canvas', LayoutTemplate],
+                ['layers', 'Layers', Layers],
+                ['properties', 'Properties', Settings],
+              ] as const
+            ).map(([panel, label, Icon]) => (
               <button
-                key={layer.id}
-                className={selected === layer.id ? 'chosen' : ''}
-                onClick={() => {
-                  if (layer.id !== selected) setCropMode(false);
-                  setSelected(layer.id);
-                  showProperties();
-                }}
+                key={panel}
+                type="button"
+                aria-pressed={mobilePanel === panel}
+                aria-controls={`editor-${panel}-panel`}
+                onClick={() => setMobilePanel(panel)}
               >
-                {layer.type === 'data' ? (
-                  <Database size={16} />
-                ) : layer.type === 'stocks' ? (
-                  <TrendingUp size={16} />
-                ) : layer.type === 'shape' ? (
-                  layer.shape?.kind === 'circle' ? (
-                    <Circle size={16} />
-                  ) : (
-                    <Square size={16} />
-                  )
-                ) : layer.type === 'image' ? (
-                  <Images size={16} />
-                ) : layer.type === 'counter' ? (
-                  <Timer size={16} />
-                ) : layer.type === 'weather' ? (
-                  <CloudSun size={16} />
-                ) : layer.type === 'clock' ? (
-                  <Clock size={16} />
-                ) : (
-                  <Type size={16} />
-                )}
-                <span>
-                  {layer.type === 'data'
-                    ? layer.data?.title || 'Data widget'
-                    : layer.type === 'stocks'
-                      ? layer.stocks?.name || 'Stocks'
-                      : layer.type === 'shape'
-                        ? layer.shape?.kind === 'circle'
-                          ? 'Circle'
-                          : 'Rectangle'
-                        : layer.type === 'text'
-                          ? layer.text || 'Text'
-                          : layer.type === 'counter'
-                            ? 'Counter'
-                            : layer.type === 'weather'
-                              ? layer.weather?.name || 'Weather'
-                              : layer.type === 'clock'
-                                ? 'Clock'
-                                : layer.removedMedia
-                                  ? 'Removed media'
-                                  : assets.find((a) => a.id === layer.assetId)
-                                      ?.name || 'Image'}
-                </span>
-                <small>{slide.layers.length - i}</small>
+                <Icon size={17} />
+                {label}
               </button>
             ))}
-          </div>
-          <div className="canvas-settings">
-            <h3>Canvas</h3>
-            <label>
-              Orientation
-              <select
-                value={slide.width > slide.height ? 'landscape' : 'portrait'}
-                onChange={(e) =>
-                  change({
-                    ...slide,
-                    width: e.target.value === 'landscape' ? 1920 : 1080,
-                    height: e.target.value === 'landscape' ? 1080 : 1920,
-                  })
-                }
-              >
-                <option value="landscape">Landscape / 16:9</option>
-                <option value="portrait">Portrait / 9:16</option>
-              </select>
-            </label>
-          </div>
-        </aside>
-        <section
-          className="canvas-workspace"
-          id="editor-canvas-panel"
-          aria-label="Slide canvas"
-          style={
-            { '--canvas-ratio': slide.width / slide.height } as CSSProperties
-          }
-        >
-          <div className="canvas-meta">
-            <span>
-              {slide.width} x {slide.height}
-            </span>
-            <span>{slide.width > slide.height ? 'LANDSCAPE' : 'PORTRAIT'}</span>
-          </div>
-          <div
-            className={`canvas-holder ${slide.width < slide.height ? 'portrait' : ''}`}
+          </nav>
+          <aside
+            className="layer-panel"
+            id="editor-layers-panel"
+            aria-label="Layers and canvas settings"
           >
-            <SlideCanvas
-              slide={slide}
-              assets={assets}
-              selected={selected}
-              interactive
-              cropMode={
-                cropMode && current?.type === 'image' && current.fit === 'cover'
-              }
-              onCrop={(id, crop) =>
-                setSlide((s) => ({
-                  ...s,
-                  layers: s.layers.map((l) =>
-                    l.id === id ? { ...l, ...crop } : l,
-                  ),
-                }))
-              }
-              onSelect={(id) => {
-                if (id !== selected) setCropMode(false);
-                setSelected(id);
-              }}
-              onDragStart={() => {
-                setPast((p) => [...p.slice(-49), slide]);
-                setFuture([]);
-              }}
-              onResize={(id, geometry) =>
-                setSlide((s) => ({
-                  ...s,
-                  layers: s.layers.map((l) =>
-                    l.id === id ? { ...l, ...geometry } : l,
-                  ),
-                }))
-              }
-              onMove={(id, x, y) =>
-                setSlide((s) => ({
-                  ...s,
-                  layers: s.layers.map((l) =>
-                    l.id === id ? { ...l, x, y } : l,
-                  ),
-                }))
-              }
-            />
-          </div>
-          <div className="canvas-bottom">
-            <span>{selected ? 'Layer selected' : 'Canvas selected'}</span>
-            <span>{dirty ? 'Draft' : 'Saved'}</span>
-          </div>
-          {error && (
-            <div className="inline-error" role="alert">
-              {error}
+            <h2>
+              <Layers size={16} />
+              Layers <span>{slide.layers.length}</span>
+            </h2>
+            <div className="insert-tools">
+              <section
+                className="insert-tool-group"
+                aria-labelledby="insert-content-heading"
+              >
+                <h3 className="insert-tool-heading" id="insert-content-heading">
+                  Content
+                </h3>
+                <div className="insert-tool-buttons">
+                  <IconButton
+                    label="Add text"
+                    caption="Text"
+                    onClick={() => add('text')}
+                  >
+                    <Type size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add image"
+                    caption="Image"
+                    onClick={() => setMedia('add')}
+                  >
+                    <ImagePlus size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add rectangle"
+                    caption="Rectangle"
+                    onClick={() => add('shape', undefined, 'rectangle')}
+                  >
+                    <Square size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add circle"
+                    caption="Circle"
+                    onClick={() => add('shape', undefined, 'circle')}
+                  >
+                    <Circle size={20} />
+                  </IconButton>
+                </div>
+              </section>
+              <section
+                className="insert-tool-group"
+                aria-labelledby="insert-widgets-heading"
+              >
+                <h3 className="insert-tool-heading" id="insert-widgets-heading">
+                  Widgets
+                </h3>
+                <div className="insert-tool-buttons">
+                  <IconButton
+                    label="Add clock widget"
+                    caption="Clock"
+                    onClick={() => add('clock')}
+                  >
+                    <Clock size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add weather widget"
+                    caption="Weather"
+                    onClick={() => add('weather')}
+                  >
+                    <CloudSun size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add counter widget"
+                    caption="Counter"
+                    onClick={() => add('counter')}
+                  >
+                    <Timer size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add stock tracker"
+                    caption="Stocks"
+                    onClick={() => add('stocks')}
+                  >
+                    <TrendingUp size={20} />
+                  </IconButton>
+                  {dataModes.map(({ mode, label, icon: Icon }) => (
+                    <IconButton
+                      key={mode}
+                      label={`Add ${label.toLowerCase()} widget`}
+                      caption={label}
+                      onClick={() => add('data', undefined, undefined, mode)}
+                    >
+                      <Icon size={20} />
+                    </IconButton>
+                  ))}
+                </div>
+              </section>
             </div>
-          )}
-        </section>
-        <aside
-          className="properties-panel"
-          id="editor-properties-panel"
-          aria-label="Layer properties"
-          tabIndex={-1}
-        >
-          <header className="property-panel-header">
-            <h2>Properties</h2>
-            {current && (
-              <div className="property-heading">
-                <strong>
-                  {current.type === 'data'
-                    ? dataModes.find((m) => m.mode === current.data?.mode)
-                        ?.label || 'Data widget'
-                    : current.type === 'stocks'
-                      ? 'Stock tracker'
-                      : current.type === 'shape'
-                        ? 'Shape'
-                        : current.type === 'text'
-                          ? 'Text'
-                          : current.type === 'counter'
-                            ? 'Counter widget'
-                            : current.type === 'weather'
-                              ? 'Weather widget'
-                              : current.type === 'clock'
-                                ? 'Clock widget'
-                                : 'Image'}
-                </strong>
-                <IconButton
-                  label="Delete layer"
-                  disabled={current.lockMode === 'full'}
+            <div className="layer-list">
+              {[...slide.layers].reverse().map((layer, i) => (
+                <button
+                  key={layer.id}
+                  className={selected === layer.id ? 'chosen' : ''}
                   onClick={() => {
-                    change({
-                      ...slide,
-                      layers: slide.layers.filter((l) => l.id !== selected),
-                    });
-                    setSelected(null);
+                    if (layer.id !== selected) setCropMode(false);
+                    setSelected(layer.id);
+                    showProperties();
                   }}
                 >
-                  <Trash2 size={17} />
-                </IconButton>
+                  {layer.type === 'data' ? (
+                    <Database size={16} />
+                  ) : layer.type === 'stocks' ? (
+                    <TrendingUp size={16} />
+                  ) : layer.type === 'shape' ? (
+                    layer.shape?.kind === 'circle' ? (
+                      <Circle size={16} />
+                    ) : (
+                      <Square size={16} />
+                    )
+                  ) : layer.type === 'image' ? (
+                    <Images size={16} />
+                  ) : layer.type === 'counter' ? (
+                    <Timer size={16} />
+                  ) : layer.type === 'weather' ? (
+                    <CloudSun size={16} />
+                  ) : layer.type === 'clock' ? (
+                    <Clock size={16} />
+                  ) : (
+                    <Type size={16} />
+                  )}
+                  <span>
+                    {layer.type === 'data'
+                      ? layer.data?.title || 'Data widget'
+                      : layer.type === 'stocks'
+                        ? layer.stocks?.name || 'Stocks'
+                        : layer.type === 'shape'
+                          ? layer.shape?.kind === 'circle'
+                            ? 'Circle'
+                            : 'Rectangle'
+                          : layer.type === 'text'
+                            ? layer.text || 'Text'
+                            : layer.type === 'counter'
+                              ? 'Counter'
+                              : layer.type === 'weather'
+                                ? layer.weather?.name || 'Weather'
+                                : layer.type === 'clock'
+                                  ? 'Clock'
+                                  : layer.removedMedia
+                                    ? 'Removed media'
+                                    : assets.find((a) => a.id === layer.assetId)
+                                        ?.name || 'Image'}
+                  </span>
+                  <small>{slide.layers.length - i}</small>
+                </button>
+              ))}
+            </div>
+            <div className="canvas-settings">
+              <h3>Canvas</h3>
+              <label>
+                Orientation
+                <select
+                  value={slide.width > slide.height ? 'landscape' : 'portrait'}
+                  onChange={(e) =>
+                    change({
+                      ...slide,
+                      width: e.target.value === 'landscape' ? 1920 : 1080,
+                      height: e.target.value === 'landscape' ? 1080 : 1920,
+                    })
+                  }
+                >
+                  <option value="landscape">Landscape / 16:9</option>
+                  <option value="portrait">Portrait / 9:16</option>
+                </select>
+              </label>
+            </div>
+          </aside>
+          <section
+            className="canvas-workspace"
+            id="editor-canvas-panel"
+            aria-label="Slide canvas"
+            style={
+              { '--canvas-ratio': slide.width / slide.height } as CSSProperties
+            }
+          >
+            <div className="canvas-meta">
+              <span>
+                {slide.width} x {slide.height}
+              </span>
+              <span>
+                {slide.width > slide.height ? 'LANDSCAPE' : 'PORTRAIT'}
+              </span>
+            </div>
+            <div
+              className={`canvas-holder ${slide.width < slide.height ? 'portrait' : ''}`}
+            >
+              <SlideCanvas
+                slide={slide}
+                assets={assets}
+                selected={selected}
+                interactive
+                cropMode={
+                  cropMode &&
+                  current?.type === 'image' &&
+                  current.fit === 'cover'
+                }
+                onCrop={(id, crop) =>
+                  setSlide((s) => ({
+                    ...s,
+                    layers: s.layers.map((l) =>
+                      l.id === id ? { ...l, ...crop } : l,
+                    ),
+                  }))
+                }
+                onSelect={(id) => {
+                  if (id !== selected) setCropMode(false);
+                  setSelected(id);
+                }}
+                onDragStart={() => {
+                  setPast((p) => [...p.slice(-49), slide]);
+                  setFuture([]);
+                }}
+                onResize={(id, geometry) =>
+                  setSlide((s) => ({
+                    ...s,
+                    layers: s.layers.map((l) =>
+                      l.id === id ? { ...l, ...geometry } : l,
+                    ),
+                  }))
+                }
+                onMove={(id, x, y) =>
+                  setSlide((s) => ({
+                    ...s,
+                    layers: s.layers.map((l) =>
+                      l.id === id ? { ...l, x, y } : l,
+                    ),
+                  }))
+                }
+              />
+            </div>
+            <div className="canvas-bottom">
+              <span>{selected ? 'Layer selected' : 'Canvas selected'}</span>
+              <span>{dirty ? 'Draft' : 'Saved'}</span>
+            </div>
+            {error && (
+              <div className="inline-error" role="alert">
+                {error}
               </div>
             )}
-          </header>
-          {current && (
-            <label className="property-lock">
-              Layer lock
-              <select
-                aria-label="Layer lock"
-                title="Full Lock prevents movement and editing. Lock movement allows content edits."
-                value={current.lockMode || 'none'}
-                onChange={(e) =>
-                  patchLayer({
-                    lockMode:
-                      e.target.value === 'none'
-                        ? undefined
-                        : (e.target.value as Layer['lockMode']),
-                  })
-                }
+          </section>
+          <aside
+            className="properties-panel"
+            id="editor-properties-panel"
+            aria-label="Layer properties"
+            tabIndex={-1}
+          >
+            <header className="property-panel-header">
+              <h2>Properties</h2>
+              {current && (
+                <div className="property-heading">
+                  <strong>
+                    {current.type === 'data'
+                      ? dataModes.find((m) => m.mode === current.data?.mode)
+                          ?.label || 'Data widget'
+                      : current.type === 'stocks'
+                        ? 'Stock tracker'
+                        : current.type === 'shape'
+                          ? 'Shape'
+                          : current.type === 'text'
+                            ? 'Text'
+                            : current.type === 'counter'
+                              ? 'Counter widget'
+                              : current.type === 'weather'
+                                ? 'Weather widget'
+                                : current.type === 'clock'
+                                  ? 'Clock widget'
+                                  : 'Image'}
+                  </strong>
+                  <IconButton
+                    label="Delete layer"
+                    disabled={current.lockMode === 'full'}
+                    onClick={() => {
+                      change({
+                        ...slide,
+                        layers: slide.layers.filter((l) => l.id !== selected),
+                      });
+                      setSelected(null);
+                    }}
+                  >
+                    <Trash2 size={17} />
+                  </IconButton>
+                </div>
+              )}
+            </header>
+            {current && (
+              <label className="property-lock">
+                Layer lock
+                <select
+                  aria-label="Layer lock"
+                  title="Full Lock prevents movement and editing. Lock movement allows content edits."
+                  value={current.lockMode || 'none'}
+                  onChange={(e) =>
+                    patchLayer({
+                      lockMode:
+                        e.target.value === 'none'
+                          ? undefined
+                          : (e.target.value as Layer['lockMode']),
+                    })
+                  }
+                >
+                  <option value="none">Unlocked</option>
+                  <option value="full">Full Lock</option>
+                  <option value="movement">Lock movement</option>
+                </select>
+              </label>
+            )}
+            {current ? (
+              <fieldset
+                className="layer-properties"
+                disabled={current.lockMode === 'full'}
+                inert={current.lockMode === 'full'}
               >
-                <option value="none">Unlocked</option>
-                <option value="full">Full Lock</option>
-                <option value="movement">Lock movement</option>
-              </select>
-            </label>
-          )}
-          {current ? (
-            <fieldset
-              className="layer-properties"
-              disabled={current.lockMode === 'full'}
-              inert={current.lockMode === 'full'}
-            >
-              <PropertySection
-                title={
-                  current.type === 'image'
-                    ? 'Source image'
-                    : current.type === 'text'
-                      ? 'Content'
-                      : 'Widget settings'
-                }
-              >
-                {current.type === 'text' && (
-                  <textarea
-                    aria-label="Text content"
-                    rows={4}
-                    value={current.text}
-                    maxLength={4000}
-                    onChange={(e) => patchLayer({ text: e.target.value })}
-                  />
-                )}
-                {current.type === 'image' && (
-                  <>
-                    <div className="property-image-preview">
-                      {currentAsset && <img src={currentAsset.url} alt="" />}
-                      <span>
-                        {current.removedMedia
-                          ? 'Removed media'
-                          : currentAsset?.name || 'Image'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="property-action"
-                      onClick={() => setMedia({ replace: current.id })}
-                    >
-                      <ImagePlus size={16} />
-                      Replace image
-                    </button>
-                  </>
-                )}
-                {current.type === 'data' && current.data && (
-                  <DataWidgetOptions
-                    layer={current}
-                    feeds={feeds}
-                    onChange={(data) => patchLayer({ data })}
-                  />
-                )}
-                {current.type === 'stocks' && current.stocks && (
-                  <>
-                    <label>
-                      Tracker title
-                      <input
-                        value={current.stocks.name}
-                        maxLength={80}
-                        onChange={(event) =>
-                          patchLayer({
-                            stocks: {
-                              ...current.stocks!,
-                              name: event.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Stock symbols
-                      <input
-                        aria-label="Stock symbols"
-                        key={current.id}
-                        defaultValue={current.stocks.symbols.join(', ')}
-                        maxLength={128}
-                        placeholder="WMT, AAPL"
-                        onBlur={(event) => {
-                          const symbols = [
-                            ...new Set(
-                              event.target.value
-                                .toUpperCase()
-                                .split(',')
-                                .map((value) => value.trim())
-                                .filter(Boolean),
-                            ),
-                          ];
-                          if (
-                            symbols.length &&
-                            symbols.length <= 8 &&
-                            symbols.every((symbol) =>
-                              /^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol),
-                            )
-                          )
-                            patchLayer({
-                              stocks: { ...current.stocks!, symbols },
-                            });
-                          else
-                            event.target.value =
-                              current.stocks!.symbols.join(', ');
-                        }}
-                      />
-                    </label>
-                    <p className="muted">
-                      Up to 8 US stock symbols. Quotes refresh every 15 minutes
-                      during scheduled trading hours. Connect quotes under
-                      Settings.
-                    </p>
-                  </>
-                )}
-                {current.type === 'shape' && current.shape && (
-                  <>
-                    <label>
-                      Shape
-                      <select
-                        aria-label="Shape"
-                        value={current.shape.kind}
-                        onChange={(event) =>
-                          patchLayer({
-                            shape: {
-                              ...current.shape!,
-                              kind: event.target.value as
-                                | 'circle'
-                                | 'rectangle',
-                            },
-                          })
-                        }
+                <PropertySection
+                  title={
+                    current.type === 'image'
+                      ? 'Source image'
+                      : current.type === 'text'
+                        ? 'Content'
+                        : 'Widget settings'
+                  }
+                >
+                  {current.type === 'text' && (
+                    <textarea
+                      aria-label="Text content"
+                      rows={4}
+                      value={current.text}
+                      maxLength={4000}
+                      onChange={(e) => patchLayer({ text: e.target.value })}
+                    />
+                  )}
+                  {current.type === 'image' && (
+                    <>
+                      <div className="property-image-preview">
+                        {currentAsset && <img src={currentAsset.url} alt="" />}
+                        <span>
+                          {current.removedMedia
+                            ? 'Removed media'
+                            : currentAsset?.name || 'Image'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="property-action"
+                        onClick={() => setMedia({ replace: current.id })}
                       >
-                        <option value="rectangle">Square / rectangle</option>
-                        <option value="circle">Circle</option>
-                      </select>
-                    </label>
-                    <div className="property-field-grid">
+                        <ImagePlus size={16} />
+                        Replace image
+                      </button>
+                    </>
+                  )}
+                  {current.type === 'data' && current.data && (
+                    <DataWidgetOptions
+                      layer={current}
+                      feeds={feeds}
+                      onChange={(data) => patchLayer({ data })}
+                    />
+                  )}
+                  {current.type === 'stocks' && current.stocks && (
+                    <>
                       <label>
-                        Fill color
+                        Tracker title
                         <input
-                          type="color"
-                          value={current.shape.fill}
+                          value={current.stocks.name}
+                          maxLength={80}
                           onChange={(event) =>
                             patchLayer({
-                              shape: {
-                                ...current.shape!,
-                                fill: event.target.value,
+                              stocks: {
+                                ...current.stocks!,
+                                name: event.target.value,
                               },
                             })
                           }
                         />
                       </label>
                       <label>
-                        Outline color
+                        Stock symbols
                         <input
-                          type="color"
-                          value={current.shape.outline}
-                          onChange={(event) =>
-                            patchLayer({
-                              shape: {
-                                ...current.shape!,
-                                outline: event.target.value,
-                              },
-                            })
-                          }
+                          aria-label="Stock symbols"
+                          key={current.id}
+                          defaultValue={current.stocks.symbols.join(', ')}
+                          maxLength={128}
+                          placeholder="WMT, AAPL"
+                          onBlur={(event) => {
+                            const symbols = [
+                              ...new Set(
+                                event.target.value
+                                  .toUpperCase()
+                                  .split(',')
+                                  .map((value) => value.trim())
+                                  .filter(Boolean),
+                              ),
+                            ];
+                            if (
+                              symbols.length &&
+                              symbols.length <= 8 &&
+                              symbols.every((symbol) =>
+                                /^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol),
+                              )
+                            )
+                              patchLayer({
+                                stocks: { ...current.stocks!, symbols },
+                              });
+                            else
+                              event.target.value =
+                                current.stocks!.symbols.join(', ');
+                          }}
                         />
                       </label>
+                      <p className="muted">
+                        Up to 8 US stock symbols. Quotes refresh every 15
+                        minutes during scheduled trading hours. Connect quotes
+                        under Settings.
+                      </p>
+                    </>
+                  )}
+                  {current.type === 'shape' && current.shape && (
+                    <>
                       <label>
-                        Outline width
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={current.shape.outlineWidth}
+                        Shape
+                        <select
+                          aria-label="Shape"
+                          value={current.shape.kind}
                           onChange={(event) =>
                             patchLayer({
                               shape: {
                                 ...current.shape!,
-                                outlineWidth: Math.max(
-                                  0,
-                                  Math.min(100, Number(event.target.value)),
-                                ),
+                                kind: event.target.value as
+                                  | 'circle'
+                                  | 'rectangle',
                               },
                             })
                           }
-                        />
+                        >
+                          <option value="rectangle">Square / rectangle</option>
+                          <option value="circle">Circle</option>
+                        </select>
                       </label>
-                      {current.shape.kind === 'rectangle' && (
+                      <div className="property-field-grid">
                         <label>
-                          Corner radius
+                          Fill color
                           <input
-                            type="number"
-                            min={0}
-                            max={1000}
-                            value={current.shape.cornerRadius}
+                            type="color"
+                            value={current.shape.fill}
                             onChange={(event) =>
                               patchLayer({
                                 shape: {
                                   ...current.shape!,
-                                  cornerRadius: Math.max(
+                                  fill: event.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Outline color
+                          <input
+                            type="color"
+                            value={current.shape.outline}
+                            onChange={(event) =>
+                              patchLayer({
+                                shape: {
+                                  ...current.shape!,
+                                  outline: event.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Outline width
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={current.shape.outlineWidth}
+                            onChange={(event) =>
+                              patchLayer({
+                                shape: {
+                                  ...current.shape!,
+                                  outlineWidth: Math.max(
                                     0,
-                                    Math.min(1000, Number(event.target.value)),
+                                    Math.min(100, Number(event.target.value)),
                                   ),
                                 },
                               })
                             }
                           />
                         </label>
-                      )}
-                    </div>
-                    <label className="property-switch" htmlFor="fill-shape">
-                      Fill shape
-                      <Switch
-                        id="fill-shape"
-                        checked={current.shape.fillEnabled !== false}
-                        onCheckedChange={(fillEnabled) =>
+                        {current.shape.kind === 'rectangle' && (
+                          <label>
+                            Corner radius
+                            <input
+                              type="number"
+                              min={0}
+                              max={1000}
+                              value={current.shape.cornerRadius}
+                              onChange={(event) =>
+                                patchLayer({
+                                  shape: {
+                                    ...current.shape!,
+                                    cornerRadius: Math.max(
+                                      0,
+                                      Math.min(
+                                        1000,
+                                        Number(event.target.value),
+                                      ),
+                                    ),
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <label className="property-switch" htmlFor="fill-shape">
+                        Fill shape
+                        <Switch
+                          id="fill-shape"
+                          checked={current.shape.fillEnabled !== false}
+                          onCheckedChange={(fillEnabled) =>
+                            patchLayer({
+                              shape: { ...current.shape!, fillEnabled },
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                  {current.type === 'weather' && current.weather && (
+                    <>
+                      <WeatherOptions
+                        key={current.id}
+                        config={current.weather}
+                        onFitSidebar={() =>
                           patchLayer({
-                            shape: { ...current.shape!, fillEnabled },
-                          })
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-                {current.type === 'weather' && current.weather && (
-                  <>
-                    <WeatherOptions
-                      key={current.id}
-                      config={current.weather}
-                      onFitSidebar={() =>
-                        patchLayer({
-                          x: 84,
-                          y: 10,
-                          width: 16,
-                          height: 80,
-                          autoSize: true,
-                          align: 'center',
-                          verticalAlign: 'middle',
-                          weather: { ...current.weather!, layout: 'vertical' },
-                        })
-                      }
-                      onChange={(patch) =>
-                        patchLayer({
-                          weather: { ...current.weather!, ...patch },
-                        })
-                      }
-                    />
-                    <label>
-                      Location name
-                      <input
-                        value={current.weather.name}
-                        maxLength={80}
-                        onChange={(e) =>
-                          patchLayer({
+                            x: 84,
+                            y: 10,
+                            width: 16,
+                            height: 80,
+                            autoSize: true,
+                            align: 'center',
+                            verticalAlign: 'middle',
                             weather: {
                               ...current.weather!,
-                              name: e.target.value,
+                              layout: 'vertical',
                             },
                           })
                         }
+                        onChange={(patch) =>
+                          patchLayer({
+                            weather: { ...current.weather!, ...patch },
+                          })
+                        }
                       />
-                    </label>
-                    <div className="number-grid weather-coordinates">
                       <label>
-                        Latitude
+                        Location name
                         <input
-                          type="number"
-                          min={-90}
-                          max={90}
-                          step="0.0001"
-                          value={current.weather.latitude ?? ''}
+                          value={current.weather.name}
+                          maxLength={80}
                           onChange={(e) =>
                             patchLayer({
                               weather: {
                                 ...current.weather!,
-                                latitude:
-                                  e.target.value === ''
-                                    ? null
-                                    : Number(e.target.value),
+                                name: e.target.value,
                               },
                             })
                           }
                         />
                       </label>
-                      <label>
-                        Longitude
-                        <input
-                          type="number"
-                          min={-180}
-                          max={180}
-                          step="0.0001"
-                          value={current.weather.longitude ?? ''}
-                          onChange={(e) =>
-                            patchLayer({
-                              weather: {
-                                ...current.weather!,
-                                longitude:
-                                  e.target.value === ''
-                                    ? null
-                                    : Number(e.target.value),
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                    </div>
-                    <label>
-                      Temperature unit
-                      <select
-                        value={current.weather.unit}
-                        onChange={(e) =>
-                          patchLayer({
-                            weather: {
-                              ...current.weather!,
-                              unit: e.target.value as 'F' | 'C',
-                            },
-                          })
-                        }
-                      >
-                        <option value="F">Fahrenheit</option>
-                        <option value="C">Celsius</option>
-                      </select>
-                    </label>
-                  </>
-                )}
-                {current.type === 'clock' && (
-                  <>
-                    <label>
-                      Clock format
-                      <select
-                        value={
-                          current.clock?.showSeconds ? 'seconds' : 'minutes'
-                        }
-                        onChange={(e) =>
-                          patchLayer({
-                            clock: {
-                              ...current.clock,
-                              showSeconds: e.target.value === 'seconds',
-                            },
-                          })
-                        }
-                      >
-                        <option value="minutes">HH:MM</option>
-                        <option value="seconds">HH:MM:SS</option>
-                      </select>
-                    </label>
-                    <label className="property-switch" htmlFor="clock-24-hour">
-                      24-hour time
-                      <Switch
-                        id="clock-24-hour"
-                        checked={current.clock?.hour12 === false}
-                        onCheckedChange={(enabled) =>
-                          patchLayer({
-                            clock: {
-                              ...current.clock,
-                              hour12: !enabled,
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-                {current.type === 'counter' && current.counter && (
-                  <>
-                    <label>
-                      Target date and time
-                      <input
-                        type="datetime-local"
-                        step="1"
-                        value={localDateTime(current.counter.targetAt)}
-                        onChange={(e) => {
-                          if (
-                            e.target.value &&
-                            Number.isFinite(new Date(e.target.value).getTime())
-                          )
-                            patchLayer({
-                              counter: {
-                                ...current.counter!,
-                                targetAt: new Date(
-                                  e.target.value,
-                                ).toISOString(),
-                              },
-                            });
-                        }}
-                      />
-                    </label>
-                    <label>
-                      Granularity
-                      <select
-                        value={current.counter.unit}
-                        onChange={(e) =>
-                          patchLayer({
-                            counter: {
-                              ...current.counter!,
-                              unit: e.target.value as NonNullable<
-                                Layer['counter']
-                              >['unit'],
-                            },
-                          })
-                        }
-                      >
-                        {['seconds', 'minutes', 'hours', 'days'].map((unit) => (
-                          <option key={unit} value={unit}>
-                            {unit[0].toUpperCase() + unit.slice(1)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="property-field-grid">
-                      {(['prefix', 'suffix'] as const).map((field) => (
-                        <label key={field}>
-                          {field === 'prefix' ? 'Prefix' : 'Suffix'}
+                      <div className="number-grid weather-coordinates">
+                        <label>
+                          Latitude
                           <input
-                            type="text"
-                            maxLength={500}
-                            value={current.counter![field] ?? ''}
+                            type="number"
+                            min={-90}
+                            max={90}
+                            step="0.0001"
+                            value={current.weather.latitude ?? ''}
                             onChange={(e) =>
                               patchLayer({
-                                counter: {
-                                  ...current.counter!,
-                                  [field]: e.target.value,
+                                weather: {
+                                  ...current.weather!,
+                                  latitude:
+                                    e.target.value === ''
+                                      ? null
+                                      : Number(e.target.value),
                                 },
                               })
                             }
                           />
                         </label>
-                      ))}
-                    </div>
-                    <label>
-                      Goal message (optional)
-                      <textarea
-                        rows={3}
-                        maxLength={500}
-                        value={current.counter.goalMessage ?? ''}
-                        onChange={(e) =>
-                          patchLayer({
-                            counter: {
-                              ...current.counter!,
-                              goalMessage: e.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="property-switch" htmlFor="counter-unit">
-                      Show unit
-                      <Switch
-                        id="counter-unit"
-                        checked={current.counter.showUnit}
-                        onCheckedChange={(showUnit) =>
-                          patchLayer({
-                            counter: { ...current.counter!, showUnit },
-                          })
-                        }
-                      />
-                    </label>
-                  </>
-                )}
-              </PropertySection>
-              <PropertySection title="Position & size">
-                <div className="number-grid">
-                  {(['x', 'y', 'width', 'height'] as const).map((key) => (
-                    <label key={key}>
-                      {key === 'x' || key === 'y'
-                        ? key.toUpperCase()
-                        : key === 'width'
-                          ? 'Width'
-                          : 'Height'}
-                      <div className="number-unit">
-                        <input
-                          type="number"
-                          aria-label={`Layer ${key}`}
-                          value={Math.round(current[key] * 100) / 100}
-                          disabled={
-                            current.lockMode === 'movement' &&
-                            (key === 'x' || key === 'y')
-                          }
-                          min={key === 'width' || key === 'height' ? 1 : 0}
-                          max={100}
-                          step={0.5}
-                          onChange={(e) => {
-                            if (e.target.value !== '')
+                        <label>
+                          Longitude
+                          <input
+                            type="number"
+                            min={-180}
+                            max={180}
+                            step="0.0001"
+                            value={current.weather.longitude ?? ''}
+                            onChange={(e) =>
                               patchLayer({
-                                [key]: Math.max(
-                                  key === 'width' || key === 'height' ? 1 : 0,
-                                  Math.min(100, Number(e.target.value)),
-                                ),
-                              });
-                          }}
-                        />
-                        <span>%</span>
+                                weather: {
+                                  ...current.weather!,
+                                  longitude:
+                                    e.target.value === ''
+                                      ? null
+                                      : Number(e.target.value),
+                                },
+                              })
+                            }
+                          />
+                        </label>
                       </div>
-                    </label>
-                  ))}
-                </div>
-                {current.type === 'image' && (
-                  <label
-                    className="property-switch"
-                    htmlFor="lock-image-aspect"
-                  >
-                    Lock proportions
-                    <Switch
-                      id="lock-image-aspect"
-                      checked={current.lockAspect !== false}
-                      onCheckedChange={(lockAspect) =>
-                        patchLayer({ lockAspect })
-                      }
-                    />
-                  </label>
-                )}
-              </PropertySection>
-              {current.type === 'data' && (
-                <PropertySection title="Appearance">
-                  <label>
-                    Text color
-                    <input
-                      type="color"
-                      value={current.color}
-                      onChange={(event) =>
-                        patchLayer({ color: event.target.value })
-                      }
-                    />
-                  </label>
-                  <p className="muted">
-                    Text and chart scale with the widget. Resize its box to fit
-                    your slide.
-                  </p>
-                </PropertySection>
-              )}
-              {current.type !== 'shape' && current.type !== 'data' && (
-                <PropertySection
-                  title={
-                    current.type === 'image' ? 'Image display' : 'Typography'
-                  }
-                >
-                  {current.type !== 'image' ? (
+                      <label>
+                        Temperature unit
+                        <select
+                          value={current.weather.unit}
+                          onChange={(e) =>
+                            patchLayer({
+                              weather: {
+                                ...current.weather!,
+                                unit: e.target.value as 'F' | 'C',
+                              },
+                            })
+                          }
+                        >
+                          <option value="F">Fahrenheit</option>
+                          <option value="C">Celsius</option>
+                        </select>
+                      </label>
+                    </>
+                  )}
+                  {current.type === 'clock' && (
                     <>
                       <label>
-                        Font family
+                        Clock format
                         <select
                           value={
-                            current.fontId
-                              ? `custom:${current.fontId}`
-                              : `system:${current.fontFamily || 'Arial'}`
+                            current.clock?.showSeconds ? 'seconds' : 'minutes'
                           }
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            if (value.startsWith('custom:'))
-                              patchLayer({
-                                fontId: value.slice('custom:'.length),
-                              });
-                            else
-                              patchLayer({
-                                fontId: undefined,
-                                fontFamily: value.slice('system:'.length),
-                              });
-                          }}
+                          onChange={(e) =>
+                            patchLayer({
+                              clock: {
+                                ...current.clock,
+                                showSeconds: e.target.value === 'seconds',
+                              },
+                            })
+                          }
                         >
-                          <optgroup label="Built-in fonts">
-                            {systemFonts.map((family) => (
-                              <option key={family} value={`system:${family}`}>
-                                {family}
-                              </option>
-                            ))}
-                          </optgroup>
-                          {fonts.length > 0 && (
-                            <optgroup label="Custom fonts">
-                              {fonts.map((font) => (
-                                <option
-                                  key={font.id}
-                                  value={`custom:${font.id}`}
-                                >
-                                  {font.family}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
+                          <option value="minutes">HH:MM</option>
+                          <option value="seconds">HH:MM:SS</option>
                         </select>
                       </label>
                       <label
                         className="property-switch"
-                        htmlFor="auto-size-text"
+                        htmlFor="clock-24-hour"
                       >
-                        Auto-size to box
+                        24-hour time
                         <Switch
-                          id="auto-size-text"
-                          checked={current.autoSize || false}
-                          onCheckedChange={(autoSize) =>
-                            patchLayer({ autoSize })
+                          id="clock-24-hour"
+                          checked={current.clock?.hour12 === false}
+                          onCheckedChange={(enabled) =>
+                            patchLayer({
+                              clock: {
+                                ...current.clock,
+                                hour12: !enabled,
+                              },
+                            })
                           }
                         />
                       </label>
+                    </>
+                  )}
+                  {current.type === 'counter' && current.counter && (
+                    <>
+                      <label>
+                        Target date and time
+                        <input
+                          type="datetime-local"
+                          step="1"
+                          value={localDateTime(current.counter.targetAt)}
+                          onChange={(e) => {
+                            if (
+                              e.target.value &&
+                              Number.isFinite(
+                                new Date(e.target.value).getTime(),
+                              )
+                            )
+                              patchLayer({
+                                counter: {
+                                  ...current.counter!,
+                                  targetAt: new Date(
+                                    e.target.value,
+                                  ).toISOString(),
+                                },
+                              });
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Granularity
+                        <select
+                          value={current.counter.unit}
+                          onChange={(e) =>
+                            patchLayer({
+                              counter: {
+                                ...current.counter!,
+                                unit: e.target.value as NonNullable<
+                                  Layer['counter']
+                                >['unit'],
+                              },
+                            })
+                          }
+                        >
+                          {['seconds', 'minutes', 'hours', 'days'].map(
+                            (unit) => (
+                              <option key={unit} value={unit}>
+                                {unit[0].toUpperCase() + unit.slice(1)}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
                       <div className="property-field-grid">
-                        <label>
-                          Font size
+                        {(['prefix', 'suffix'] as const).map((field) => (
+                          <label key={field}>
+                            {field === 'prefix' ? 'Prefix' : 'Suffix'}
+                            <input
+                              type="text"
+                              maxLength={500}
+                              value={current.counter![field] ?? ''}
+                              onChange={(e) =>
+                                patchLayer({
+                                  counter: {
+                                    ...current.counter!,
+                                    [field]: e.target.value,
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      <label>
+                        Goal message (optional)
+                        <textarea
+                          rows={3}
+                          maxLength={500}
+                          value={current.counter.goalMessage ?? ''}
+                          onChange={(e) =>
+                            patchLayer({
+                              counter: {
+                                ...current.counter!,
+                                goalMessage: e.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="property-switch" htmlFor="counter-unit">
+                        Show unit
+                        <Switch
+                          id="counter-unit"
+                          checked={current.counter.showUnit}
+                          onCheckedChange={(showUnit) =>
+                            patchLayer({
+                              counter: { ...current.counter!, showUnit },
+                            })
+                          }
+                        />
+                      </label>
+                    </>
+                  )}
+                </PropertySection>
+                <PropertySection title="Layout">
+                  <div className="number-grid">
+                    {(['x', 'y', 'width', 'height'] as const).map((key) => (
+                      <label key={key}>
+                        {key === 'x' || key === 'y'
+                          ? key.toUpperCase()
+                          : key === 'width'
+                            ? 'Width'
+                            : 'Height'}
+                        <div className="number-unit">
                           <input
                             type="number"
-                            value={current.fontSize}
-                            disabled={current.autoSize}
-                            min={12}
-                            max={400}
+                            aria-label={`Layer ${key}`}
+                            value={Math.round(current[key] * 100) / 100}
+                            disabled={
+                              current.lockMode === 'movement' &&
+                              (key === 'x' || key === 'y')
+                            }
+                            min={key === 'width' || key === 'height' ? 1 : 0}
+                            max={100}
+                            step={0.5}
                             onChange={(e) => {
                               if (e.target.value !== '')
                                 patchLayer({
-                                  fontSize: Math.max(
-                                    12,
-                                    Math.min(400, Number(e.target.value)),
+                                  [key]: Math.max(
+                                    key === 'width' || key === 'height' ? 1 : 0,
+                                    Math.min(100, Number(e.target.value)),
                                   ),
                                 });
                             }}
                           />
+                          <span>%</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  {current.type === 'image' && (
+                    <label
+                      className="property-switch"
+                      htmlFor="lock-image-aspect"
+                    >
+                      Lock proportions
+                      <Switch
+                        id="lock-image-aspect"
+                        checked={current.lockAspect !== false}
+                        onCheckedChange={(lockAspect) =>
+                          patchLayer({ lockAspect })
+                        }
+                      />
+                    </label>
+                  )}
+                </PropertySection>
+                {current.type === 'data' && (
+                  <PropertySection title="Appearance">
+                    <label>
+                      Text color
+                      <input
+                        type="color"
+                        value={current.color}
+                        onChange={(event) =>
+                          patchLayer({ color: event.target.value })
+                        }
+                      />
+                    </label>
+                    <p className="muted">
+                      Text and chart scale with the widget. Resize its box to
+                      fit your slide.
+                    </p>
+                  </PropertySection>
+                )}
+                {current.type !== 'shape' && current.type !== 'data' && (
+                  <PropertySection
+                    title={
+                      current.type === 'image' ? 'Image display' : 'Typography'
+                    }
+                  >
+                    {current.type !== 'image' ? (
+                      <>
+                        <label>
+                          Font family
+                          <select
+                            value={
+                              current.fontId
+                                ? `custom:${current.fontId}`
+                                : `system:${current.fontFamily || 'Arial'}`
+                            }
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (value.startsWith('custom:'))
+                                patchLayer({
+                                  fontId: value.slice('custom:'.length),
+                                });
+                              else
+                                patchLayer({
+                                  fontId: undefined,
+                                  fontFamily: value.slice('system:'.length),
+                                });
+                            }}
+                          >
+                            <optgroup label="Built-in fonts">
+                              {systemFonts.map((family) => (
+                                <option key={family} value={`system:${family}`}>
+                                  {family}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {fonts.length > 0 && (
+                              <optgroup label="Custom fonts">
+                                {fonts.map((font) => (
+                                  <option
+                                    key={font.id}
+                                    value={`custom:${font.id}`}
+                                  >
+                                    {font.family}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
                         </label>
-                        <label className="property-color-field">
-                          Text color
-                          <input
-                            type="color"
-                            value={current.color}
-                            onChange={(e) =>
-                              patchLayer({ color: e.target.value })
+                        <label
+                          className="property-switch"
+                          htmlFor="auto-size-text"
+                        >
+                          Auto-size to box
+                          <Switch
+                            id="auto-size-text"
+                            checked={current.autoSize || false}
+                            onCheckedChange={(autoSize) =>
+                              patchLayer({ autoSize })
                             }
                           />
                         </label>
-                      </div>
-                      <div className="property-control-row">
-                        <span>Style</span>
-                        <fieldset
-                          className="format-tools"
-                          aria-label="Text style"
-                        >
-                          <IconButton
-                            label="Bold"
-                            active={current.bold}
-                            onClick={() => patchLayer({ bold: !current.bold })}
+                        <div className="property-field-grid">
+                          <label>
+                            Font size
+                            <input
+                              type="number"
+                              value={current.fontSize}
+                              disabled={current.autoSize}
+                              min={12}
+                              max={400}
+                              onChange={(e) => {
+                                if (e.target.value !== '')
+                                  patchLayer({
+                                    fontSize: Math.max(
+                                      12,
+                                      Math.min(400, Number(e.target.value)),
+                                    ),
+                                  });
+                              }}
+                            />
+                          </label>
+                          <label className="property-color-field">
+                            Text color
+                            <input
+                              type="color"
+                              value={current.color}
+                              onChange={(e) =>
+                                patchLayer({ color: e.target.value })
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="property-control-row">
+                          <span>Style</span>
+                          <fieldset
+                            className="format-tools"
+                            aria-label="Text style"
                           >
-                            <Bold size={18} />
-                          </IconButton>
-                          {(['left', 'center', 'right'] as const).map(
-                            (align, i) => (
-                              <IconButton
-                                key={align}
-                                label={`Align ${align}`}
-                                active={current.align === align}
-                                onClick={() => patchLayer({ align })}
-                              >
-                                {i === 0 ? (
-                                  <AlignLeft size={18} />
-                                ) : i === 1 ? (
-                                  <AlignCenter size={18} />
-                                ) : (
-                                  <AlignRight size={18} />
-                                )}
-                              </IconButton>
-                            ),
-                          )}
-                        </fieldset>
-                      </div>
-                      <div className="property-control-row">
-                        <span>Vertical</span>
-                        <fieldset
-                          className="format-tools"
-                          aria-label="Vertical alignment"
-                        >
-                          {(['top', 'middle', 'bottom'] as const).map(
-                            (verticalAlign, i) => (
-                              <IconButton
-                                key={verticalAlign}
-                                label={`Align ${verticalAlign}`}
-                                active={
-                                  (current.verticalAlign || 'top') ===
-                                  verticalAlign
-                                }
-                                onClick={() => patchLayer({ verticalAlign })}
-                              >
-                                {i === 0 ? (
-                                  <AlignVerticalJustifyStart size={18} />
-                                ) : i === 1 ? (
-                                  <AlignVerticalJustifyCenter size={18} />
-                                ) : (
-                                  <AlignVerticalJustifyEnd size={18} />
-                                )}
-                              </IconButton>
-                            ),
-                          )}
-                        </fieldset>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <label>
-                        Image fit
-                        <select
-                          value={current.fit}
-                          onChange={(e) =>
-                            patchLayer({ fit: e.target.value as Layer['fit'] })
-                          }
-                        >
-                          <option value="cover">Fill frame</option>
-                          <option value="contain">Fit image</option>
-                        </select>
-                      </label>
-                      {current.fit === 'cover' && (
-                        <details className="property-details" key={current.id}>
-                          <summary>Crop adjustments</summary>
-                          <div className="crop-controls">
-                            <button
-                              type="button"
-                              className={cropMode ? 'primary' : ''}
-                              aria-pressed={cropMode}
-                              onClick={() => setCropMode(!cropMode)}
-                            >
-                              <Crop size={17} />
-                              {cropMode ? 'Done cropping' : 'Adjust crop'}
-                            </button>
-                            <div className="slider-field">
-                              <span>Zoom</span>
-                              <Slider
-                                aria-label="Crop zoom"
-                                value={[current.cropZoom ?? 1]}
-                                min={1}
-                                max={4}
-                                step={0.05}
-                                onValueChange={(v) =>
-                                  patchLayer({
-                                    cropZoom: Array.isArray(v) ? v[0] : v,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div className="slider-field">
-                              <span>Horizontal position</span>
-                              <Slider
-                                aria-label="Crop horizontal position"
-                                value={[current.cropX ?? 50]}
-                                min={0}
-                                max={100}
-                                step={1}
-                                onValueChange={(v) =>
-                                  patchLayer({
-                                    cropX: Array.isArray(v) ? v[0] : v,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div className="slider-field">
-                              <span>Vertical position</span>
-                              <Slider
-                                aria-label="Crop vertical position"
-                                value={[current.cropY ?? 50]}
-                                min={0}
-                                max={100}
-                                step={1}
-                                onValueChange={(v) =>
-                                  patchLayer({
-                                    cropY: Array.isArray(v) ? v[0] : v,
-                                  })
-                                }
-                              />
-                            </div>
-                            <button
-                              type="button"
+                            <IconButton
+                              label="Bold"
+                              active={current.bold}
                               onClick={() =>
-                                patchLayer({
-                                  cropX: 50,
-                                  cropY: 50,
-                                  cropZoom: 1,
-                                })
+                                patchLayer({ bold: !current.bold })
                               }
                             >
-                              <Undo2 size={16} />
-                              Reset crop
-                            </button>
-                          </div>
-                        </details>
-                      )}
-                    </>
-                  )}
+                              <Bold size={18} />
+                            </IconButton>
+                            {(['left', 'center', 'right'] as const).map(
+                              (align, i) => (
+                                <IconButton
+                                  key={align}
+                                  label={`Align ${align}`}
+                                  active={current.align === align}
+                                  onClick={() => patchLayer({ align })}
+                                >
+                                  {i === 0 ? (
+                                    <AlignLeft size={18} />
+                                  ) : i === 1 ? (
+                                    <AlignCenter size={18} />
+                                  ) : (
+                                    <AlignRight size={18} />
+                                  )}
+                                </IconButton>
+                              ),
+                            )}
+                          </fieldset>
+                        </div>
+                        <div className="property-control-row">
+                          <span>Vertical</span>
+                          <fieldset
+                            className="format-tools"
+                            aria-label="Vertical alignment"
+                          >
+                            {(['top', 'middle', 'bottom'] as const).map(
+                              (verticalAlign, i) => (
+                                <IconButton
+                                  key={verticalAlign}
+                                  label={`Align ${verticalAlign}`}
+                                  active={
+                                    (current.verticalAlign || 'top') ===
+                                    verticalAlign
+                                  }
+                                  onClick={() => patchLayer({ verticalAlign })}
+                                >
+                                  {i === 0 ? (
+                                    <AlignVerticalJustifyStart size={18} />
+                                  ) : i === 1 ? (
+                                    <AlignVerticalJustifyCenter size={18} />
+                                  ) : (
+                                    <AlignVerticalJustifyEnd size={18} />
+                                  )}
+                                </IconButton>
+                              ),
+                            )}
+                          </fieldset>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <label>
+                          Image fit
+                          <select
+                            value={current.fit}
+                            onChange={(e) =>
+                              patchLayer({
+                                fit: e.target.value as Layer['fit'],
+                              })
+                            }
+                          >
+                            <option value="cover">Fill frame</option>
+                            <option value="contain">Fit image</option>
+                          </select>
+                        </label>
+                        {current.fit === 'cover' && (
+                          <details
+                            className="property-details"
+                            key={current.id}
+                          >
+                            <summary>Crop adjustments</summary>
+                            <div className="crop-controls">
+                              <button
+                                type="button"
+                                className={cropMode ? 'primary' : ''}
+                                aria-pressed={cropMode}
+                                onClick={() => setCropMode(!cropMode)}
+                              >
+                                <Crop size={17} />
+                                {cropMode ? 'Done cropping' : 'Adjust crop'}
+                              </button>
+                              <div className="slider-field">
+                                <span>Zoom</span>
+                                <Slider
+                                  aria-label="Crop zoom"
+                                  value={[current.cropZoom ?? 1]}
+                                  min={1}
+                                  max={4}
+                                  step={0.05}
+                                  onValueChange={(v) =>
+                                    patchLayer({
+                                      cropZoom: Array.isArray(v) ? v[0] : v,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="slider-field">
+                                <span>Horizontal position</span>
+                                <Slider
+                                  aria-label="Crop horizontal position"
+                                  value={[current.cropX ?? 50]}
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  onValueChange={(v) =>
+                                    patchLayer({
+                                      cropX: Array.isArray(v) ? v[0] : v,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div className="slider-field">
+                                <span>Vertical position</span>
+                                <Slider
+                                  aria-label="Crop vertical position"
+                                  value={[current.cropY ?? 50]}
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  onValueChange={(v) =>
+                                    patchLayer({
+                                      cropY: Array.isArray(v) ? v[0] : v,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  patchLayer({
+                                    cropX: 50,
+                                    cropY: 50,
+                                    cropZoom: 1,
+                                  })
+                                }
+                              >
+                                <Undo2 size={16} />
+                                Reset crop
+                              </button>
+                            </div>
+                          </details>
+                        )}
+                      </>
+                    )}
+                  </PropertySection>
+                )}
+                <PropertySection title="Arrange">
+                  <div className="format-tools">
+                    <IconButton
+                      label="Bring forward"
+                      disabled={current.lockMode === 'full'}
+                      onClick={() => reorder(1)}
+                    >
+                      <ArrowUp size={18} />
+                    </IconButton>
+                    <IconButton
+                      label="Send backward"
+                      disabled={current.lockMode === 'full'}
+                      onClick={() => reorder(-1)}
+                    >
+                      <ArrowDown size={18} />
+                    </IconButton>
+                    <IconButton
+                      label="Duplicate layer"
+                      disabled={current.lockMode === 'full'}
+                      onClick={() => {
+                        const layer = { ...current, id: uuid() };
+                        change({ ...slide, layers: [...slide.layers, layer] });
+                        setSelected(layer.id);
+                      }}
+                    >
+                      <Copy size={18} />
+                    </IconButton>
+                  </div>
                 </PropertySection>
-              )}
-              <PropertySection title="Arrange">
-                <div className="format-tools">
-                  <IconButton
-                    label="Bring forward"
-                    disabled={current.lockMode === 'full'}
-                    onClick={() => reorder(1)}
-                  >
-                    <ArrowUp size={18} />
-                  </IconButton>
-                  <IconButton
-                    label="Send backward"
-                    disabled={current.lockMode === 'full'}
-                    onClick={() => reorder(-1)}
-                  >
-                    <ArrowDown size={18} />
-                  </IconButton>
-                  <IconButton
-                    label="Duplicate layer"
-                    disabled={current.lockMode === 'full'}
-                    onClick={() => {
-                      const layer = { ...current, id: uuid() };
-                      change({ ...slide, layers: [...slide.layers, layer] });
-                      setSelected(layer.id);
-                    }}
-                  >
-                    <Copy size={18} />
-                  </IconButton>
-                </div>
-              </PropertySection>
-            </fieldset>
-          ) : (
-            <p className="property-empty">
-              Select a layer to edit its properties.
+              </fieldset>
+            ) : (
+              <p className="property-empty">
+                Select a layer to edit its properties.
+              </p>
+            )}
+          </aside>
+        </div>
+        <Modal
+          title={
+            media && typeof media === 'object'
+              ? 'Replace image'
+              : 'Add an image'
+          }
+          description="Choose an image from your media library."
+          open={media !== null}
+          onClose={() => setMedia(null)}
+          wide
+        >
+          <MediaLibrary
+            assets={assets}
+            folders={folders}
+            onRefresh={onRefresh}
+            onUpload={onUpload}
+            uploading={uploading}
+            shareWithSlideId={slide.id}
+            onPick={(asset) => chooseImage(asset.id)}
+          />
+        </Modal>
+        <Modal
+          title="Save changes before leaving?"
+          destructive
+          description="Save this slide, discard the changes, or keep editing."
+          open={navigation.confirmOpen}
+          onClose={() => {
+            if (!busy) navigation.cancel();
+          }}
+        >
+          {error && (
+            <p role="alert" className="inline-error">
+              {error}
             </p>
           )}
-        </aside>
-      </div>
-      <Modal
-        title={
-          media && typeof media === 'object' ? 'Replace image' : 'Add an image'
-        }
-        description="Choose an image from your media library."
-        open={media !== null}
-        onClose={() => setMedia(null)}
-        wide
-      >
-        <MediaLibrary
-          assets={assets}
-          folders={folders}
-          onRefresh={onRefresh}
-          onUpload={onUpload}
-          uploading={uploading}
-          shareWithSlideId={slide.id}
-          onPick={(asset) => chooseImage(asset.id)}
-        />
-      </Modal>
-      <Modal
-        title="Save changes before leaving?"
-        destructive
-        description="Save this slide, discard the changes, or keep editing."
-        open={navigation.confirmOpen}
-        onClose={() => {
-          if (!busy) navigation.cancel();
-        }}
-      >
-        {error && (
-          <p role="alert" className="inline-error">
-            {error}
-          </p>
-        )}
-        <div className="dialog-actions">
-          <button disabled={busy} onClick={navigation.cancel}>
-            Keep editing
-          </button>
-          <button disabled={busy} className="danger" onClick={navigation.leave}>
-            Discard changes
-          </button>
-          <button
-            className="primary"
-            disabled={busy || !slide.name.trim()}
-            onClick={() => {
-              void save().then((ok) => {
-                if (ok) navigation.leave();
-              });
-            }}
-          >
-            <Save size={16} />
-            Save and continue
-          </button>
-        </div>
-      </Modal>
-    </div>
+          <div className="dialog-actions">
+            <button disabled={busy} onClick={navigation.cancel}>
+              Keep editing
+            </button>
+            <button
+              disabled={busy}
+              className="danger"
+              onClick={navigation.leave}
+            >
+              Discard changes
+            </button>
+            <button
+              className="primary"
+              disabled={busy || !slide.name.trim()}
+              onClick={() => {
+                void save().then((ok) => {
+                  if (ok) navigation.leave();
+                });
+              }}
+            >
+              <Save size={16} />
+              Save and continue
+            </button>
+          </div>
+        </Modal>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3511,6 +4046,7 @@ type PlaylistShareChange = {
 function PlaylistEditor({
   initial,
   slides,
+  folders,
   assets,
   groups,
   isAdmin,
@@ -3524,6 +4060,7 @@ function PlaylistEditor({
 }: {
   initial: Playlist;
   slides: Slide[];
+  folders: NonNullable<Library['slideFolders']>;
   assets: Asset[];
   groups: NonNullable<Library['groups']>;
   isAdmin: boolean;
@@ -3536,7 +4073,7 @@ function PlaylistEditor({
     changes: Pick<PlaylistShareChange, 'kind' | 'id' | 'target'>[],
   ) => Promise<unknown>;
   onPublish: (p: Playlist) => Promise<Playlist>;
-  onPreview: (id: string) => void;
+  onPreview: (id: string, version?: 'draft' | 'published') => void;
 }) {
   const [p, setP] = useState<Playlist>(structuredClone(initial));
   const [duplicateSlide, setDuplicateSlide] = useState<Slide | null>(null);
@@ -3561,6 +4098,34 @@ function PlaylistEditor({
   const [pendingAction, setPendingAction] = useState({
     publish: false,
     preview: false,
+  });
+  const [pickerFilter, setPickerFilter] = useState<LibraryFilter>({
+    ...clearLibraryFilter,
+  });
+  const [pickerTag, setPickerTag] = useState('');
+  const [pickerFolder, setPickerFolder] = useState('');
+  const [pickerSort, setPickerSort] = useState('name');
+  const pickerFolders = [
+    ...new Set(slides.map((s) => s.folderId).filter(Boolean)),
+  ];
+  const pickerSlides = slides
+    .filter(
+      (s) =>
+        matchesLibraryFilter(s, pickerFilter, groups, '') &&
+        (!pickerTag || s.tags?.includes(pickerTag)) &&
+        (!pickerFolder || s.folderId === pickerFolder),
+    )
+    .sort((a, b) =>
+      pickerSort === 'updated'
+        ? Date.parse(b.updatedAt || '') - Date.parse(a.updatedAt || '')
+        : a.name.localeCompare(b.name, undefined, { numeric: true }),
+    );
+  const scheduleTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const activeDuration = playlistDuration({
+    ...p,
+    items: p.items.filter(
+      (item) => playlistItemStatus(item, scheduleNow).state === 'active',
+    ),
   });
   const [tab, setTab] = useState('sequence');
   const [saved, setSaved] = useState(JSON.stringify(initial));
@@ -3661,8 +4226,60 @@ function PlaylistEditor({
           if (!busy) navigation.requestLeave();
         }}
         wide
+        footer={
+          <>
+            <div className="dialog-actions">
+              <button
+                aria-label="Save draft and preview"
+                disabled={busy || !p.items.length}
+                onClick={() => action(false, true)}
+              >
+                <Play size={18} />
+                Save draft and preview
+              </button>
+              {p.publishedAt && (
+                <button
+                  disabled={busy}
+                  onClick={() => onPreview(p.id, 'published')}
+                >
+                  <Play size={16} />
+                  Preview published
+                </button>
+              )}
+              <button
+                disabled={busy || !p.name.trim()}
+                onClick={() => action()}
+              >
+                <Save size={16} />
+                Save draft
+              </button>
+              <button
+                className="primary"
+                disabled={busy || !p.items.length || !p.name.trim()}
+                onClick={() => action(true)}
+              >
+                <Check size={17} />
+                Publish playlist
+              </button>
+            </div>
+          </>
+        }
       >
         <div className="playlist-fields" inert={busy}>
+          <output className="publication-summary">
+            <strong>
+              {p.publicationState === 'changes' || (p.publishedAt && dirty)
+                ? 'Unpublished changes'
+                : p.publishedAt
+                  ? 'Published'
+                  : 'Draft'}
+            </strong>
+            <span>
+              {p.publishedAt
+                ? `Last published ${new Date(p.publishedAt).toLocaleString()}. Save draft keeps playlist edits off screens until you publish.`
+                : 'Publish when ready, then assign this playlist to a screen.'}
+            </span>
+          </output>
           <label>
             Playlist name
             <input
@@ -3811,239 +4428,298 @@ function PlaylistEditor({
               </label>
             )}
           </div>
-          {tab === 'sequence' ? (
-            <div className="sequence">
-              {p.items.length ? (
-                p.items.map((item, index) => {
-                  const slide = slides.find((s) => s.id === item.slideId);
-                  const availability = playlistItemStatus(item, scheduleNow);
-                  const statusDate = availability.at
-                    ? new Date(availability.at)
-                    : null;
-                  const statusLabel =
-                    availability.state === 'active'
-                      ? 'Active'
-                      : availability.state === 'invalid'
-                        ? 'Check schedule'
-                        : `${availability.state === 'scheduled' ? 'Starts' : 'Deactivated'} ${statusDate!.toLocaleString(
-                            [],
-                            {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                            },
-                          )}`;
-                  return (
-                    <div
-                      className="sequence-row"
-                      key={`${index}-${item.slideId}`}
-                    >
-                      <span className="sequence-number">
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-                      <div className="sequence-thumb">
-                        {slide && <SlideCanvas slide={slide} assets={assets} />}
-                      </div>
-                      <div className="sequence-details">
-                        <strong>{slide?.name || 'Missing slide'}</strong>
-                        {p.fork && (
-                          <span className="inherited-entry-label">
-                            {item.sourceEntryId
-                              ? 'From master'
-                              : 'Added locally'}
-                          </span>
-                        )}
-                        <span
-                          className={`sequence-status ${availability.state}`}
-                          title={statusDate?.toString()}
-                        >
-                          {availability.state === 'active' ? (
-                            <CheckCircle2 size={13} aria-hidden="true" />
-                          ) : availability.state === 'scheduled' ? (
-                            <Clock size={13} aria-hidden="true" />
-                          ) : (
-                            <Circle size={13} aria-hidden="true" />
-                          )}
-                          <span>{statusLabel}</span>
-                        </span>
-                      </div>
-                      <div className="sequence-controls">
-                        <label
-                          className="sequence-toggle"
-                          htmlFor={`schedule-${index}`}
-                        >
-                          Schedule
-                          <Switch
-                            id={`schedule-${index}`}
-                            aria-label={`Schedule slide ${index + 1}`}
-                            disabled={!!item.sourceEntryId}
-                            checked={
-                              item.scheduleEnabled ??
-                              Boolean(item.startsAt || item.expiresAt)
-                            }
-                            onCheckedChange={(scheduleEnabled) =>
-                              setP({
-                                ...p,
-                                items: p.items.map((entry, i) =>
-                                  i === index
-                                    ? { ...entry, scheduleEnabled }
-                                    : entry,
-                                ),
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="duration-input">
-                          <input
-                            aria-label={`Duration for slide ${index + 1}`}
-                            type="number"
-                            min={2}
-                            max={3600}
-                            value={item.duration}
-                            onChange={(e) =>
-                              setP({
-                                ...p,
-                                items: p.items.map((v, i) =>
-                                  i === index
-                                    ? {
-                                        ...v,
-                                        ...(v.sourceEntryId
-                                          ? { durationOverride: true }
-                                          : {}),
-                                        duration: Math.max(
-                                          2,
-                                          Math.min(
-                                            3600,
-                                            Number(e.target.value),
-                                          ),
-                                        ),
-                                      }
-                                    : v,
-                                ),
-                              })
-                            }
-                          />
-                          <span>sec</span>
-                        </label>
-                        {item.sourceEntryId && item.durationOverride && (
-                          <IconButton
-                            label={`Reset duration for slide ${index + 1} to master`}
-                            onClick={() =>
-                              setP({
-                                ...p,
-                                items: p.items.map((entry, i) =>
-                                  i === index
-                                    ? {
-                                        ...entry,
-                                        durationOverride: false,
-                                        duration:
-                                          entry.masterDuration ||
-                                          entry.duration,
-                                      }
-                                    : entry,
-                                ),
-                              })
-                            }
-                          >
-                            <Undo2 size={16} />
-                          </IconButton>
-                        )}
-                        <div className="row-actions">
-                          <IconButton
-                            label={`Move slide ${index + 1} up`}
-                            disabled={!index}
-                            onClick={() => move(index, -1)}
-                          >
-                            <ArrowUp size={16} />
-                          </IconButton>
-                          <IconButton
-                            label={`Move slide ${index + 1} down`}
-                            disabled={index === p.items.length - 1}
-                            onClick={() => move(index, 1)}
-                          >
-                            <ArrowDown size={16} />
-                          </IconButton>
-                          <IconButton
-                            label={`Remove slide ${index + 1}`}
-                            disabled={!!item.sourceEntryId}
-                            onClick={() =>
-                              setP({
-                                ...p,
-                                items: p.items.filter((_, i) => i !== index),
-                              })
-                            }
-                          >
-                            <X size={16} />
-                          </IconButton>
-                        </div>
-                      </div>
-                      {(item.scheduleEnabled ??
-                        Boolean(item.startsAt || item.expiresAt)) && (
-                        <div className="sequence-schedule">
-                          {(['startsAt', 'expiresAt'] as const).map((field) => (
-                            <label key={field}>
-                              {field === 'startsAt'
-                                ? 'Starts at'
-                                : 'Expires at'}
-                              <input
-                                type="datetime-local"
-                                disabled={!!item.sourceEntryId}
-                                step="1"
-                                aria-label={`${field === 'startsAt' ? 'Starts at' : 'Expires at'} for slide ${index + 1}`}
-                                value={
-                                  item[field] ? localDateTime(item[field]) : ''
-                                }
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  if (
-                                    value &&
-                                    !Number.isFinite(new Date(value).getTime())
-                                  )
-                                    return;
-                                  setP({
-                                    ...p,
-                                    items: p.items.map((entry, i) =>
-                                      i === index
-                                        ? {
-                                            ...entry,
-                                            [field]: value
-                                              ? new Date(value).toISOString()
-                                              : null,
-                                          }
-                                        : entry,
-                                    ),
-                                  });
-                                }}
-                              />
-                            </label>
-                          ))}
-                        </div>
-                      )}
+          <div
+            className="sequence"
+            style={tab !== 'sequence' ? { display: 'none' } : undefined}
+          >
+            {p.items.length ? (
+              p.items.map((item, index) => {
+                const slide = slides.find((s) => s.id === item.slideId);
+                const availability = playlistItemStatus(item, scheduleNow);
+                const statusDate = availability.at
+                  ? new Date(availability.at)
+                  : null;
+                const statusLabel =
+                  availability.state === 'active'
+                    ? 'Active'
+                    : availability.state === 'invalid'
+                      ? 'Check schedule'
+                      : `${availability.state === 'scheduled' ? 'Starts' : 'Deactivated'} ${statusDate!.toLocaleString(
+                          [],
+                          {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          },
+                        )}`;
+                return (
+                  <div
+                    className="sequence-row"
+                    key={`${index}-${item.slideId}`}
+                  >
+                    <span className="sequence-number">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <div className="sequence-thumb">
+                      {slide && <SlideCanvas slide={slide} assets={assets} />}
                     </div>
-                  );
-                })
-              ) : (
-                <div className="small-empty">
-                  <ListVideo size={28} />
-                  <p>No slides in this playlist.</p>
-                  <button onClick={() => setTab('library')}>
-                    <Plus size={16} />
-                    Add slides
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
+                    <div className="sequence-details">
+                      <strong>{slide?.name || 'Missing slide'}</strong>
+                      {p.fork && (
+                        <span className="inherited-entry-label">
+                          {item.sourceEntryId ? 'From master' : 'Added locally'}
+                        </span>
+                      )}
+                      <span
+                        className={`sequence-status ${availability.state}`}
+                        title={statusDate?.toString()}
+                      >
+                        {availability.state === 'active' ? (
+                          <CheckCircle2 size={13} aria-hidden="true" />
+                        ) : availability.state === 'scheduled' ? (
+                          <Clock size={13} aria-hidden="true" />
+                        ) : (
+                          <Circle size={13} aria-hidden="true" />
+                        )}
+                        <span>{statusLabel}</span>
+                      </span>
+                    </div>
+                    <div className="sequence-controls">
+                      <label
+                        className="sequence-toggle"
+                        htmlFor={`schedule-${index}`}
+                      >
+                        Schedule
+                        <Switch
+                          id={`schedule-${index}`}
+                          aria-label={`Schedule slide ${index + 1}`}
+                          disabled={!!item.sourceEntryId}
+                          checked={
+                            item.scheduleEnabled ??
+                            Boolean(item.startsAt || item.expiresAt)
+                          }
+                          onCheckedChange={(scheduleEnabled) =>
+                            setP({
+                              ...p,
+                              items: p.items.map((entry, i) =>
+                                i === index
+                                  ? { ...entry, scheduleEnabled }
+                                  : entry,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="duration-input">
+                        <input
+                          aria-label={`Duration for slide ${index + 1}`}
+                          type="number"
+                          min={2}
+                          max={3600}
+                          value={item.duration}
+                          onChange={(e) =>
+                            setP({
+                              ...p,
+                              items: p.items.map((v, i) =>
+                                i === index
+                                  ? {
+                                      ...v,
+                                      ...(v.sourceEntryId
+                                        ? { durationOverride: true }
+                                        : {}),
+                                      duration: Math.max(
+                                        2,
+                                        Math.min(3600, Number(e.target.value)),
+                                      ),
+                                    }
+                                  : v,
+                              ),
+                            })
+                          }
+                        />
+                        <span>sec</span>
+                      </label>
+                      {item.sourceEntryId && item.durationOverride && (
+                        <IconButton
+                          label={`Reset duration for slide ${index + 1} to master`}
+                          onClick={() =>
+                            setP({
+                              ...p,
+                              items: p.items.map((entry, i) =>
+                                i === index
+                                  ? {
+                                      ...entry,
+                                      durationOverride: false,
+                                      duration:
+                                        entry.masterDuration || entry.duration,
+                                    }
+                                  : entry,
+                              ),
+                            })
+                          }
+                        >
+                          <Undo2 size={16} />
+                        </IconButton>
+                      )}
+                      <div className="row-actions">
+                        <IconButton
+                          label={`Move slide ${index + 1} up`}
+                          disabled={!index}
+                          onClick={() => move(index, -1)}
+                        >
+                          <ArrowUp size={16} />
+                        </IconButton>
+                        <IconButton
+                          label={`Move slide ${index + 1} down`}
+                          disabled={index === p.items.length - 1}
+                          onClick={() => move(index, 1)}
+                        >
+                          <ArrowDown size={16} />
+                        </IconButton>
+                        <IconButton
+                          label={`Remove slide ${index + 1}`}
+                          disabled={!!item.sourceEntryId}
+                          onClick={() =>
+                            setP({
+                              ...p,
+                              items: p.items.filter((_, i) => i !== index),
+                            })
+                          }
+                        >
+                          <X size={16} />
+                        </IconButton>
+                      </div>
+                    </div>
+                    {(item.scheduleEnabled ??
+                      Boolean(item.startsAt || item.expiresAt)) && (
+                      <div className="sequence-schedule">
+                        {(['startsAt', 'expiresAt'] as const).map((field) => (
+                          <label key={field}>
+                            {field === 'startsAt' ? 'Starts at' : 'Expires at'}
+                            <input
+                              type="datetime-local"
+                              disabled={!!item.sourceEntryId}
+                              step="1"
+                              aria-label={`${field === 'startsAt' ? 'Starts at' : 'Expires at'} for slide ${index + 1}`}
+                              value={
+                                item[field] ? localDateTime(item[field]) : ''
+                              }
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (
+                                  value &&
+                                  !Number.isFinite(new Date(value).getTime())
+                                )
+                                  return;
+                                setP({
+                                  ...p,
+                                  items: p.items.map((entry, i) =>
+                                    i === index
+                                      ? {
+                                          ...entry,
+                                          [field]: value
+                                            ? new Date(value).toISOString()
+                                            : null,
+                                        }
+                                      : entry,
+                                  ),
+                                });
+                              }}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="small-empty">
+                <ListVideo size={28} />
+                <p>No slides in this playlist.</p>
+                <button onClick={() => setTab('library')}>
+                  <Plus size={16} />
+                  Add slides
+                </button>
+              </div>
+            )}
+          </div>
+          <div
+            className="playlist-picker"
+            style={tab !== 'library' ? { display: 'none' } : undefined}
+          >
+            <LibraryFilters
+              filter={pickerFilter}
+              onChange={setPickerFilter}
+              groups={groups}
+              statuses={[]}
+              shown={pickerSlides.length}
+              total={slides.length}
+              noun="Slides"
+              additionalActive={Number(!!pickerFolder) + Number(!!pickerTag)}
+              onReset={() => {
+                setPickerFolder('');
+                setPickerTag('');
+              }}
+              filterControls={
+                <>
+                  <label>
+                    Folder
+                    <select
+                      aria-label="Picker folder"
+                      value={pickerFolder}
+                      onChange={(e) => setPickerFolder(e.target.value)}
+                    >
+                      <option value="">All folders</option>
+                      {pickerFolders.map((id) => (
+                        <option key={id} value={id || undefined}>
+                          {folders.find((folder) => folder.id === id)?.name ||
+                            'Unavailable folder'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Tags
+                    <select
+                      aria-label="Picker tag"
+                      value={pickerTag}
+                      onChange={(e) => setPickerTag(e.target.value)}
+                    >
+                      <option value="">All tags</option>
+                      {[...new Set(slides.flatMap((s) => s.tags || []))]
+                        .sort()
+                        .map((tag) => (
+                          <option key={tag}>{tag}</option>
+                        ))}
+                    </select>
+                  </label>
+                </>
+              }
+            >
+              <label className="slide-sort-control">
+                Sort slides
+                <select
+                  aria-label="Picker sort"
+                  value={pickerSort}
+                  onChange={(e) => setPickerSort(e.target.value)}
+                >
+                  <option value="name">Name</option>
+                  <option value="updated">Recently updated</option>
+                </select>
+              </label>
+            </LibraryFilters>
             <div className="add-slide-grid">
-              {slides.map((s) => {
+              {pickerSlides.map((s) => {
                 const count = p.items.filter(
                   (item) => item.slideId === s.id,
                 ).length;
                 return (
                   <button
                     key={s.id}
+                    data-slide-id={s.id}
                     type="button"
                     data-added={count > 0}
                     aria-label={
@@ -4075,11 +4751,23 @@ function PlaylistEditor({
                 );
               })}
               {!slides.length && <p>Create a slide first.</p>}
+              {!!slides.length && !pickerSlides.length && (
+                <p>No slides match. Clear filters or try another name.</p>
+              )}
             </div>
-          )}
+          </div>
           <div className="playlist-total">
             <span>{p.items.length} slides</span>
-            <strong>{playlistDuration(p)} seconds / loop</strong>
+            <strong>
+              {activeDuration} seconds playing now · {playlistDuration(p)}{' '}
+              seconds across all entries
+            </strong>
+            {hasSchedule && (
+              <span>
+                Schedule times use {scheduleTimezone}. Inactive entries are
+                excluded from the current loop.
+              </span>
+            )}
           </div>
         </div>
         {error && (
@@ -4088,27 +4776,6 @@ function PlaylistEditor({
           </div>
         )}
         {message && <output className="success-message">{message}</output>}
-        <div className="dialog-actions">
-          <IconButton
-            label="Preview saved playlist"
-            disabled={busy || !p.items.length}
-            onClick={() => action(false, true)}
-          >
-            <Play size={18} />
-          </IconButton>
-          <button disabled={busy || !p.name.trim()} onClick={() => action()}>
-            <Save size={16} />
-            Save draft
-          </button>
-          <button
-            className="primary"
-            disabled={busy || !p.items.length || !p.name.trim()}
-            onClick={() => action(true)}
-          >
-            <Check size={17} />
-            Publish playlist
-          </button>
-        </div>
       </Modal>
       <Modal
         title="Add this slide again?"

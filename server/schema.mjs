@@ -40,6 +40,7 @@ export const layerSchema = z
       .max(100.000001)
       .transform((value) => Math.min(100, value)),
     text: z.string().max(4000).default(''),
+    starterText: z.literal(true).optional(),
     assetId: id.optional(),
     removedMedia: z.literal(true).optional(),
     fontSize: z.number().min(12).max(400).default(72),

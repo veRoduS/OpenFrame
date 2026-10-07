@@ -1,6 +1,6 @@
 # Public website
 
-The server hosts a public OpenFrame landing page at `/`. Its login links open `/login`; successful sign-in opens `/dashboard`. Bookmark `/dashboard` to go straight to the workspace when signed in. Visiting `/login` or the legacy `/app` route with an active session also opens `/dashboard`; otherwise the workspace requests sign-in at `/login`. Signing out returns to `/login`. Player routes and API authorization are unchanged.
+The server hosts a public OpenFrame landing page at `/`. Its login links open `/login`; successful sign-in opens `/dashboard`. Bookmark `/dashboard` to go straight to Slides when signed in. Other workspace sections use `/dashboard/playlists`, `/dashboard/screens`, `/dashboard/media`, `/dashboard/users`, `/dashboard/password`, and `/dashboard/settings`; section filters are carried in the query string. Users and Settings are admin-only; non-admin direct links redirect to Slides. Visiting `/login` or the legacy `/app` route with an active session also opens `/dashboard`; otherwise the workspace requests sign-in at `/login`. Signing out returns to `/login`. Player routes and synchronization authorization are unchanged.
 
 Sessions use persistent 30-day cookies and renew during authenticated activity, at most once a day. Reloading, revisiting a bookmark, or normally closing and reopening the browser does not require another sign-in. Private browsing, clearing cookies, signing out, or account/password changes can end a session earlier. See [users and groups](users-and-groups.md#staying-signed-in).
 

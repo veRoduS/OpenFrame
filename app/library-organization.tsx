@@ -76,8 +76,10 @@ export function LibraryOrganizationToolbar({
   refresh,
   onAccess,
   children,
+  showTagFilter = true,
 }: {
   children: ReactNode;
+  showTagFilter?: boolean;
   kind: 'slides' | 'playlists';
   items: Item[];
   folders: LibraryFolder[];
@@ -377,21 +379,23 @@ export function LibraryOrganizationToolbar({
             )}
           </div>
           <div className="organization-tools">
-            <label className="organization-tag-filter">
-              <Tags size={16} />
-              <select
-                aria-label={`Filter ${kind} by tag`}
-                value={filter.tag}
-                onChange={(e) => onFilter({ ...filter, tag: e.target.value })}
-              >
-                <option value="">All tags</option>
-                {tags.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {showTagFilter && (
+              <label className="organization-tag-filter">
+                <Tags size={16} />
+                <select
+                  aria-label={`Filter ${kind} by tag`}
+                  value={filter.tag}
+                  onChange={(e) => onFilter({ ...filter, tag: e.target.value })}
+                >
+                  <option value="">All tags</option>
+                  {tags.map((tag) => (
+                    <option key={tag} value={tag}>
+                      {tag}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {(filter.folder !== 'all' || filter.tag) && (
               <button
                 type="button"

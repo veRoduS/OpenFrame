@@ -31,7 +31,7 @@
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 .library-results .slide-grid[data-layout='large'] {
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
 }
 @media (max-width: 767px) {
   .library-browser-body .library-results-heading .media-folder-title {
@@ -97,7 +97,6 @@
   top: 12px;
   left: 12px;
   z-index: 2;
-  background: white;
 }
 .slide-card .library-item-tags {
   padding: 0 16px;

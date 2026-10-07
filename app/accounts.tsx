@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, type SyntheticEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import {
   minimumPasswordLength,
   maximumPasswordLength,
@@ -70,6 +77,10 @@ async function copyText(value: string) {
 }
 
 export function PasswordSettings({ user }: { user: User }) {
+  const requirementsId = useId();
+  const confirmErrorId = useId();
+  const confirmInput = useRef<HTMLInputElement>(null);
+  const [confirmError, setConfirmError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -103,9 +114,15 @@ export function PasswordSettings({ user }: { user: User }) {
           onSubmit={(e) => {
             const form = e.currentTarget;
             const data = fields(e);
+            if (data.password !== data.confirm) {
+              setConfirmError(
+                'New passwords do not match. Re-enter the new password.',
+              );
+              confirmInput.current?.focus();
+              return;
+            }
+            setConfirmError('');
             void run(async () => {
-              if (data.password !== data.confirm)
-                throw new Error('New passwords do not match');
               await api('/api/account/password', 'POST', {
                 currentPassword: data.currentPassword,
                 password: data.password,
@@ -130,6 +147,8 @@ export function PasswordSettings({ user }: { user: User }) {
             New password
             <input
               name="password"
+              aria-describedby={requirementsId}
+              onChange={() => setConfirmError('')}
               type="password"
               autoComplete="new-password"
               minLength={minimumPasswordLength}
@@ -137,10 +156,17 @@ export function PasswordSettings({ user }: { user: User }) {
               required
             />
           </label>
+          <p className="field-help" id={requirementsId}>
+            Use {minimumPasswordLength}–{maximumPasswordLength} characters.
+          </p>
           <label>
             Confirm new password
             <input
               name="confirm"
+              ref={confirmInput}
+              aria-invalid={!!confirmError}
+              aria-describedby={confirmError ? confirmErrorId : requirementsId}
+              onChange={() => setConfirmError('')}
               type="password"
               autoComplete="new-password"
               minLength={minimumPasswordLength}
@@ -148,6 +174,11 @@ export function PasswordSettings({ user }: { user: User }) {
               required
             />
           </label>
+          {confirmError && (
+            <p className="field-error" id={confirmErrorId} role="alert">
+              {confirmError}
+            </p>
+          )}
           <button className="primary" disabled={busy}>
             <KeyRound size={16} />
             Change password

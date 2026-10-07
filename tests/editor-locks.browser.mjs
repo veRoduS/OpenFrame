@@ -134,7 +134,7 @@ try {
     await page.getByRole('button', { name: 'Add image', exact: true }).click();
     assert.equal(
       await page
-        .getByRole('dialog')
+        .getByRole('dialog', { name: 'Add an image', exact: true })
         .locator('[data-slot="dialog-title"]')
         .textContent(),
       'Add an image',

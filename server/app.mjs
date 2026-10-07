@@ -1,5 +1,7 @@
 import { mountDataFeeds, feedMetadata, feedIds } from './data-feeds.mjs';
 import { composeFork, identifyEntries } from './playlist-forks.mjs';
+import { publicationState } from './publication-state.mjs';
+import { trackStarterText, removeUntouchedStarter } from './starter-text.mjs';
 import { mountLibraryOrganization } from './library-organization.mjs';
 import { createStockCache, stockSymbols } from './stocks.mjs';
 import express from 'express';
@@ -739,6 +741,7 @@ export function createApp({
   });
   const publicResource = (kind, item) => ({
     ...item,
+    ...(kind === 'playlist' ? publicationMetadata(resolvedPlaylist(item)) : {}),
     folderId: item.folderId || null,
     tags: item.tags || [],
     readOnly: !accounts.canEdit(
@@ -757,6 +760,7 @@ export function createApp({
     db,
     accounts,
     admin,
+    administrator,
     allRecords,
     list,
     put,
@@ -782,6 +786,15 @@ export function createApp({
       return { ...p, forkSyncError: error.message };
     }
   }
+  const publicationMetadata = (p) => ({
+    publicationState: publicationState(p),
+    publishedAt: p.published?.publishedAt || null,
+    publishedRevision: p.published?.revision || null,
+    publishedSlideIds:
+      p.published?.items
+        ?.map((item) => item.slide?.id ?? item.slideId)
+        .filter(Boolean) || [],
+  });
   app.get('/api/library', admin, (req, res) => {
     const groups = db
       .prepare(
@@ -887,11 +900,7 @@ export function createApp({
             ...p
           }) => ({
             ...withGroups('playlist', publicResource('playlist', p)),
-            publishedAt: published?.publishedAt || null,
-            publishedSlideIds:
-              published?.items
-                ?.map((item) => item.slide?.id ?? item.slideId)
-                .filter(Boolean) || [],
+            ...publicationMetadata({ ...p, published }),
           }),
         ),
       assets: allRecords('asset')
@@ -932,7 +941,7 @@ export function createApp({
     }
   }
   app.post('/api/slides', admin, (req, res) => {
-    const slide = slideSchema.parse(req.body);
+    const slide = trackStarterText(slideSchema.parse(req.body));
     organization.validateFolder('slide', slide.folderId, req.user);
     dataFeeds.validateLayers(slide, req.user);
     checkImages(slide, req.user);
@@ -950,18 +959,21 @@ export function createApp({
   });
   app.put('/api/slides/:id', admin, (req, res) => {
     const previous = requireEditable('slide', req.params.id);
-    const slide = slideSchema.parse({
-      ...req.body,
-      folderId:
-        req.body.folderId === undefined
-          ? previous.folderId || null
-          : req.body.folderId,
-      tags: req.body.tags === undefined ? previous.tags || [] : req.body.tags,
-      managingGroupId:
-        req.body.managingGroupId === undefined
-          ? previous.managingGroupId
-          : req.body.managingGroupId,
-    });
+    const slide = trackStarterText(
+      slideSchema.parse({
+        ...req.body,
+        folderId:
+          req.body.folderId === undefined
+            ? previous.folderId || null
+            : req.body.folderId,
+        tags: req.body.tags === undefined ? previous.tags || [] : req.body.tags,
+        managingGroupId:
+          req.body.managingGroupId === undefined
+            ? previous.managingGroupId
+            : req.body.managingGroupId,
+      }),
+      previous,
+    );
     organization.validateFolder('slide', slide.folderId, req.user);
     dataFeeds.validateLayers(slide, req.user);
     checkImages(slide, req.user);
@@ -977,11 +989,16 @@ export function createApp({
   app.delete('/api/slides/:id', admin, (req, res) => {
     requireEditable('slide', req.params.id);
     if (
-      allRecords('playlist').some((p) =>
-        p.items.some((i) => i.slideId === req.params.id),
+      allRecords('playlist').some(
+        (p) =>
+          p.items.some((i) => i.slideId === req.params.id) ||
+          p.published?.items.some((i) => i.slide?.id === req.params.id),
       )
     )
-      throw fail(409, 'Remove this slide from playlists first');
+      throw fail(
+        409,
+        'Remove this slide from playlist drafts and publish their updated versions first',
+      );
     remove('slide', req.params.id);
     res.json({ ok: true });
   });
@@ -1359,7 +1376,7 @@ export function createApp({
         );
         checkPublicationRecipients(candidate);
         const published = accounts.context.run(undefined, () =>
-          snapshot(candidate),
+          snapshot(candidate, true),
         );
         fork.published = published;
         fork.publishedEntries = candidate.items.map((i) => ({
@@ -1426,9 +1443,14 @@ export function createApp({
       managingGroupId: _management,
       ...content
     } = slide;
-    return content;
+    return {
+      ...content,
+      layers: content.layers.map(
+        ({ starterText: _starterText, ...layer }) => layer,
+      ),
+    };
   }
-  function snapshot(p) {
+  function snapshot(p, publishing = false) {
     if (p.fork) {
       requireRecord('playlist', p.fork.masterId);
       try {
@@ -1447,6 +1469,8 @@ export function createApp({
     const master = p.fork
       ? allRecords('playlist').find((m) => m.id === p.fork.masterId)
       : null;
+    const contentSlide = (slide) =>
+      manifestSlide(publishing ? removeUntouchedStarter(slide) : slide);
     const items = p.items.map((item) => ({
       duration: Math.max(
         2,
@@ -1456,7 +1480,7 @@ export function createApp({
       scheduleEnabled: item.scheduleEnabled,
       expiresAt:
         item.scheduleEnabled === false ? null : (item.expiresAt ?? null),
-      slide: manifestSlide(
+      slide: contentSlide(
         item.sourceEntryId
           ? master.published.items[
               master.publishedEntries.findIndex(
@@ -1494,6 +1518,7 @@ export function createApp({
     };
   }
   function refreshPublishedSlide(slide) {
+    slide = removeUntouchedStarter(slide);
     const rows = db
       .prepare("SELECT id,body FROM records WHERE kind='playlist'")
       .all();
@@ -1550,7 +1575,7 @@ export function createApp({
     p.items = resolvedPlaylist(p).items;
     if (!p.items.length)
       throw fail(400, 'Add at least one slide before publishing');
-    p.published = snapshot(p);
+    p.published = snapshot(p, true);
     checkPublicationRecipients(p, p.published.items);
     delete p.forkSyncError;
     p.publishedEntries = p.items.map((i) => ({
@@ -1569,12 +1594,43 @@ export function createApp({
         fork: structuredClone(p.fork),
         items: structuredClone(p.items),
       };
-    put('playlist', p);
-    propagateForks(p.id);
-    res.json({ publishedAt: p.published.publishedAt });
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const id of new Set(
+        p.items
+          .filter((item) => !item.sourceEntryId)
+          .map((item) => item.slideId),
+      )) {
+        const slide = requireRecord('slide', id);
+        const cleaned = removeUntouchedStarter(slide);
+        if (
+          cleaned.layers.length !== slide.layers.length &&
+          accounts.canEdit(req.user, 'slide', id)
+        ) {
+          const saved = put('slide', {
+            ...cleaned,
+            updatedAt: new Date().toISOString(),
+          });
+          refreshPublishedSlide(saved);
+        }
+      }
+      put('playlist', p);
+      propagateForks(p.id);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+    res.json(publicationMetadata(p));
   });
   app.get('/api/preview/:id', admin, (req, res) => {
-    const manifest = snapshot(requireRecord('playlist', req.params.id));
+    const playlist = requireRecord('playlist', req.params.id);
+    const published = req.query.version === 'published';
+    if (published && !playlist.published)
+      throw fail(404, 'This playlist has not been published');
+    const manifest = published
+      ? structuredClone(playlist.published)
+      : snapshot(playlist);
     manifest.revision = hash(
       JSON.stringify([manifest.items, manifest.assets, manifest.transition]),
     );

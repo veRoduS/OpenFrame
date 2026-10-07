@@ -15,6 +15,221 @@ import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 
+void test('library publication status and published preview preserve the actual screen version', async (t) => {
+  const { request } = await fixture(t);
+  const slide = (await request('/api/slides', 'POST', slideData())).data;
+  const body = { name: 'Lobby', items: [{ slideId: slide.id, duration: 10 }] };
+  const playlist = (await request('/api/playlists', 'POST', body)).data;
+  assert.equal(playlist.publicationState, 'draft');
+  assert.equal(
+    (await request(`/api/preview/${playlist.id}?version=published`)).status,
+    404,
+  );
+  await request(`/api/playlists/${playlist.id}/publish`, 'POST');
+  let row = (await request('/api/library')).data.playlists.find(
+    (p) => p.id === playlist.id,
+  );
+  assert.equal(row.publicationState, 'published');
+  assert.ok(row.publishedRevision);
+  await request(`/api/playlists/${playlist.id}`, 'PUT', {
+    ...body,
+    tags: ['lobby'],
+  });
+  assert.equal(
+    (await request('/api/library')).data.playlists[0].publicationState,
+    'published',
+  );
+  const updated = await request(`/api/playlists/${playlist.id}`, 'PUT', {
+    ...body,
+    items: [{ slideId: slide.id, duration: 20 }],
+  });
+  assert.equal(updated.data.publicationState, 'changes');
+  assert.equal(
+    (await request(`/api/preview/${playlist.id}`)).data.items[0].duration,
+    20,
+  );
+  assert.equal(
+    (await request(`/api/preview/${playlist.id}?version=published`)).data
+      .items[0].duration,
+    10,
+  );
+  assert.equal(
+    (
+      await request(
+        `/api/preview/${playlist.id}?version=published`,
+        'GET',
+        undefined,
+        false,
+      )
+    ).status,
+    401,
+  );
+  await request(`/api/playlists/${playlist.id}/publish`, 'POST');
+  row = (await request('/api/library')).data.playlists[0];
+  assert.equal(row.publicationState, 'published');
+  assert.equal(
+    (await request(`/api/preview/${playlist.id}?version=published`)).data
+      .items[0].duration,
+    20,
+  );
+});
+
+void test('publication removes generated starter text from slides, including repeated entries, while preserving intentional text', async (t) => {
+  const { request } = await fixture(t);
+  const upload = new FormData();
+  upload.append(
+    'file',
+    new Blob(
+      [
+        await sharp({
+          create: {
+            width: 100,
+            height: 100,
+            channels: 3,
+            background: '#202923',
+          },
+        })
+          .png()
+          .toBuffer(),
+      ],
+      { type: 'image/png' },
+    ),
+    'cover.png',
+  );
+  const image = (await request('/api/assets', 'POST', upload)).data;
+  const body = slideData();
+  const starter = {
+    ...body.layers[0],
+    text: 'Something worth\nsharing.',
+    starterText: true,
+  };
+  body.layers = [
+    starter,
+    { ...starter, id: randomUUID(), starterText: undefined },
+    {
+      ...starter,
+      id: randomUUID(),
+      type: 'image',
+      assetId: image.id,
+      starterText: undefined,
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    },
+  ];
+  const slide = (await request('/api/slides', 'POST', body)).data;
+  const playlist = (
+    await request('/api/playlists', 'POST', {
+      name: 'Starter cleanup',
+      items: [
+        { slideId: slide.id, duration: 10 },
+        { slideId: slide.id, duration: 20 },
+      ],
+    })
+  ).data;
+  assert.equal(
+    (await request(`/api/preview/${playlist.id}`)).data.items[0].slide.layers
+      .length,
+    3,
+  );
+  assert.equal((await request('/api/library')).data.slides[0].layers.length, 3);
+  assert.equal(
+    (await request(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const stored = (await request('/api/library')).data.slides[0];
+  assert.equal(stored.layers.length, 2);
+  assert.equal(stored.layers[0].id, body.layers[1].id);
+  for (const item of (
+    await request(`/api/preview/${playlist.id}?version=published`)
+  ).data.items) {
+    assert.equal(item.slide.layers.length, 2);
+    assert.equal(item.slide.layers[0].starterText, undefined);
+  }
+  const changed = (
+    await request('/api/slides', 'POST', { ...slideData(), layers: [starter] })
+  ).data;
+  const edit = (
+    await request(`/api/slides/${changed.id}`, 'PUT', {
+      ...changed,
+      layers: [{ ...changed.layers[0], text: 'Changed message' }],
+    })
+  ).data;
+  assert.equal(edit.layers[0].starterText, undefined);
+  await request(`/api/slides/${edit.id}`, 'PUT', {
+    ...edit,
+    layers: [starter],
+  });
+  const second = (
+    await request('/api/playlists', 'POST', {
+      name: 'Keep reverted text',
+      items: [{ slideId: edit.id, duration: 10 }],
+    })
+  ).data;
+  await request(`/api/playlists/${second.id}/publish`, 'POST');
+  assert.equal(
+    (await request(`/api/preview/${second.id}?version=published`)).data.items[0]
+      .slide.layers.length,
+    1,
+  );
+});
+
+void test('failed publication leaves starter text untouched and published references block deletion', async (t) => {
+  const { request, db } = await fixture(t);
+  const body = slideData();
+  body.layers[0] = {
+    ...body.layers[0],
+    text: 'Something worth\nsharing.',
+    starterText: true,
+  };
+  const slide = (await request('/api/slides', 'POST', body)).data;
+  const playlist = (
+    await request('/api/playlists', 'POST', {
+      name: 'Publication rollback',
+      items: [{ slideId: slide.id, duration: 10 }],
+    })
+  ).data;
+  const broken = {
+    ...slide,
+    layers: [
+      ...slide.layers,
+      {
+        ...slide.layers[0],
+        id: randomUUID(),
+        type: 'image',
+        assetId: randomUUID(),
+        starterText: undefined,
+      },
+    ],
+  };
+  db.prepare("UPDATE records SET body=? WHERE kind='slide' AND id=?").run(
+    JSON.stringify(broken),
+    slide.id,
+  );
+  assert.equal(
+    (await request(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    404,
+  );
+  assert.equal(
+    (await request('/api/library')).data.slides[0].layers[0].starterText,
+    true,
+  );
+  db.prepare("UPDATE records SET body=? WHERE kind='slide' AND id=?").run(
+    JSON.stringify(slide),
+    slide.id,
+  );
+  await request(`/api/playlists/${playlist.id}/publish`, 'POST');
+  await request(`/api/playlists/${playlist.id}`, 'PUT', {
+    name: playlist.name,
+    items: [],
+  });
+  assert.equal(
+    (await request(`/api/slides/${slide.id}`, 'DELETE')).status,
+    409,
+  );
+});
+
 void test('playlist transitions validate, persist and remain isolated in publications', async (t) => {
   const { request, db } = await fixture(t);
   const slide = (await request('/api/slides', 'POST', slideData())).data;

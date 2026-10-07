@@ -16,6 +16,7 @@ export type Layer = {
   width: number;
   height: number;
   text: string;
+  starterText?: true;
   assetId?: string;
   removedMedia?: boolean;
   fontSize: number;
@@ -131,6 +132,8 @@ export type Playlist = LibraryOrganization & {
     expiresAt?: string | null;
   }[];
   publishedAt?: string | null;
+  publicationState?: 'draft' | 'published' | 'changes';
+  publishedRevision?: string | null;
   publishedSlideIds?: string[];
   updatedAt?: string;
 };
@@ -198,6 +201,7 @@ export type Device = {
     recovery?: string | null;
     playback?: {
       phase: string;
+      slideId?: string | null;
       preparationMs?: number;
       missedDeadlines?: number;
       error?: string | null;

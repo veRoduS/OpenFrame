@@ -247,10 +247,14 @@ void test('token revocation, expiry and creator loss of access deny subsequent w
     userId: editor.id,
     permission: 'edit',
   });
-  const mine = await editor.call(`/api/data-feeds/${feed.id}/tokens`, 'POST', {
-    name: 'Mine',
+  // Model a key issued before setup was restricted to admins.
+  const mine = await admin(`/api/data-feeds/${feed.id}/tokens`, 'POST', {
+    name: 'Legacy editor key',
   });
-  assert.equal(mine.status, 201);
+  db.prepare('UPDATE data_feed_tokens SET creatorId=? WHERE id=?').run(
+    editor.id,
+    mine.data.id,
+  );
   assert.equal(
     (await write(payload, {}, false, feed.id, mine.data.token)).status,
     200,
@@ -263,6 +267,53 @@ void test('token revocation, expiry and creator loss of access deny subsequent w
     (await write(payload, {}, false, feed.id, mine.data.token)).status,
     401,
   );
+});
+
+void test('Settings setup requires admin even with explicit feed Edit access', async (t) => {
+  const { admin, feed, token, write, user } = await fixture(t);
+  const editor = await user('settings-editor');
+  await admin(`/api/access/data-feed/${feed.id}`, 'POST', {
+    userId: editor.id,
+    permission: 'edit',
+  });
+  assert.equal((await editor.call(`/api/data-feeds/${feed.id}`)).status, 200);
+  assert.equal(
+    (await editor.call(`/api/data-feeds/${feed.id}/data`)).status,
+    200,
+  );
+  assert.ok(
+    (await editor.call('/api/library')).data.dataFeeds.some(
+      (entry) => entry.id === feed.id,
+    ),
+  );
+  /** @type {[string, string, unknown?][]} */
+  const denied = [
+    ['/api/data-feeds', 'POST', definition],
+    [`/api/data-feeds/${feed.id}`, 'PUT', { name: 'Unauthorized rename' }],
+    [`/api/data-feeds/${feed.id}`, 'DELETE'],
+    [`/api/data-feeds/${feed.id}/tokens`, 'GET'],
+    [`/api/data-feeds/${feed.id}/tokens`, 'POST', { name: 'Unauthorized key' }],
+    [`/api/data-feeds/${feed.id}/tokens/${token.id}`, 'DELETE'],
+    ['/api/settings/stocks', 'GET'],
+    ['/api/settings/stocks', 'PUT', { apiKey: 'unauthorized' }],
+    ['/api/fonts', 'POST'],
+    [`/api/fonts/${randomUUID()}`, 'DELETE'],
+  ];
+  for (const [url, method, body] of denied) {
+    const result = await editor.call(url, method, body);
+    assert.equal(result.status, 403, `${method} ${url}`);
+    assert.equal(result.data.error, 'Admin access required');
+  }
+  assert.equal(
+    (await admin(`/api/data-feeds/${feed.id}`)).data.name,
+    definition.name,
+  );
+  assert.equal(
+    (await admin(`/api/data-feeds/${feed.id}/tokens`)).data.length,
+    1,
+  );
+  assert.equal((await write()).status, 200);
+  assert.equal((await editor.call('/api/fonts')).status, 200);
 });
 
 void test('inherited groups can view feeds but cannot manage them or issue tokens', async (t) => {

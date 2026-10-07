@@ -2,6 +2,27 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.23.0] - 2026-10-07
+
+- Unify workspace navigation, library search/filter/view controls, dialog sizing, editor panels, and guided screen setup. Preserve section/filter URLs through reload and browser Back.
+- Distinguish connection and playback status, explain when saving updates published screens, and show Draft, Published, or Unpublished changes with separate draft/published previews.
+- Restrict Settings, including Data feeds, Stock quotes setup, and Fonts, to admins in navigation, direct routes, and setup APIs. Preserve shared feed/font use and existing integration keys.
+- Keep Slides and Playlists selection checkboxes visibly checked after focus, hover, and library rerenders.
+- Remove untouched generated “Something worth\nsharing.” text layers on publication; preserve edited text, existing unmarked text, and sources the publisher cannot edit.
+- Preserve existing accounts, permissions, media, and manifest schemas. Player 0.10.14 adds published-preview selection; existing installed players do not need upgrading for this server milestone.
+
+## [0.22.3] - 2026-10-07
+
+- Keep slide and playlist selection checkboxes visibly checked after focus, hover and library rerenders
+
+## [0.22.2] - 2026-10-07
+
+- Restrict Settings, data-feed setup and API-key management to admins; retain shared feed and font use in slides
+
+## [0.22.1] - 2026-10-07
+
+- Unify workspace navigation, publication feedback, libraries, dialogs and setup; remove untouched generated slide text on publication.
+
 ## [0.22.0] - 2026-10-06
 
 - Show the same nested Slides, Playlists, and Media folders to every signed-in user, including empty folders. Restrict folder creation, renaming, moving, deletion, and access management to admins; users can organize content they can edit in any folder.

@@ -59,7 +59,7 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | POST | `/api/logout` | Revoke current session |
 | GET | `/api/library` | Slides, playlist summaries, assets, folders, device status, visible groups |
 | POST | `/api/slides` | Create slide |
-| PUT / DELETE | `/api/slides/:id` | Replace/delete slide; deletion blocked while used in drafts |
+| PUT / DELETE | `/api/slides/:id` | Replace/delete slide; deletion blocked while used in drafts or publications |
 | POST | `/api/assets` | Upload image as multipart field `file`, optional `folderId`; GIF animation is preserved in bounded animated WebP. From a slide picker, optional `shareWithSlideId` copies that slide's user/group grants to the new asset (slide owner or admin only) |
 | PATCH | `/api/assets/:id` | Edit `{name?,folderId?,tags?}`; null folderId means Unfiled |
 | POST | `/api/assets/batch` | `{ids,action?,folderId?,addTags?,removeTags?}`; action is update (default) or delete |
@@ -157,6 +157,14 @@ Publishing a fork freezes its local draft state in server metadata. Publishing a
 
 External integrations update a reusable feed with `PUT /api/data-feeds/{feedId}/data`, `Authorization: Bearer <feed token>`, and a complete JSON snapshot. Tokens are write-only and scoped to one feed, and require their creator to retain active Edit access. The body is limited to 32 KiB; feed updates are limited to 60 authorized attempts per minute. Data supports numbers, bounded time series, and bounded category arrays. Updates are separate from playlist publication revisions.
 
-See the [standalone integration guide](data-feeds-api.md) for exact payload shapes, status/error codes, retries, limits, and copyable curl/Python examples. [OpenAPI 3.1 JSON](../server/data-feeds.openapi.json) is served publicly at `/api/data-feeds/openapi.json`; the guide is served at `/api/data-feeds/guide`. Session-authenticated feed creation, metadata, snapshots, and token management live under `/api/data-feeds`. Add `data-feed` to the existing `/api/access/:kind/:id` sharing interface for View/Edit hierarchy rules.
+See the [standalone integration guide](data-feeds-api.md) for exact payload shapes, status/error codes, retries, limits, and copyable curl/Python examples. [OpenAPI 3.1 JSON](../server/data-feeds.openapi.json) is served publicly at `/api/data-feeds/openapi.json`; the guide is served at `/api/data-feeds/guide`. Session-authenticated feed endpoints live under `/api/data-feeds`. Feed creation, changes, deletion, and token management require an admin session. Metadata and snapshot reads retain normal resource viewing permissions; bearer snapshot updates remain available to integrations. Add `data-feed` to the existing `/api/access/:kind/:id` sharing interface for View/Edit hierarchy rules.
 
 Player sync adds a top-level `dataFeeds` map keyed by referenced feed UUID, with `{revision,updatedAt,data,status}` snapshots. Preview includes the same map. At most 20 distinct feeds are allowed per playlist; no token metadata is delivered to players. Playlists using data widgets emit manifest schema **4**, requiring player **0.10.13+**. Existing schema 2/3 publications are unchanged.
+
+### Publication state, preview versions, and starter layers
+
+Library and playlist responses include `publicationState: "draft" | "published" | "changes"`, `publishedAt`, `publishedRevision`, and `publishedSlideIds`. State compares effective playback order, timing, schedules, name, and transition with the publication; folders, tags, access metadata, entry IDs, and automatic slide-content refreshes do not create playlist draft changes.
+
+`GET /api/preview/:id` previews the saved draft. `?version=published` previews the actual publication and returns 404 if none exists. Both require normal playlist viewing access. The browser player preview accepts `version=published`; normal player synchronization is unchanged.
+
+Generated text layers may carry `starterText:true` only for the exact initial string `Something worth\nsharing.`. Editing the text or omitting its marker permanently removes the marker for that existing layer. Publishing removes untouched marked layers from the snapshot and from source slides the publisher can edit, in one transaction; source slides with only View access are retained. Draft previews never trigger cleanup. The marker is not sent to players. Existing unmarked layers are never inferred to be starters.

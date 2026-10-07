@@ -98,6 +98,7 @@ export function mountDataFeeds(
     db,
     accounts,
     admin,
+    administrator,
     allRecords,
     list,
     put,
@@ -203,7 +204,7 @@ export function mountDataFeeds(
   app.get('/api/data-feeds', admin, (req, res) =>
     res.json(list('data-feed').map(publicFeed)),
   );
-  app.post('/api/data-feeds', admin, (req, res) => {
+  app.post('/api/data-feeds', administrator, (req, res) => {
     const input = feedSchema.parse(req.body);
     if (allRecords('data-feed').length >= 200)
       throw fail(409, 'FEED_LIMIT', 'Maximum of 200 feeds reached');
@@ -220,7 +221,7 @@ export function mountDataFeeds(
   app.get('/api/data-feeds/:id', admin, (req, res) =>
     res.json(publicFeed(requireRecord('data-feed', req.params.id))),
   );
-  app.put('/api/data-feeds/:id', admin, (req, res) => {
+  app.put('/api/data-feeds/:id', administrator, (req, res) => {
     const feed = requireEditable('data-feed', req.params.id);
     const input = feedSchema.parse(req.body);
     if (JSON.stringify(input.fields) !== JSON.stringify(feed.fields))
@@ -231,7 +232,7 @@ export function mountDataFeeds(
       );
     res.json(publicFeed(put('data-feed', { ...feed, ...input })));
   });
-  app.delete('/api/data-feeds/:id', admin, (req, res) => {
+  app.delete('/api/data-feeds/:id', administrator, (req, res) => {
     requireEditable('data-feed', req.params.id);
     if (inUse(req.params.id))
       throw fail(
@@ -271,7 +272,7 @@ export function mountDataFeeds(
       })[feed.id],
     );
   });
-  app.get('/api/data-feeds/:id/tokens', admin, (req, res) => {
+  app.get('/api/data-feeds/:id/tokens', administrator, (req, res) => {
     requireEditable('data-feed', req.params.id);
     res.json(
       db
@@ -281,7 +282,7 @@ export function mountDataFeeds(
         .all(req.params.id),
     );
   });
-  app.post('/api/data-feeds/:id/tokens', admin, (req, res) => {
+  app.post('/api/data-feeds/:id/tokens', administrator, (req, res) => {
     requireEditable('data-feed', req.params.id);
     const input = z
       .object({
@@ -327,19 +328,23 @@ export function mountDataFeeds(
       token,
     });
   });
-  app.delete('/api/data-feeds/:id/tokens/:tokenId', admin, (req, res) => {
-    requireEditable('data-feed', req.params.id);
-    if (
-      !db
-        .prepare(
-          'UPDATE data_feed_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE id=? AND feedId=?',
-        )
-        .run(new Date().toISOString(), req.params.tokenId, req.params.id)
-        .changes
-    )
-      throw fail(404, 'NOT_FOUND', 'Token not found');
-    res.json({ ok: true });
-  });
+  app.delete(
+    '/api/data-feeds/:id/tokens/:tokenId',
+    administrator,
+    (req, res) => {
+      requireEditable('data-feed', req.params.id);
+      if (
+        !db
+          .prepare(
+            'UPDATE data_feed_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE id=? AND feedId=?',
+          )
+          .run(new Date().toISOString(), req.params.tokenId, req.params.id)
+          .changes
+      )
+        throw fail(404, 'NOT_FOUND', 'Token not found');
+      res.json({ ok: true });
+    },
+  );
   const buckets = new Map();
   // Token auth intentionally runs before session middleware. Tokens cannot manage feeds or read the library.
   app.put('/api/data-feeds/:id/data', (req, res) => {

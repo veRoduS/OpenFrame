@@ -30,7 +30,15 @@ type Setup = {
 };
 type Inventory = { vpns: Vpn[]; setups: Setup[]; defaultServer: string };
 
-export function ScreenSetup({ onClose }: { onClose: () => void }) {
+export function ScreenSetup({
+  onClose,
+  onPair,
+}: {
+  onClose: () => void;
+  onPair?: () => void;
+}) {
+  const [advanced, setAdvanced] = useState(false);
+  const [created, setCreated] = useState(false);
   const [tab, setTab] = useState('build');
   const [inventory, setInventory] = useState<Inventory>({
     vpns: [],
@@ -130,6 +138,7 @@ export function ScreenSetup({ onClose }: { onClose: () => void }) {
     setTab('issued');
     await refresh();
     await download(setup.id);
+    setCreated(true);
   }
   async function importConfig() {
     await api('/api/screen-setup/vpns', 'POST', {
@@ -165,11 +174,50 @@ export function ScreenSetup({ onClose }: { onClose: () => void }) {
         >
           <TabsList className="setup-tabs">
             <TabsTrigger value="build">Build config</TabsTrigger>
-            <TabsTrigger value="vpns">VPN configs</TabsTrigger>
+            {advanced && <TabsTrigger value="vpns">VPN configs</TabsTrigger>}
             <TabsTrigger value="issued">Issued setups</TabsTrigger>
-            <TabsTrigger value="managed">Managed VPN</TabsTrigger>
+            {advanced && <TabsTrigger value="managed">Managed VPN</TabsTrigger>}
           </TabsList>
         </Tabs>
+        <button
+          className="setup-advanced-toggle"
+          aria-expanded={advanced}
+          onClick={() => {
+            setAdvanced(!advanced);
+            if (advanced && ['vpns', 'managed'].includes(tab)) setTab('build');
+          }}
+        >
+          Advanced setup: VPN and network management
+        </button>
+        {created && (
+          <div className="setup-next-steps">
+            <output>
+              <strong>Configuration downloaded. Next steps</strong>
+            </output>
+            <ol>
+              <li>
+                Extract the ZIP. Follow SETUP.txt and the{' '}
+                <a
+                  href="https://github.com/veRoduS/OpenFrame/blob/main/docs/player-installation.md"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  player installation guide
+                </a>
+                .
+              </li>
+              <li>Start the player and check that it can reach this server.</li>
+              <li>
+                Enter its pairing code here, then assign a published playlist.
+              </li>
+            </ol>
+            {onPair && (
+              <button className="primary" onClick={onPair}>
+                Pair screen
+              </button>
+            )}
+          </div>
+        )}
         {error && (
           <p role="alert" className="inline-error">
             {error}
@@ -207,7 +255,7 @@ export function ScreenSetup({ onClose }: { onClose: () => void }) {
                       }}
                     >
                       <option value="direct">LAN / HTTPS</option>
-                      <option value="wireguard">WireGuard</option>
+                      {advanced && <option value="wireguard">WireGuard</option>}
                     </select>
                   </label>
                 </div>

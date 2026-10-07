@@ -364,29 +364,22 @@ try {
       { kind, id: inner.id },
     );
   }
-  // Moving feeds into Settings preserves existing non-admin View/Edit permissions.
+  // Admin-only Settings does not remove shared feeds from the slide library.
   const inheritedFeed = await api(adminPage, '/api/data-feeds', 'POST', {
     name: 'Regional data',
     managingGroupId: top.id,
     fields: [{ key: 'value', type: 'number' }],
   });
-  await page.goto(`${base}/dashboard`);
-  await page.getByRole('button', { name: /^Settings/ }).click();
+  await page.goto(`${base}/dashboard/settings`);
+  await page.waitForURL(`${base}/dashboard`);
+  await page.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
   assert.equal(
-    await page
-      .getByRole('heading', { name: 'Stock quotes', exact: true })
-      .count(),
+    await page.getByRole('button', { name: 'Settings', exact: true }).count(),
     0,
   );
-  await page.getByRole('button', { name: /Regional data.*field/ }).click();
-  await dialog
-    .getByText('View only. The managing group controls this feed.', {
-      exact: true,
-    })
-    .waitFor();
   assert.equal(
-    await dialog
-      .getByRole('button', { name: 'Generate API key', exact: true })
+    await page
+      .getByRole('heading', { name: /^(Data feeds|Stock quotes|Fonts)$/ })
       .count(),
     0,
   );
@@ -394,17 +387,19 @@ try {
     (await api(page, `/api/data-feeds/${inheritedFeed.id}`)).readOnly,
     true,
   );
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'New feed', exact: true }).click();
-  await dialog.getByLabel('Name', { exact: true }).fill('Local data');
-  await dialog
-    .getByRole('button', { name: 'Create feed', exact: true })
-    .click();
-  await page.getByRole('button', { name: /Local data.*field/ }).click();
-  await dialog
-    .getByRole('button', { name: 'Generate API key', exact: true })
-    .waitFor();
-  await page.keyboard.press('Escape');
+  assert.ok(
+    (await api(page, '/api/library')).dataFeeds.some(
+      (feed) => feed.id === inheritedFeed.id,
+    ),
+  );
+  assert.equal(
+    (
+      await page.request.get(
+        `${base}/api/data-feeds/${inheritedFeed.id}/tokens`,
+      )
+    ).status(),
+    403,
+  );
   await adminPage.goto(`${base}/dashboard`);
   await adminPage
     .getByRole('button', {

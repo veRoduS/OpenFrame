@@ -116,11 +116,13 @@ try {
   });
   await liveCard
     .getByRole('button', {
-      name: 'Live playlists for Safety North',
+      name: 'Screen assignments for Safety North',
       exact: true,
     })
     .hover();
-  await page.getByText('Live in playlists', { exact: true }).waitFor();
+  await page
+    .getByText('Assigned to connected screens', { exact: true })
+    .waitFor();
   await page
     .locator('[data-slot=tooltip-content]')
     .getByText('Safety North', { exact: true })
