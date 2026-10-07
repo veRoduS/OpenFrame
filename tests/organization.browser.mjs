@@ -188,48 +188,48 @@ try {
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('tab', { name: 'Groups', exact: true }).click();
   await dialog.getByText('Has inherited access', { exact: true }).waitFor();
-  assert.equal(
-    await dialog.getByLabel('Membership in Group B', { exact: true }).count(),
-    0,
-  );
-  await dialog
-    .getByRole('button', {
-      name: 'Add direct membership for Jordan Taylor to Group B',
-      exact: true,
-    })
-    .click();
-  await dialog
-    .getByText('Add Jordan Taylor to Group B?', { exact: true })
-    .waitFor();
-  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await dialog
-    .getByRole('button', {
-      name: 'Add direct membership for Jordan Taylor to Group B',
-      exact: true,
-    })
-    .click();
-  await dialog
-    .getByRole('button', { name: 'Confirm add', exact: true })
-    .click();
-  await dialog.getByLabel('Membership in Group B', { exact: true }).waitFor();
-  assert.ok(
-    (await api('/api/groups'))
-      .find((group) => group.id === other.id)
-      .members.some((person) => person.id === created.user.id),
-  );
+  const membership = dialog.getByLabel('Membership in Group B', {
+    exact: true,
+  });
+  assert.equal(await membership.inputValue(), '');
+  await membership.selectOption('member');
   await page.waitForFunction(
     () =>
       !document.querySelector('[aria-label="Membership in Group B"]').disabled,
   );
-  await dialog
-    .getByLabel('Membership in Group B', { exact: true })
-    .selectOption('');
-  await dialog
-    .getByRole('button', {
-      name: 'Add direct membership for Jordan Taylor to Group B',
-      exact: true,
-    })
-    .waitFor();
+  assert.ok(
+    (await api('/api/groups'))
+      .find((group) => group.id === other.id)
+      .members.some(
+        (person) =>
+          person.id === created.user.id && person.directRole === 'member',
+      ),
+  );
+  await membership.selectOption('admin');
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[aria-label="Membership in Group B"]').disabled,
+  );
+  assert.equal(
+    (await api('/api/groups'))
+      .find((group) => group.id === other.id)
+      .members.find((person) => person.id === created.user.id).directRole,
+    'admin',
+  );
+  // Retain another direct admin before removing this membership.
+  const backup = await api('/api/users', 'POST', {
+    username: 'backup-admin',
+    name: 'Backup admin',
+  });
+  await api(`/api/groups/${other.id}/members/${backup.user.id}`, 'PUT', {
+    role: 'admin',
+  });
+  await membership.selectOption('');
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[aria-label="Membership in Group B"]').disabled,
+  );
+  assert.equal(await membership.inputValue(), '');
   await dialog.getByRole('tab', { name: 'Content', exact: true }).click();
   await dialog.getByRole('heading', { name: 'Slides', exact: true }).waitFor();
   await dialog.getByText('Through groups: Group 1', { exact: false }).waitFor();
@@ -248,12 +248,11 @@ try {
   await dialog.getByRole('tab', { name: 'Groups', exact: true }).click();
   assert.equal(
     await dialog.getByLabel('Membership in Group A', { exact: true }).count(),
-    0,
+    1,
   );
   assert.ok(
-    (await dialog
-      .getByText('Group admin · Unrestricted', { exact: true })
-      .count()) >= 3,
+    (await dialog.getByText('Admin · Unrestricted', { exact: true }).count()) >=
+      3,
   );
   await dialog.getByRole('tab', { name: 'Content', exact: true }).click();
   assert.equal(

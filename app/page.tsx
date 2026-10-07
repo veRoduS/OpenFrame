@@ -1,5 +1,6 @@
 import { ANDROID_GITHUB_APK } from '../server/android-release-config.mjs';
 import { IconButton } from './components/ui/icon-button';
+import { SlideMetadata, SlideTagsDialog } from './slide-metadata';
 import { useMediaUploads, type MediaUploadBatch } from './media-uploads';
 import { DataFeeds, DataWidgetOptions, dataModes } from './data-feeds';
 import { Checkbox } from './components/ui/checkbox';
@@ -283,6 +284,23 @@ export default function App() {
       return 'name';
     },
   );
+  const [screenLayout, setScreenLayout] = useState<'list' | 'grid'>(() => {
+    try {
+      return localStorage.getItem('openframe.screens.layout') === 'grid'
+        ? 'grid'
+        : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('openframe.screens.layout', screenLayout);
+    } catch {
+      /* Storage is optional. */
+    }
+  }, [screenLayout]);
+  const [taggedSlide, setTaggedSlide] = useState<Slide | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem('openframe.slides.sort', slideSort);
@@ -620,9 +638,17 @@ export default function App() {
           (Date.parse(b.updatedAt || '') || 0)) *
         (playlistSort === 'newest' ? -1 : 1),
   );
-  const visibleDevices = library.devices.filter((item) =>
-    matchesLibraryFilter(item, filters.devices, groups, screenStatus(item)),
-  );
+  const visibleDevices = library.devices
+    .filter((item) =>
+      matchesLibraryFilter(item, filters.devices, groups, screenStatus(item)),
+    )
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        }) || a.id.localeCompare(b.id),
+    );
   const filterBar = (
     key: 'slides' | 'playlists' | 'devices',
     shown: number,
@@ -1194,11 +1220,6 @@ export default function App() {
                                         <strong>
                                           Assigned to connected screens
                                         </strong>
-                                        <p>
-                                          Connection does not confirm that a
-                                          physical display is showing this
-                                          slide.
-                                        </p>
                                         <ul className="live-playlist-list">
                                           {library.playlists
                                             .filter(
@@ -1260,7 +1281,10 @@ export default function App() {
                                       <span>
                                         {slide.width} x {slide.height}{' '}
                                         <span className="dot-separator">/</span>{' '}
-                                        {slide.layers.length} layers
+                                        {slide.layers.length}{' '}
+                                        {slide.layers.length === 1
+                                          ? 'layer'
+                                          : 'layers'}
                                       </span>
                                     </button>
                                     <IconButton
@@ -1313,16 +1337,15 @@ export default function App() {
                                       </IconButton>
                                     )}
                                   </div>
-                                  <OrganizationTags item={slide} />
                                   {slide.readOnly && (
                                     <div className="slide-read-only">
                                       View only
                                     </div>
                                   )}
-                                  <ManageAccessButton
-                                    resourceName={slide.name}
-                                    tags={slide.accessTags}
-                                    onClick={() =>
+                                  <SlideMetadata
+                                    slide={slide}
+                                    onTags={() => setTaggedSlide(slide)}
+                                    onAccess={() =>
                                       setAccessResource({
                                         kind: 'slide',
                                         id: slide.id,
@@ -1573,11 +1596,34 @@ export default function App() {
                   )}
                   {view === 'devices' && (
                     <>
-                      {filterBar('devices', visibleDevices.length, [
-                        { value: 'online', label: 'Connected' },
-                        { value: 'offline', label: 'Offline' },
-                        { value: 'pending', label: 'Awaiting approval' },
-                      ])}
+                      {filterBar(
+                        'devices',
+                        visibleDevices.length,
+                        [
+                          { value: 'online', label: 'Connected' },
+                          { value: 'offline', label: 'Offline' },
+                          { value: 'pending', label: 'Awaiting approval' },
+                        ],
+                        <fieldset
+                          className="slide-view-controls"
+                          aria-label="Screen view"
+                        >
+                          <IconButton
+                            label="Row view"
+                            active={screenLayout === 'list'}
+                            onClick={() => setScreenLayout('list')}
+                          >
+                            <List size={18} />
+                          </IconButton>
+                          <IconButton
+                            label="Grid view"
+                            active={screenLayout === 'grid'}
+                            onClick={() => setScreenLayout('grid')}
+                          >
+                            <Grid2X2 size={18} />
+                          </IconButton>
+                        </fieldset>,
+                      )}
                       {!!library.devices.length && !visibleDevices.length && (
                         <p className="empty-filter-results">
                           No results match these filters. Try another group or
@@ -1623,7 +1669,10 @@ export default function App() {
                         </div>
                       </div>
                       {library.devices.length ? (
-                        <div className="devices-list">
+                        <div
+                          className="devices-list"
+                          data-layout={screenLayout}
+                        >
                           {visibleDevices.map((d) => (
                             <DeviceRow
                               key={d.id}
@@ -2026,6 +2075,14 @@ export default function App() {
               refresh={refresh}
             />
           )}
+          <SlideTagsDialog
+            slide={taggedSlide}
+            existingTags={[
+              ...new Set(library.slides.flatMap((slide) => slide.tags || [])),
+            ]}
+            onClose={() => setTaggedSlide(null)}
+            onChanged={refresh}
+          />
           <Modal
             title="Pair a screen"
             description="Enter the eight-character code shown on the player display."

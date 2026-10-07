@@ -9,6 +9,115 @@ import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 import { createAccounts, hashPassword } from '../server/accounts.mjs';
 
+void test('deleting users is admin-only, preserves content and removes identities, grants and keys', async (t) => {
+  const { admin, user, db, client } = await fixture(t);
+  const person = await user('delete-member');
+  const other = await user('delete-other');
+  const adminId = (await admin('/api/auth')).data.user.id;
+  const owned = (await person.call('/api/slides', 'POST', slide)).data;
+  const shared = (await admin('/api/slides', 'POST', slide)).data;
+  await admin(`/api/access/slide/${shared.id}`, 'POST', {
+    userId: person.user.id,
+    permission: 'edit',
+  });
+  const group = (await admin('/api/groups', 'POST', { name: 'Deletion group' }))
+    .data;
+  await admin(`/api/groups/${group.id}/members/${person.user.id}`, 'PUT', {
+    role: 'admin',
+  });
+  const feed = (
+    await admin('/api/data-feeds', 'POST', {
+      name: 'Deletion feed',
+      fields: [{ key: 'value', type: 'number' }],
+    })
+  ).data;
+  const key = (
+    await admin(`/api/data-feeds/${feed.id}/tokens`, 'POST', {
+      name: 'Legacy key',
+    })
+  ).data;
+  db.prepare('UPDATE data_feed_tokens SET creatorId=? WHERE id=?').run(
+    person.user.id,
+    key.id,
+  );
+  const invitation = (
+    await admin(`/api/users/${person.user.id}/invitation`, 'POST')
+  ).data.invitation;
+  assert.equal(
+    (await other.call(`/api/users/${person.user.id}`, 'DELETE')).status,
+    403,
+  );
+  assert.equal((await admin(`/api/users/${adminId}`, 'DELETE')).status, 409);
+  assert.equal(
+    (await admin(`/api/users/${person.user.id}`, 'DELETE')).status,
+    409,
+  );
+  assert.ok(db.prepare('SELECT id FROM users WHERE id=?').get(person.user.id));
+  await admin(`/api/groups/${group.id}/members/${other.user.id}`, 'PUT', {
+    role: 'admin',
+  });
+  assert.equal(
+    (await admin(`/api/users/${person.user.id}`, 'DELETE')).status,
+    200,
+  );
+  assert.equal((await person.call('/api/library')).status, 401);
+  assert.equal(
+    (await admin('/api/users')).data.some(
+      (entry) => entry.id === person.user.id,
+    ),
+    false,
+  );
+  for (const table of [
+    'memberships',
+    'user_sessions',
+    'invitations',
+    'resource_grants',
+    'resource_permissions',
+  ])
+    assert.equal(
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE userId=?`)
+        .get(person.user.id).n,
+      0,
+    );
+  assert.equal(
+    db
+      .prepare(
+        "SELECT ownerId FROM resource_access WHERE kind='slide' AND id=?",
+      )
+      .get(owned.id).ownerId,
+    adminId,
+  );
+  assert.ok(
+    (await admin('/api/library')).data.slides.some(
+      (entry) => entry.id === owned.id,
+    ),
+  );
+  assert.ok(
+    db.prepare('SELECT revokedAt FROM data_feed_tokens WHERE id=?').get(key.id)
+      .revokedAt,
+  );
+  const anonymous = client();
+  assert.equal(
+    (
+      await anonymous('/api/activate', 'POST', {
+        token: invitation,
+        password: 'deletion-test-password',
+      })
+    ).status,
+    400,
+  );
+  await admin(`/api/users/${other.user.id}`, 'PATCH', { role: 'admin' });
+  assert.equal(
+    (await other.call(`/api/users/${other.user.id}`, 'DELETE')).status,
+    400,
+  );
+  assert.equal(
+    (await admin(`/api/users/${person.user.id}`, 'DELETE')).status,
+    404,
+  );
+});
+
 const password = 'test-password-long-enough';
 const slide = {
   name: 'Private slide',
@@ -1426,6 +1535,10 @@ void test('only global admins create groups; admin group access is implicit and 
     403,
   );
   await admin(`/api/users/${manager.user.id}`, 'PATCH', { role: 'admin' });
+  const backup = await user('backup-group-admin');
+  await admin(`/api/groups/${root.id}/members/${backup.user.id}`, 'PUT', {
+    role: 'admin',
+  });
   for (const group of (await admin('/api/groups')).data) {
     const membership = group.members.find(
       (person) => person.id === manager.user.id,
@@ -1441,8 +1554,13 @@ void test('only global admins create groups; admin group access is implicit and 
             { role },
           )
         ).status,
-        409,
+        200,
       );
+    const stillImplicit = (await admin('/api/groups')).data
+      .find((item) => item.id === group.id)
+      .members.find((person) => person.id === manager.user.id);
+    assert.equal(stillImplicit.role, 'admin');
+    assert.equal(stillImplicit.directRole, null);
   }
   const privateItem = (await admin('/api/slides', 'POST', slide)).data;
   assert.equal(

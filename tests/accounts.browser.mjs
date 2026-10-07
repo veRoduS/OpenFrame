@@ -169,13 +169,20 @@ try {
     .first()
     .click();
   await page
-    .locator('.access-tags')
-    .getByText('Campus displays', { exact: true })
+    .getByRole('button', {
+      name: 'Manage access to Campus welcome',
+      exact: true,
+    })
+    .hover();
+  await page
+    .locator('[data-slot="tooltip-content"]')
+    .getByText('Group: Campus displays', { exact: true })
     .waitFor();
   await page
-    .locator('.access-tags')
+    .locator('[data-slot="tooltip-content"]')
     .getByText('User: Jordan Taylor', { exact: true })
     .waitFor();
+  await page.mouse.move(0, 0);
   const member = await browser.newPage({
     viewport: { width: 1280, height: 900 },
   });

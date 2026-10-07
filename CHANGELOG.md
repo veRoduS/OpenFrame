@@ -2,6 +2,15 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.23.1] - 2026-10-07
+
+- Remove the physical-display disclaimer from Slides’ Assigned preview and use the singular “1 layer” label.
+- Replace slide card tag/access lists with compact hover previews and click-to-edit dialogs; integrate access management into Access. Metadata edits preserve layers and publications.
+- Hide the built-in admin in Users & Groups and make direct memberships editable for every listed group, including named admin accounts, without reducing inherited access.
+- Add confirmed admin-only user deletion that preserves content, transfers personal ownership, and removes sessions, invitations, memberships and user grants while revoking feed API keys. Protect the built-in/current admin and each group’s last active direct administrator.
+- Add Small/Medium/Large Media grids with URL persistence and remembered Row/Grid screen views. Sort screens by name with numeric ordering and a stable ID tie-breaker so heartbeats cannot reorder them.
+- Server-only patch; installed player sync and manifest schemas remain compatible.
+
 ## [0.23.0] - 2026-10-07
 
 - Unify workspace navigation, library search/filter/view controls, dialog sizing, editor panels, and guided screen setup. Preserve section/filter URLs through reload and browser Back.

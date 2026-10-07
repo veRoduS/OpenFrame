@@ -1,4 +1,18 @@
 /* Media navigation and consistent card footers. */
+.media-browser-grid[data-layout='small'] {
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+}
+.media-browser-grid[data-layout='medium'] {
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+}
+.media-browser-grid[data-layout='large'] {
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+}
+@media (max-width: 767px) {
+  .media-browser-grid[data-layout] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .media-toolbar-options {
   display: flex;
   align-items: center;

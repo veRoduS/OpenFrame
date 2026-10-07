@@ -546,6 +546,65 @@ export function createAccounts(db) {
       db.prepare('DELETE FROM invitations WHERE userId=?').run(user.id);
       res.json({ invitation: invite({ userId: user.id }) });
     });
+    app.delete('/api/users/:id', administrator, (req, res) => {
+      const user = userById(req.params.id);
+      if (!user) throw fail(404, 'User not found');
+      if (user.username === 'admin')
+        throw fail(409, 'The built-in admin account cannot be deleted');
+      if (user.id === req.user.id)
+        throw fail(400, 'Cannot delete your own admin account');
+      if (
+        user.role === 'admin' &&
+        !user.disabled &&
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM users WHERE role='admin' AND disabled=0",
+          )
+          .get().n <= 1
+      )
+        throw fail(409, 'Keep at least one active admin');
+      const soleAdmin = db
+        .prepare(
+          `SELECT m.groupId FROM memberships m WHERE m.userId=? AND m.role='admin' AND NOT EXISTS (SELECT 1 FROM memberships other JOIN users u ON u.id=other.userId WHERE other.groupId=m.groupId AND other.role='admin' AND other.userId<>? AND u.disabled=0)`,
+        )
+        .get(user.id, user.id);
+      if (soleAdmin)
+        throw fail(
+          409,
+          'Assign another active group admin before deleting this user',
+        );
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        db.prepare('UPDATE resource_access SET ownerId=? WHERE ownerId=?').run(
+          req.user.id,
+          user.id,
+        );
+        for (const table of [
+          'resource_grants',
+          'resource_permissions',
+          'memberships',
+          'user_sessions',
+          'invitations',
+        ])
+          db.prepare(`DELETE FROM ${table} WHERE userId=?`).run(user.id);
+        if (
+          db
+            .prepare(
+              "SELECT 1 FROM sqlite_master WHERE type='table' AND name='data_feed_tokens'",
+            )
+            .get()
+        )
+          db.prepare(
+            'UPDATE data_feed_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE creatorId=?',
+          ).run(new Date().toISOString(), user.id);
+        db.prepare('DELETE FROM users WHERE id=?').run(user.id);
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+      res.json({ ok: true });
+    });
     app.patch('/api/users/:id', administrator, (req, res) => {
       const input = z
         .object({
@@ -615,7 +674,7 @@ export function createAccounts(db) {
           canManage: !!groupAdmin(req.user, group.id),
           members: db
             .prepare(
-              "SELECT u.id,u.username,u.name,u.role AS accountRole,CASE WHEN u.role='admin' THEN 'admin' ELSE m.role END AS role FROM users u LEFT JOIN memberships m ON m.userId=u.id AND m.groupId=? WHERE m.userId IS NOT NULL OR (u.role='admin' AND u.disabled=0) ORDER BY u.name COLLATE NOCASE",
+              "SELECT u.id,u.username,u.name,u.role AS accountRole,m.role AS directRole,CASE WHEN u.role='admin' THEN 'admin' ELSE m.role END AS role FROM users u LEFT JOIN memberships m ON m.userId=u.id AND m.groupId=? WHERE m.userId IS NOT NULL OR (u.role='admin' AND u.disabled=0) ORDER BY u.name COLLATE NOCASE",
             )
             .all(group.id),
         })),
@@ -733,10 +792,10 @@ export function createAccounts(db) {
       const target = userById(req.params.userId);
       if (!target || (target.disabled && role !== 'remove'))
         throw fail(404, 'Active user not found');
-      if (target.role === 'admin')
+      if (target.role === 'admin' && req.user.role !== 'admin')
         throw fail(
-          409,
-          'Admins automatically administer every group; their group access cannot be changed',
+          403,
+          'Only an admin can edit an admin account’s direct memberships',
         );
       if (!existing && req.user.role !== 'admin')
         throw fail(403, 'Only an admin can add existing users');

@@ -255,6 +255,15 @@
   min-width: 100px;
   flex-shrink: 0;
 }
+.user-membership-row .account-actions label {
+  min-width: 180px;
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.user-membership-row .account-actions select {
+  min-width: 180px;
+}
 
 .user-access-modal .direct-access-toggle input {
   flex-shrink: 0;

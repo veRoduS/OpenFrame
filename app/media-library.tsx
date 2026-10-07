@@ -10,6 +10,8 @@ import {
   Images,
   Upload,
   Grid2X2,
+  Grid3X3,
+  Square,
   List,
   Pencil,
   Trash2,
@@ -79,7 +81,13 @@ export function MediaLibrary({
   const [search, setSearch] = useState(() => routeParam('q'));
   const [tag, setTag] = useState(() => routeParam('tag'));
   const [sort, setSort] = useState(() => routeParam('sort', 'newest'));
-  const [display, setDisplay] = useState(() => routeParam('layout', 'grid'));
+  const readLayout = useCallback(() => {
+    const saved = routeParam('layout', 'medium');
+    return ['list', 'small', 'medium', 'large'].includes(saved)
+      ? saved
+      : 'medium';
+  }, [routeParam]);
+  const [display, setDisplay] = useState(readLayout);
   const [foldersOpen, setFoldersOpen] = useState(false);
   useEffect(() => {
     if (onPick) return;
@@ -89,7 +97,7 @@ export function MediaLibrary({
       ['q', search, ''],
       ['tag', tag, ''],
       ['sort', sort, 'newest'],
-      ['layout', display, 'grid'],
+      ['layout', display, 'medium'],
     ])
       if (value !== fallback) params.set(key, value);
     const route = '/dashboard/media' + (params.size ? `?${params}` : '');
@@ -108,12 +116,12 @@ export function MediaLibrary({
       setSearch(routeParam('q'));
       setTag(routeParam('tag'));
       setSort(routeParam('sort', 'newest'));
-      setDisplay(routeParam('layout', 'grid'));
+      setDisplay(readLayout());
       setSelected(new Set());
     }
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
-  }, [onPick, routeParam]);
+  }, [onPick, routeParam, readLayout]);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     new Set(),
   );
@@ -383,13 +391,22 @@ export function MediaLibrary({
             >
               <List size={18} />
             </Tool>
-            <Tool
-              label="Grid view"
-              active={display === 'grid'}
-              onClick={() => setDisplay('grid')}
-            >
-              <Grid2X2 size={18} />
-            </Tool>
+            {(
+              [
+                ['small', 'Small grid', Grid3X3],
+                ['medium', 'Medium grid', Grid2X2],
+                ['large', 'Large grid', Square],
+              ] as const
+            ).map(([layout, label, Icon]) => (
+              <Tool
+                key={layout}
+                label={label}
+                active={display === layout}
+                onClick={() => setDisplay(layout)}
+              >
+                <Icon size={18} />
+              </Tool>
+            ))}
           </fieldset>
           {onPick && (
             <button
@@ -684,8 +701,9 @@ export function MediaLibrary({
           {filtered.length ? (
             <div
               className={
-                display === 'grid' ? 'media-browser-grid' : 'media-browser-list'
+                display === 'list' ? 'media-browser-list' : 'media-browser-grid'
               }
+              data-layout={display}
             >
               {filtered.map((a) => (
                 <article

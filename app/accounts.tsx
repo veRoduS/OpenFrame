@@ -29,6 +29,12 @@ import {
 import { orderedTree, isWithin, indentedName } from './hierarchy';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import './accounts.css';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from './components/ui/alert-dialog';
 
 export type User = {
   id: string;
@@ -43,7 +49,11 @@ type Group = {
   name: string;
   parentId: string | null;
   canManage: boolean;
-  members: (User & { role: string; accountRole?: string })[];
+  members: (User & {
+    role: string;
+    accountRole?: string;
+    directRole?: string | null;
+  })[];
 };
 type Resource = { kind: string; id: string; name: string };
 const fields = (event: SyntheticEvent<HTMLFormElement>) => {
@@ -218,10 +228,21 @@ export function Accounts({
     group: boolean;
   } | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const isAdmin = user.role === 'admin';
   const reload = useCallback(async () => {
-    setGroups(await api<Group[]>('/api/groups'));
-    if (isAdmin) setUsers(await api<User[]>('/api/users'));
+    setGroups(
+      (await api<Group[]>('/api/groups')).map((group) => ({
+        ...group,
+        members: group.members.filter((person) => person.username !== 'admin'),
+      })),
+    );
+    if (isAdmin)
+      setUsers(
+        (await api<User[]>('/api/users')).filter(
+          (person) => person.username !== 'admin',
+        ),
+      );
   }, [isAdmin]);
   useEffect(() => {
     void reload().catch((e) => setError(e.message));
@@ -385,19 +406,32 @@ export function Accounts({
                       </button>
                     )}
                     {item.id !== user.id && (
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            await api(`/api/users/${item.id}`, 'PATCH', {
-                              disabled: !item.disabled,
-                            });
-                            await reload();
-                          })
-                        }
-                      >
-                        {item.disabled ? 'Enable' : 'Disable'}
-                      </button>
+                      <>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void run(async () => {
+                              await api(`/api/users/${item.id}`, 'PATCH', {
+                                disabled: !item.disabled,
+                              });
+                              await reload();
+                            })
+                          }
+                        >
+                          {item.disabled ? 'Enable' : 'Disable'}
+                        </button>
+                        <button
+                          className="danger"
+                          disabled={busy}
+                          aria-label={`Delete ${item.name}`}
+                          onClick={() => {
+                            setError('');
+                            setDeletingUser(item);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -819,11 +853,56 @@ export function Accounts({
         currentUser={user}
         groups={groups}
         onClose={() => setSelectedUser(null)}
+        onDelete={(account) => {
+          setSelectedUser(null);
+          setError('');
+          setDeletingUser(account);
+        }}
         onChanged={async () => {
           await reload();
           await refresh();
         }}
       />
+      <AlertDialog
+        open={!!deletingUser}
+        onOpenChange={(open) => !open && !busy && setDeletingUser(null)}
+      >
+        <AlertDialogContent className="of-modal">
+          <AlertDialogTitle>Delete {deletingUser?.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the account, memberships, invitations and
+            direct access grants, signs out its sessions, and revokes its feed
+            API keys. Content is preserved and its personal ownership transfers
+            to you. Assign another group admin first if this user is the only
+            one.
+          </AlertDialogDescription>
+          <div className="dialog-actions">
+            <button disabled={busy} onClick={() => setDeletingUser(null)}>
+              Cancel
+            </button>
+            <button
+              className="danger"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await api(`/api/users/${deletingUser!.id}`, 'DELETE');
+                  await reload();
+                  await refresh();
+                  setDeletingUser(null);
+                  setNotice('User deleted. Content has been preserved.');
+                })
+              }
+            >
+              Delete user
+            </button>
+          </div>
+          {error && (
+            <p className="inline-error" role="alert">
+              {error}
+            </p>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </Tabs>
   );
 }
@@ -843,12 +922,14 @@ function UserAccessDialog({
   groups,
   onClose,
   onChanged,
+  onDelete,
 }: {
   selected: User | null;
   currentUser: User;
   groups: Group[];
   onClose: () => void;
   onChanged: () => Promise<void>;
+  onDelete: (account: User) => void;
 }) {
   const [resources, setResources] = useState<UserResource[]>([]);
   const [account, setAccount] = useState<User | null>(null);
@@ -857,7 +938,6 @@ function UserAccessDialog({
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('all');
   const [section, setSection] = useState('account');
-  const [confirmGroup, setConfirmGroup] = useState<string | null>(null);
   useEffect(() => {
     setAccount(selected);
     setError('');
@@ -865,7 +945,6 @@ function UserAccessDialog({
     setQuery('');
     setKind('all');
     setSection('account');
-    setConfirmGroup(null);
     if (!selected) return;
     let current = true;
     api<UserResource[]>(`/api/users/${selected.id}/access`)
@@ -913,7 +992,6 @@ function UserAccessDialog({
             value={section}
             onValueChange={(value) => {
               setSection(String(value));
-              setConfirmGroup(null);
             }}
           >
             <TabsList
@@ -965,12 +1043,23 @@ function UserAccessDialog({
                 Use Groups to manage memberships, or Content to review access to
                 slides, playlists, screens, media, and folders.
               </p>
+              {account.id !== currentUser.id && (
+                <button
+                  className="danger"
+                  disabled={busy}
+                  onClick={() => onDelete(account)}
+                >
+                  Delete user
+                </button>
+              )}
             </TabsContent>
             <TabsContent value="groups" className="user-access-panel">
               <h3>Group memberships</h3>
               <p className="muted">
-                Membership includes access to every subgroup. Removing a direct
-                membership keeps any access inherited from a containing group.
+                Choose a direct membership for each group. Changes save
+                immediately. Removing membership keeps inherited access. Admin
+                accounts retain unrestricted access independently of their
+                direct memberships.
               </p>
               {!groups.length && (
                 <p className="account-empty">No groups yet.</p>
@@ -1003,72 +1092,39 @@ function UserAccessDialog({
                         </span>
                       )}
                     </div>
-                    {account.role === 'admin' ? (
-                      <span className="badge green">
-                        Group admin · Unrestricted
-                      </span>
-                    ) : !direct ? (
-                      confirmGroup === group.id ? (
-                        <div className="account-actions">
-                          <span>
-                            Add {account.name} to {group.name}?
-                            {inherited &&
-                              ' This adds direct membership; inherited access already applies.'}
-                          </span>
-                          <button
-                            disabled={busy}
-                            onClick={() =>
-                              void change(async () => {
-                                await api(
-                                  `/api/groups/${group.id}/members/${account.id}`,
-                                  'PUT',
-                                  { role: 'member' },
-                                );
-                                setConfirmGroup(null);
-                              })
-                            }
-                          >
-                            Confirm add
-                          </button>
-                          <button
-                            disabled={busy}
-                            onClick={() => setConfirmGroup(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          aria-label={`Add direct membership for ${account.name} to ${group.name}`}
-                          title="Add direct membership"
-                          className="add-membership-button"
+                    <div className="account-actions">
+                      {account.role === 'admin' && (
+                        <span className="badge green">
+                          Admin · Unrestricted
+                        </span>
+                      )}
+                      <label>
+                        Direct membership
+                        <select
+                          aria-label={`Membership in ${group.name}`}
+                          value={
+                            direct?.directRole ??
+                            (account.role === 'admin' ? '' : direct?.role) ??
+                            ''
+                          }
                           disabled={busy || !!account.disabled}
-                          onClick={() => setConfirmGroup(group.id)}
+                          onChange={(event) => {
+                            const role = event.target.value || 'remove';
+                            void change(async () => {
+                              await api(
+                                `/api/groups/${group.id}/members/${account.id}`,
+                                'PUT',
+                                { role },
+                              );
+                            });
+                          }}
                         >
-                          <Plus size={16} />
-                        </button>
-                      )
-                    ) : (
-                      <select
-                        aria-label={`Membership in ${group.name}`}
-                        value={direct?.role || ''}
-                        disabled={busy || !!account.disabled}
-                        onChange={(event) => {
-                          const role = event.target.value || 'remove';
-                          void change(async () => {
-                            await api(
-                              `/api/groups/${group.id}/members/${account.id}`,
-                              'PUT',
-                              { role },
-                            );
-                          });
-                        }}
-                      >
-                        <option value="">Remove direct membership</option>
-                        <option value="member">Member</option>
-                        <option value="admin">Group admin</option>
-                      </select>
-                    )}
+                          <option value="">No direct membership</option>
+                          <option value="member">Member</option>
+                          <option value="admin">Group admin</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
                 );
               })}

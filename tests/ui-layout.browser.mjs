@@ -113,17 +113,17 @@ try {
   await page.goto(base + '/dashboard');
   const card = page.locator('.slide-card').first();
   await card.waitFor();
-  assert.equal(await card.locator('.access-tag').count(), 2);
-  await card
-    .locator('.access-tag.user')
+  assert.equal(await card.locator('.metadata-placeholder').count(), 2);
+  const access = card.getByRole('button', {
+    name: `Manage access to ${slide.name}`,
+    exact: true,
+  });
+  await access.hover();
+  await page
+    .locator('[data-slot="tooltip-content"]')
     .getByText('User: Jordan Taylor', { exact: true })
     .waitFor();
-  await card
-    .getByRole('button', {
-      name: `Show all 31 access grants for ${slide.name}`,
-      exact: true,
-    })
-    .click();
+  await access.click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('region', { name: 'Existing group access' }).waitFor();
   assert.equal(await dialog.locator('.access-grant-row').count(), 31);

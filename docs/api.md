@@ -15,12 +15,13 @@
 | GET / POST | `/api/users` | Admin list/create; create `{username,name}` returns `{user,password,invitation}` with a cryptographically random 12-character password for immediate sign-in; response is `no-store`, password appears only in this response, legacy one-use invitation remains supported |
 | POST | `/api/users/:id/invitation` | Admin replacement password invitation; returns `{invitation}` |
 | PATCH | `/api/users/:id` | Admin role/status update with `{role?:"user"|"admin",disabled?:boolean}`; self-demotion/disable and last-admin removal protected |
+| DELETE | `/api/users/:id` | Admin permanently deletes account, sessions, invitations, memberships and direct grants; revokes its feed keys and transfers personal content ownership to the acting admin. Built-in/self/last active admin and sole active direct group admin protected; content and publications preserved |
 | GET | `/api/users/:id/access` | Admin overview of direct grants, ownership, group sources, effective and read-only access |
-| GET / POST | `/api/groups` | List accessible groups including descendants with direct members and implicit global admins (`accountRole` distinguishes account role from group `role`); global admin creates `{name,parentId?:string|null}` |
+| GET / POST | `/api/groups` | List accessible groups including descendants with direct members and implicit global admins (`accountRole` distinguishes account role from effective group `role`; `directRole` is `member`, `admin`, or null for explicit membership); global admin creates `{name,parentId?:string|null}` |
 | PATCH | `/api/groups/:id` | Group admin renames; global admin reparents `{name?:string,parentId?:string|null}`; cycle and administrator checks |
 | POST | `/api/groups/:id/invitation` | Group admin creates one-use join token; returns `{invitation}` |
 | POST | `/api/groups/join` | Signed-in user accepts `{token}` |
-| PUT | `/api/groups/:id/members/:userId` | Global admin adds existing users; group admin updates direct members with `{role:"admin"|"member"|"remove"}`; last active direct group admin protected; global admin group access is implicit and cannot be changed |
+| PUT | `/api/groups/:id/members/:userId` | Global admin adds existing users; group admin updates direct members with `{role:"admin"|"member"|"remove"}`; last active direct group admin protected; global admins can edit named admin accounts’ direct memberships, while their implicit admin access remains unchanged |
 | GET | `/api/access/:kind/:id` | Returns `{canShare,managingGroupId,grants:[{userId,groupId,permission}]}` for an accessible item |
 | POST | `/api/access/:kind/:id` | Personal owner/managing group/admin grants `{groupId,permission?:"view"|"edit"}` or admin grants `{userId,permission?}`; add `remove:true` to revoke; new grants default to View for slides/playlists |
 
