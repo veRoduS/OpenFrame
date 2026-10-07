@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { DataFeedApplications } from './data-feed-applications';
 import { Button } from './components/ui/button';
 import {
   AlertDialog,
@@ -103,6 +104,27 @@ export function DataFeeds({
   const [revoking, setRevoking] = useState<Token | null>(null);
   const keyHelpId = useId();
   const [keyErrors, setKeyErrors] = useState<Record<number, string>>({});
+  const refreshRef = useRef(onRefresh);
+  useEffect(() => {
+    refreshRef.current = onRefresh;
+  }, [onRefresh]);
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        await refreshRef.current();
+      } catch {
+        /* Keep the last visible feeds while disconnected. */
+      }
+      if (!stopped) timer = setTimeout(poll, 15000);
+    }
+    timer = setTimeout(poll, 15000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, []);
   async function run(action: () => Promise<void>) {
     setError('');
     setBusy(true);
@@ -115,6 +137,9 @@ export function DataFeeds({
     }
   }
   const base = selected ? `/api/data-feeds/${selected.id}` : '';
+  const selectedFeed = selected
+    ? feeds.find((feed) => feed.id === selected.id) || selected
+    : null;
   useEffect(() => {
     if (!selected) return;
     setName(selected.name);
@@ -176,6 +201,7 @@ export function DataFeeds({
         Connect an application with an API key and send data to metrics,
         progress bars, graphs, and charts across your slides.
       </p>
+      {isAdmin && <DataFeedApplications groups={groups} />}
       <div className="data-feed-toolbar">
         <label>
           Find a feed
@@ -204,8 +230,9 @@ export function DataFeeds({
           <Database size={32} />
           <h2>Connect your data</h2>
           <p>
-            Create a feed, define its fields, then give your integration a
-            feed-specific API key.
+            Use an application API key to create feeds and metrics
+            automatically, or create a feed here and generate a key for its
+            fixed fields.
           </p>
         </div>
       )}
@@ -480,7 +507,7 @@ export function DataFeeds({
           <DialogDescription>
             {selected?.readOnly
               ? 'View only. The managing group controls this feed.'
-              : 'Manage updates and application API keys for this feed.'}
+              : 'Manage updates and feed-specific API keys for this feed.'}
           </DialogDescription>
           {selected && (
             <>
@@ -495,7 +522,7 @@ export function DataFeeds({
                       const next = await api<DataFeed>(base, 'PUT', {
                         name,
                         managingGroupId: selected.managingGroupId || null,
-                        fields: selected.fields,
+                        fields: selectedFeed!.fields,
                       });
                       setSelected(next);
                       await onRefresh();
@@ -526,7 +553,7 @@ export function DataFeeds({
                       {
                         baseUrl: location.origin,
                         feedId: selected.id,
-                        fields: selected.fields,
+                        fields: selectedFeed!.fields,
                         update: {
                           method: 'PUT',
                           url: `${location.origin}${base}/data`,
@@ -552,7 +579,7 @@ export function DataFeeds({
               </p>
               <pre className="data-feed-code">
                 {JSON.stringify(
-                  snapshot?.data ?? exampleData(selected),
+                  snapshot?.data ?? exampleData(selectedFeed!),
                   null,
                   2,
                 )}
@@ -689,13 +716,19 @@ export function DataFeeds({
               )}
               <h3>Send an update</h3>
               <pre className="data-feed-code">
-                {exampleRequest(selected, `${location.origin}${base}/data`)}
+                {exampleRequest(
+                  selectedFeed!,
+                  `${location.origin}${base}/data`,
+                )}
               </pre>
               <button
                 className="ghost"
                 onClick={() =>
                   void copy(
-                    exampleRequest(selected, `${location.origin}${base}/data`),
+                    exampleRequest(
+                      selectedFeed!,
+                      `${location.origin}${base}/data`,
+                    ),
                   )
                 }
               >
@@ -704,7 +737,7 @@ export function DataFeeds({
               <button
                 className="ghost"
                 onClick={() =>
-                  void copy(JSON.stringify(exampleData(selected), null, 2))
+                  void copy(JSON.stringify(exampleData(selectedFeed!), null, 2))
                 }
               >
                 <Copy size={16} /> Copy example payload

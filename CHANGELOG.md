@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.23.2] - 2026-10-07
+
+- Add admin-managed application API keys and automatic ingestion: one key creates named feeds and typed metric fields on first push, appends new fields, and merges later values without host-side metric setup.
+- Isolate feed names by application; retain fixed field types, sharing rules, bounded payload/field/feed/key/rate limits and one-time hashed keys. Support key rotation, expiry, confirmed revocation and unused application cleanup; disabled, demoted or deleted key creators cannot ingest.
+- Refresh feed discovery in Settings, keep current field definitions in integration details, and publish copyable ingestion examples plus an additive OpenAPI 1.1 contract. Existing feed-specific keys and complete-snapshot PUT updates remain supported.
+- Preserve schema 4 playback, stable feed bindings and playlist publication revisions; existing player 0.10.14 needs no update for application ingestion.
+
 ## [0.23.1] - 2026-10-07
 
 - Remove the physical-display disclaimer from Slides’ Assigned preview and use the singular “1 layer” label.

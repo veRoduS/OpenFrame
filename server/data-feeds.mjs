@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import contract from './data-feeds.openapi.json' with { type: 'json' };
+import { mountDataFeedApplications } from './data-feed-applications.mjs';
 
 export const fieldSchema = z
   .object({
@@ -120,6 +121,16 @@ export function mountDataFeeds(
     return row ? JSON.parse(row.body) : null;
   };
   const publicFeed = (feed) => publicResource('data-feed', feedMetadata(feed));
+  mountDataFeedApplications(app, {
+    db,
+    accounts,
+    administrator,
+    allRecords,
+    put,
+    raw,
+    fieldSchema,
+    values,
+  });
   const tokenFields = 'id,feedId,name,createdAt,expiresAt,revokedAt,lastUsedAt';
   const inUse = (id) =>
     allRecords('slide').some((s) =>
@@ -245,6 +256,9 @@ export function mountDataFeeds(
       db.prepare('DELETE FROM data_feed_tokens WHERE feedId=?').run(
         req.params.id,
       );
+      db.prepare(
+        'DELETE FROM data_feed_application_sources WHERE feedId=?',
+      ).run(req.params.id);
       for (const table of [
         'resource_access',
         'resource_management',

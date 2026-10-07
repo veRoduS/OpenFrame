@@ -6,9 +6,47 @@ This guide is a complete handoff for a developer or AI building an integration. 
 **Contract:** download `GET /api/data-feeds/openapi.json` (OpenAPI 3.1), or share [the JSON file](../server/data-feeds.openapi.json).
 **Requirements:** server 0.20.0+, player 0.10.13+ for data widgets. Existing slides remain compatible with older players. Use HTTPS outside a trusted local network.
 
-API keys are feed-specific credentials for external applications. They work without a browser session or OpenFrame password. Send a key in the `Authorization: Bearer YOUR_API_KEY` header. The management API retains its existing `/tokens` routes and `token` response field for compatibility; these tokens are the API keys shown in Settings. Existing keys continue working. From server 0.22.2, Settings and the session-based feed setup and key-management endpoints require an admin account; users with viewing access can still use shared feeds in slide widgets.
+OpenFrame supports **application API keys** that automatically create feeds and metrics on first push, and existing **feed-specific API keys** for fixed-schema integrations. Both are credentials for external applications. They work without a browser session or OpenFrame password. Send a key in the `Authorization: Bearer YOUR_API_KEY` header. The management API retains its existing `/tokens` routes and `token` response field for compatibility; these tokens are the API keys shown in Settings. Existing keys continue working. From server 0.22.2, Settings and the session-based feed setup and key-management endpoints require an admin account; users with viewing access can still use shared feeds in slide widgets.
 
-## Quick start
+## Application keys: automatic metric creation
+
+As an admin, open **Settings → Data feeds → New application**, give the application a name, and choose **Personal** or a managing group once. Create the application, enter a key name and expiry, and select **Generate application API key**. Copy the one-time key and the **Ingest URL**. **Copy integration details** provides the endpoint, method, example payload and guide; share the key separately. No individual feed or field setup is needed on the host.
+
+The application chooses a stable feed name in the URL, for example `production`, and sends metric names and values directly as JSON:
+
+```sh
+curl --fail-with-body --request POST \
+  'https://openframe.blackfalcon.cloud/api/data-feeds/ingest/production' \
+  --header 'Authorization: Bearer YOUR_APPLICATION_API_KEY' \
+  --header 'Content-Type: application/json' \
+  --data '{"completed":42,"goal":100}'
+```
+
+The first successful request creates a reusable feed named after the application and source, defines `completed` and `goal` as Number fields, and returns HTTP **201**. Later requests to the same name with any key belonging to the same application return **200** and update the same feed ID. The application can choose other feed names with the same key. Different applications using `production` get separate feeds; keys cannot read snapshots, modify another application's feeds, manage sharing, or act as an OpenFrame login. Existing `ofd_` feed keys cannot use this endpoint; application keys use the `ofa_` prefix.
+
+```json
+{
+  "applicationId": "11111111-1111-4111-8111-111111111111",
+  "sourceKey": "production",
+  "feedId": "22222222-2222-4222-8222-222222222222",
+  "fields": [{"key":"completed","type":"number"},{"key":"goal","type":"number"}],
+  "revision": "33333333-3333-4333-8333-333333333333",
+  "updatedAt": "2026-10-07T18:00:00.000Z",
+  "created": true
+}
+```
+
+A later push such as `{"completed":43,"orders":12}` updates `completed`, creates `orders`, and keeps `goal` at 100. This endpoint **merges named metrics**; it does not require a complete snapshot. New numeric values or null create Number fields. Nonempty arrays of `{time,value}` create Time series fields; nonempty arrays of `{label,value}` create Categories fields. Once created, a metric's type cannot change. Null clears an existing number; an empty array clears an existing chart. New chart fields need a nonempty first array so their type can be identified. All existing value bounds and chart validation below still apply.
+
+Feed names are case-sensitive, 1–80 characters, starting with a letter or number and containing only letters, numbers, underscores or hyphens. Metric keys use the existing 1–40 character field-key rules below. Each request has 1–20 metrics; each feed may accumulate at most 20 fields. Use another feed name for an additional set of metrics. Payloads remain limited to **32 KiB**. The **60 ingestion calls per minute per application** budget is shared by all its keys and feed names, including parsed requests with invalid metric values; applications have independent budgets. Writes validate the entire request before committing feed creation, fields, values, ownership, source mapping and key usage together. Invalid requests retain the previous data and schema.
+
+The server supports up to 50 registered applications, 20 active keys per application and 200 total feeds across both modes. Expired/revoked key metadata is pruned when generating another key. Application keys expire in 1–365 days and can be revoked under **Manage keys**. The issuing account must remain an active admin: disabling, deleting or demoting it stops writes. User deletion also explicitly revokes its application keys. Rotating a key within the same application preserves its feed names and IDs.
+
+Automatically created feeds use the application's configured managing group and the first writer's personal ownership. They appear in the existing feed list and widget selectors. The Settings feed list refreshes about every 15 seconds while open. Select the feed/metric in a slide and publish its layout once; subsequent data updates use normal preview/player sync without republishing. Existing sharing and schema 4 rules still apply. Revoking a key preserves feeds, last values and slide bindings. Admins can delete an application only after removing all its unused feeds; normal feed deletion protection prevents removing feeds referenced by drafts or publications. Deleting an unused feed clears that name's mapping, so another push recreates it; revoke the application's keys first to stop recreation.
+
+Additional ingestion failures include **409 `FIELD_LIMIT`**, **409 `FEED_LIMIT`**, and **429 `RATE_LIMITED`** with `Retry-After`. Invalid fields/types use **400 `INVALID_PAYLOAD`**; rejected keys use **401 `INVALID_TOKEN`**. A missing configured managing group uses **409 `INVALID_GROUP`** and prevents creation. The legacy per-feed PUT endpoint below retains complete-snapshot behavior and fixed field definitions.
+
+## Feed-specific keys: existing quick start
 
 1. As an OpenFrame admin, open **Settings → Data feeds → New feed**. Give it a name and a managing group. Add field keys and types. For the example below use `completed` (number), `goal` (number), `hourly` (time series), and `departments` (categories).
 2. Open that feed, enter an application name, select **Generate API key**, and copy the key from the one-time pop-up. The pop-up also provides the exact update URL. Choose an expiry, 1–365 days (90 by default). The token is shown once; OpenFrame stores only its SHA-256 hash. If lost, create a replacement and revoke the old token.
@@ -89,7 +127,7 @@ A route that does not exist returns 404. A token intentionally receives 401 for 
 
 ## Access, playback, and offline behavior
 
-Feeds use the same group hierarchy and View/Edit rules as slides and playlists. Direct managing-group members can edit the feed and issue/revoke update tokens. Access inherited through ancestor/descendant groups is View only unless an explicit Edit grant exists. Admins have unrestricted access. Tokens are rechecked on every write against the creator's current active account and Edit permission: disabling the creator or removing their Edit access stops writes immediately. Reassignment may change who can manage the feed. There are at most 20 active tokens per feed and 200 feeds per server; expired/revoked token metadata is pruned when issuing another token.
+Feeds use the same group hierarchy and View/Edit rules as slides and playlists. Direct managing-group members have content Edit access. Feed setup and key management require an admin session; previously issued feed-specific keys still check their creator’s active Edit permission on every write. Access inherited through ancestor/descendant groups is View only unless an explicit Edit grant exists. Admins have unrestricted access. Tokens are rechecked on every write against the creator's current active account and Edit permission: disabling the creator or removing their Edit access stops writes immediately. Reassignment may change who can manage the feed. There are at most 20 active tokens per feed and 200 feeds per server; expired/revoked token metadata is pruned when issuing another token.
 
 A slide's viewers must also be able to view its bound feed. Sharing slides/playlists/screens propagates View access to dependencies where the sharing user has permission to grant it. Publication checks verify playlist recipients' feed access. A published playlist can reference at most 20 distinct feeds. Preview and player sync deliver only referenced snapshots, never tokens or token hashes. Online players clear inaccessible data when a successful sync returns `unavailable`.
 
@@ -103,6 +141,11 @@ These endpoints are for the OpenFrame UI or a trusted operator session, **not** 
 | --- | --- |
 | `GET /api/data-feeds/openapi.json` | Public machine-readable contract; no authentication. |
 | `GET /api/data-feeds/guide` | Public downloadable copy of this guide; no credentials. |
+| `GET / POST /api/data-feeds/applications` | Admin list/create `{name,managingGroupId?:UUID|null}`; metadata includes `id`, `createdAt`, and `feedCount`. |
+| `DELETE /api/data-feeds/applications/{id}` | Admin deletes an application with no feeds and its keys; 409 `APPLICATION_IN_USE` otherwise. |
+| `GET / POST /api/data-feeds/applications/{id}/tokens` | Admin lists key metadata or generates a key with `{name,expiresInDays?:90}`; POST returns one-time `token`. |
+| `DELETE /api/data-feeds/applications/{id}/tokens/{tokenId}` | Admin revokes an application key. |
+| `POST /api/data-feeds/ingest/{sourceKey}` | Application-key authentication; automatically creates/extends a scoped feed and merges named metric values. |
 | `GET /api/data-feeds` | Visible feed metadata and field definitions; no snapshot values. |
 | `POST /api/data-feeds` | Create `{name, managingGroupId: UUID or null, fields:[{key,type}]}`. Returns 201 metadata. |
 | `GET /api/data-feeds/{id}` | View feed metadata. |

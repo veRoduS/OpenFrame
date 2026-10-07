@@ -26,7 +26,7 @@ Use **Password invitation** to issue a replacement or reset link. Issuing it rep
 
 Admins can change their password under **Users & Groups > My password**; regular users use **My password** in the sidebar. Both require the current password. Other sessions are signed out. Passwords are stored as salted scrypt hashes; invitation and session tokens are stored as hashes. There is no MFA or automated email recovery.
 
-Admins can **Disable** an account temporarily or select **Delete** to remove it permanently after confirmation. Deletion signs out its sessions, removes invitations, direct memberships and user grants, and revokes feed API keys created by that user. Content and publications are preserved; personal ownership transfers to the admin performing deletion. The built-in admin and your current account cannot be deleted. Assign another active direct group admin before deleting a group’s only administrator.
+Admins can **Disable** an account temporarily or select **Delete** to remove it permanently after confirmation. Deletion signs out its sessions, removes invitations, direct memberships and user grants, and revokes feed and application API keys created by that user. Content and publications are preserved; personal ownership transfers to the admin performing deletion. The built-in admin and your current account cannot be deleted. Assign another active direct group admin before deleting a group’s only administrator.
 
 ## Groups
 

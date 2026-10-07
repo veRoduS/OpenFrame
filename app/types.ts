@@ -211,6 +211,8 @@ export type Device = {
 };
 export type DataFeed = {
   id: string;
+  applicationId?: string;
+  sourceKey?: string;
   name: string;
   fields: { key: string; type: 'number' | 'series' | 'categories' }[];
   readOnly?: boolean;

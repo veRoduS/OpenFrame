@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenFrame Data Feeds API",
-    "version": "1.0.0",
-    "description": "Reusable live slide data. Integrations use write-only per-feed bearer tokens, not operator passwords. See docs/data-feeds-api.md for a complete handoff. Tokens expire and are checked against creator Edit access on every write."
+    "version": "1.1.0",
+    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md."
   },
   "servers": [
     {
@@ -1426,6 +1426,664 @@
           }
         }
       }
+    },
+    "/api/data-feeds/applications": {
+      "get": {
+        "operationId": "listApplications",
+        "summary": "Admin lists application scopes and feed counts",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Application"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApplication",
+        "summary": "Admin registers a named application scope; no individual metrics need setup",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationDefinition"
+              },
+              "example": {
+                "name": "Sales dashboard",
+                "managingGroupId": null
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/applications/{applicationId}": {
+      "parameters": [
+        {
+          "name": "applicationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "deleteApplication",
+        "summary": "Admin deletes an application only when it has no feeds; its keys are removed",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/applications/{applicationId}/tokens": {
+      "parameters": [
+        {
+          "name": "applicationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "listApplicationTokens",
+        "summary": "Admin lists key metadata; secrets/hashes are excluded",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApplicationTokenMetadata"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "issueApplicationToken",
+        "summary": "Admin creates a one-time scoped application API key",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedApplicationToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              },
+              "example": {
+                "name": "Production",
+                "expiresInDays": 90
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/applications/{applicationId}/tokens/{tokenId}": {
+      "parameters": [
+        {
+          "name": "applicationId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "tokenId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "operationId": "revokeApplicationToken",
+        "summary": "Admin revokes an application API key; feeds and last values stay intact",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/ingest/{sourceKey}": {
+      "parameters": [
+        {
+          "name": "sourceKey",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$"
+          },
+          "description": "Stable case-sensitive feed name chosen by the application, scoped by the application key."
+        }
+      ],
+      "post": {
+        "operationId": "ingestApplicationMetrics",
+        "summary": "Automatically create a scoped feed and append typed metrics; merge values atomically",
+        "security": [
+          {
+            "ApplicationWriteToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestData"
+              },
+              "example": {
+                "completed": 42,
+                "goal": 100
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing feed updated; omitted metrics retained",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestReceipt"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Feed created automatically with inferred fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body exceeds 32768 bytes: PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Send application/json: UNSUPPORTED_MEDIA_TYPE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Shared application ingestion budget exceeded: RATE_LIMITED",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another attempt",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed; prior data/schema preserved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1441,6 +2099,12 @@
         "in": "cookie",
         "name": "openframe_session",
         "description": "Existing authenticated operator session; View/Edit and same-origin policy apply."
+      },
+      "ApplicationWriteToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "ofa_<256-bit base64url secret>",
+        "description": "Admin-issued application key; creates/updates only its own named feeds via ingestion. Creator must remain an active admin. No snapshot reads or management access."
       }
     },
     "schemas": {
@@ -1525,7 +2189,7 @@
                 "items": {
                   "$ref": "#/components/schemas/Field"
                 },
-                "description": "Unique field keys. Definitions cannot be changed after creation."
+                "description": "Unique field keys. Application ingestion can append fields; existing key/type pairs remain immutable. Session updates cannot change fields."
               }
             }
           },
@@ -1555,6 +2219,14 @@
                   "string",
                   "null"
                 ]
+              },
+              "applicationId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "sourceKey": {
+                "type": "string",
+                "description": "Application-supplied source name; namespaced by applicationId."
               }
             }
           }
@@ -1799,6 +2471,245 @@
         "properties": {
           "ok": {
             "const": true
+          }
+        }
+      },
+      "ApplicationDefinition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "managingGroupId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "default": null
+          }
+        }
+      },
+      "Application": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "managingGroupId",
+          "createdAt",
+          "feedCount"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "managingGroupId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "default": null
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "feedCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ApplicationTokenMetadata": {
+        "type": "object",
+        "required": [
+          "id",
+          "applicationId",
+          "name",
+          "createdAt",
+          "expiresAt",
+          "revokedAt",
+          "lastUsedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "IssuedApplicationToken": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApplicationTokenMetadata"
+          },
+          {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "string",
+                "pattern": "^ofa_[A-Za-z0-9_-]{43}$",
+                "description": "One-time application key; only its SHA-256 digest is persisted."
+              }
+            }
+          }
+        ]
+      },
+      "IngestData": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 20,
+        "description": "Named metric updates, merged atomically. Unknown names create fields inferred from number/null or nonempty series/category arrays; existing types are immutable. Omitted metrics keep their values. At most 20 fields total per feed. Null clears a number; [] clears an existing chart but cannot define a new chart type. Payload <=32768 bytes.",
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": -1000000000000.0,
+              "maximum": 1000000000000.0
+            },
+            {
+              "type": "array",
+              "maxItems": 240,
+              "items": {
+                "type": "object",
+                "required": [
+                  "time",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "ISO datetime with Z or explicit offset. Points must have strictly ascending unique timestamps."
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": -1000000000000.0,
+                    "maximum": 1000000000000.0
+                  }
+                }
+              }
+            },
+            {
+              "type": "array",
+              "maxItems": 40,
+              "items": {
+                "type": "object",
+                "required": [
+                  "label",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": -1000000000000.0,
+                    "maximum": 1000000000000.0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "propertyNames": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$"
+        }
+      },
+      "IngestReceipt": {
+        "type": "object",
+        "required": [
+          "applicationId",
+          "sourceKey",
+          "feedId",
+          "fields",
+          "revision",
+          "updatedAt",
+          "created"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceKey": {
+            "type": "string"
+          },
+          "feedId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            },
+            "maxItems": 20
+          },
+          "revision": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created": {
+            "type": "boolean"
           }
         }
       }

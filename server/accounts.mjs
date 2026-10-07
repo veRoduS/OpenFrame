@@ -587,16 +587,20 @@ export function createAccounts(db) {
           'invitations',
         ])
           db.prepare(`DELETE FROM ${table} WHERE userId=?`).run(user.id);
-        if (
-          db
-            .prepare(
-              "SELECT 1 FROM sqlite_master WHERE type='table' AND name='data_feed_tokens'",
-            )
-            .get()
-        )
-          db.prepare(
-            'UPDATE data_feed_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE creatorId=?',
-          ).run(new Date().toISOString(), user.id);
+        for (const table of [
+          'data_feed_tokens',
+          'data_feed_application_tokens',
+        ])
+          if (
+            db
+              .prepare(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+              )
+              .get(table)
+          )
+            db.prepare(
+              `UPDATE ${table} SET revokedAt=COALESCE(revokedAt,?) WHERE creatorId=?`,
+            ).run(new Date().toISOString(), user.id);
         db.prepare('DELETE FROM users WHERE id=?').run(user.id);
         db.exec('COMMIT');
       } catch (error) {

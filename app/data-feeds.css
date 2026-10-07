@@ -4,6 +4,40 @@
   min-width: 0;
   margin: 0;
 }
+.data-feed-applications {
+  padding: 20px 0;
+  margin: 16px 0 24px;
+  border-top: 1px solid var(--color-border, #dde3df);
+  border-bottom: 1px solid var(--color-border, #dde3df);
+}
+.data-feed-applications h3 {
+  margin: 0 0 8px;
+}
+.data-feed-applications .data-feed-toolbar > div {
+  flex: 1;
+  min-width: 0;
+}
+.data-feed-applications .data-feed-toolbar p {
+  margin: 0;
+}
+.data-feed-application-list {
+  margin-top: 16px;
+}
+.data-feed-application-list summary {
+  cursor: pointer;
+  color: var(--of-accent, #17613d);
+  font-weight: 600;
+}
+@media (max-width: 767px) {
+  .data-feed-applications .data-feed-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .data-feed-applications .data-feed-toolbar > button {
+    width: 100%;
+  }
+}
 .data-feed-toolbar {
   display: flex;
   gap: 16px;
@@ -112,6 +146,13 @@ button.data-feed-open {
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border, #dde3df);
+}
+.data-feed-token > div {
+  min-width: 0;
+  flex: 1;
+}
+.data-feed-token strong {
+  overflow-wrap: anywhere;
 }
 .data-feed-secret {
   display: flex;

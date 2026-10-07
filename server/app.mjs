@@ -293,6 +293,10 @@ export function createApp({
     '/api/data-feeds/:id/data',
     express.json({ limit: '32kb', strict: true }),
   );
+  app.use(
+    '/api/data-feeds/ingest',
+    express.json({ limit: '32kb', strict: true }),
+  );
   app.use(express.json({ limit: '1mb' }));
   mountAndroidReleases(app, {
     source: androidReleaseSource,
