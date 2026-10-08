@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.23.3] - 2026-10-07
+
+- Add a one-page application metrics API handoff with request examples, automatic field creation, update semantics, limits and retry guidance.
+
 ## [0.23.2] - 2026-10-07
 
 - Add admin-managed application API keys and automatic ingestion: one key creates named feeds and typed metric fields on first push, appends new fields, and merges later values without host-side metric setup.

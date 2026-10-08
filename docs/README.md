@@ -35,4 +35,5 @@
 - [Roadmap and limitations](roadmap.md): current scope and outstanding validation.
 - [Validation record](validation.md): dated checks for the local release-preparation revision.
 
+- [Application metrics API one-pager](data-feeds-api-one-pager.md) — request format, first push, later updates, examples, and limits.
 - [Data feeds API handoff](data-feeds-api.md) — external updates, scoped tokens, schemas, examples, and [OpenAPI contract](../server/data-feeds.openapi.json).

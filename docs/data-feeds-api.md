@@ -10,6 +10,8 @@ OpenFrame supports **application API keys** that automatically create feeds and 
 
 ## Application keys: automatic metric creation
 
+For a concise integration handoff, use the [application metrics API one-pager](data-feeds-api-one-pager.md).
+
 As an admin, open **Settings → Data feeds → New application**, give the application a name, and choose **Personal** or a managing group once. Create the application, enter a key name and expiry, and select **Generate application API key**. Copy the one-time key and the **Ingest URL**. **Copy integration details** provides the endpoint, method, example payload and guide; share the key separately. No individual feed or field setup is needed on the host.
 
 The application chooses a stable feed name in the URL, for example `production`, and sends metric names and values directly as JSON:
