@@ -2,6 +2,12 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.24.0] - 2026-10-07
+
+- Release automatic application metrics ingestion and workspace management improvements with an API one-pager.
+- Include application-scoped keys, automatic feed/field creation and partial updates, plus compact slide metadata editing, user membership/deletion controls, Media grid sizes and stable Screens Row/Grid views from local revisions 0.23.1–0.23.3.
+- Keep player 0.10.14 and schema 4 unchanged; existing feed-specific integrations remain supported. See the [release notes](docs/release-notes/0.24.0.md) and [API one-pager](docs/data-feeds-api-one-pager.md).
+
 ## [0.23.3] - 2026-10-07
 
 - Add a one-page application metrics API handoff with request examples, automatic field creation, update semantics, limits and retry guidance.

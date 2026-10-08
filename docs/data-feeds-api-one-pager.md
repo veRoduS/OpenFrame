@@ -17,15 +17,16 @@ Replace `{sourceKey}` with a stable feed name chosen by your application, such a
 **Copy and paste (Mac/Linux):** change the server URL if needed, then paste your key when prompted. This reads the key without echoing it or storing it in shell history:
 
 ```sh
-printf 'Application API key: '
-IFS= read -r -s OPENFRAME_APPLICATION_KEY
-printf '\n'
-curl --fail-with-body --request POST \
-  'https://openframe.blackfalcon.cloud/api/data-feeds/ingest/production' \
-  --header "Authorization: Bearer $OPENFRAME_APPLICATION_KEY" \
-  --header 'Content-Type: application/json' \
-  --data '{"completed":42,"goal":100}'
-unset OPENFRAME_APPLICATION_KEY
+(
+  printf 'Application API key: '
+  IFS= read -r -s OPENFRAME_APPLICATION_KEY
+  printf '\n'
+  curl --fail-with-body --request POST \
+    'https://openframe.blackfalcon.cloud/api/data-feeds/ingest/production' \
+    --header "Authorization: Bearer $OPENFRAME_APPLICATION_KEY" \
+    --header 'Content-Type: application/json' \
+    --data '{"completed":42,"goal":100}'
+)
 ```
 
 ## First push and later updates
