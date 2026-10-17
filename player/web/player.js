@@ -14,7 +14,8 @@ const previewVersion =
     ? '?version=published'
     : '';
 const connectionStatus = document.getElementById('connection-status');
-let lastState = null,
+let suspended = document.hidden,
+  lastState = null,
   lastStatus = null,
   blank = false,
   resizeGeneration = 0,
@@ -84,6 +85,10 @@ function applyState(state) {
     message.hidden = true;
     return;
   }
+  if (suspended) {
+    playback.stop('empty');
+    return;
+  }
   if (state.manifest)
     playback.update(
       state.manifest,
@@ -134,8 +139,12 @@ async function poll() {
 }
 async function reportPlayback() {
   if (preview || !lastStatus) return;
+  const status = {
+    ...lastStatus,
+    error: lastStatus.error || playback.current?.getError?.() || null,
+  };
   if (globalThis.OpenFrameAndroid) {
-    globalThis.OpenFrameAndroid.reportPlayback(JSON.stringify(lastStatus));
+    globalThis.OpenFrameAndroid.reportPlayback(JSON.stringify(status));
     return;
   }
   const abort = new AbortController();
@@ -144,7 +153,7 @@ async function reportPlayback() {
     await fetch('/local/playback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(lastStatus),
+      body: JSON.stringify(status),
       signal: abort.signal,
     });
   } catch {
@@ -168,3 +177,19 @@ addEventListener('pagehide', () => {
   playback.stop();
 });
 void poll();
+
+// Android invokes this before pausing WebView timers; visibility covers browser/Pi.
+let lifecycleSequence = 0;
+globalThis.openFrameSetBackground = (background, sequence) => {
+  // Ignore an older native lifecycle command that arrives after a newer one.
+  if (Number.isFinite(sequence)) {
+    if (sequence < lifecycleSequence) return;
+    lifecycleSequence = sequence;
+  }
+  suspended = !!background;
+  if (suspended) playback.stop('empty');
+  else if (lastState) applyState(lastState);
+};
+document.addEventListener('visibilitychange', () => {
+  globalThis.openFrameSetBackground(document.hidden);
+});

@@ -27,7 +27,6 @@ import android.view.Gravity;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.concurrent.Executors;
@@ -44,6 +43,7 @@ public final class PlayerActivity extends Activity {
     private PlayerAgent agent;
     private WebView web;
     private boolean resumed;
+    private int lifecycleGeneration;
     private int generation;
     private static final ScheduledExecutorService updateWorker = Executors.newSingleThreadScheduledExecutor();
     private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L;
@@ -183,6 +183,7 @@ public final class PlayerActivity extends Activity {
             web = new WebView(this);
             web.setBackgroundColor(Color.BLACK);
             web.getSettings().setJavaScriptEnabled(true);
+            web.getSettings().setMediaPlaybackRequiresUserGesture(false);
             web.getSettings().setAllowFileAccess(false);
             web.getSettings().setAllowContentAccess(false);
             web.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
@@ -190,6 +191,9 @@ public final class PlayerActivity extends Activity {
             // The only JavaScript bridge method accepts bounded playback telemetry.
             web.addJavascriptInterface(new PlaybackBridge(current), "OpenFrameAndroid");
             web.setWebViewClient(new WebViewClient() {
+                @Override public void onPageFinished(WebView view, String url) {
+                    if (web == view && !resumed) view.evaluateJavascript(backgroundScript(true, lifecycleGeneration), null);
+                }
                 @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
                 @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     String url = request.getUrl().toString();
@@ -207,13 +211,20 @@ public final class PlayerActivity extends Activity {
                             });
                             return response("application/json", new ByteArrayInputStream(snapshot.getBytes(StandardCharsets.UTF_8)));
                         }
-                        if (path != null && path.matches("/media/[a-f0-9-]{36}\\.(webp|woff2|woff|ttf|otf)")) {
+                        if (path != null && path.matches("/media/[a-f0-9-]{36}\\.(webp|mp4|woff2|woff|ttf|otf)")) {
                             String filename = path.substring(7);
-                            String mime = filename.endsWith(".webp") ? "image/webp"
+                            String mime = filename.endsWith(".mp4") ? "video/mp4"
+                                    : filename.endsWith(".webp") ? "image/webp"
                                     : filename.endsWith(".woff2") ? "font/woff2"
                                     : filename.endsWith(".woff") ? "font/woff"
                                     : filename.endsWith(".otf") ? "font/otf" : "font/ttf";
-                            return response(mime, new FileInputStream(new File(current.media, filename)));
+                            String range = null;
+                            for (java.util.Map.Entry<String, String> header : request.getRequestHeaders().entrySet()) {
+                                if ("Range".equalsIgnoreCase(header.getKey())) range = header.getValue();
+                            }
+                            MediaResponse media = new MediaResponse(new File(current.media, filename), range);
+                            return new WebResourceResponse(mime, null, media.status,
+                                    media.status == 206 ? "Partial Content" : media.status == 416 ? "Range Not Satisfiable" : "OK", media.headers, media.body);
                         }
                         if (path != null && path.matches("/[a-z-]+\\.(html|js|css|svg)")) {
                             String type = path.endsWith(".js") ? "text/javascript" : path.endsWith(".css") ? "text/css"
@@ -251,7 +262,7 @@ public final class PlayerActivity extends Activity {
         java.util.Map<String, String> headers = new java.util.HashMap<>();
         headers.put("Cache-Control", "no-store");
         headers.put("X-Content-Type-Options", "nosniff");
-        headers.put("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'");
+        headers.put("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'");
         return new WebResourceResponse(type, "UTF-8", 200, "OK", headers, body);
     }
 
@@ -448,12 +459,19 @@ public final class PlayerActivity extends Activity {
             web = null;
         }
     }
+    private static String backgroundScript(boolean background, int sequence) {
+        return "window.openFrameSetBackground && window.openFrameSetBackground(" + background + "," + sequence + ")";
+    }
     @Override protected void onResume() {
         super.onResume();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (deviceSleepStatus != null) deviceSleepStatus.setText(deviceSleepSummary());
         resumed = true;
-        if (web != null) { web.onResume(); web.resumeTimers(); }
+        lifecycleGeneration++;
+        if (web != null) {
+            web.onResume(); web.resumeTimers();
+            web.evaluateJavascript(backgroundScript(false, lifecycleGeneration), null);
+        }
         startPolling();
         if (waitingForInstallPermission) {
             waitingForInstallPermission = false;
@@ -464,9 +482,25 @@ public final class PlayerActivity extends Activity {
     }
     @Override protected void onPause() {
         resumed = false;
+        final int pausedGeneration = ++lifecycleGeneration;
         stopPolling();
         stopUpdates();
-        if (web != null) { web.onPause(); web.pauseTimers(); }
+        if (web != null) {
+            WebView current = web;
+            // Release media before suspending JS. A bounded native fallback also
+            // pauses the WebView if its renderer cannot answer the cleanup call.
+            Runnable pause = new Runnable() {
+                @Override public void run() {
+                    current.removeCallbacks(this);
+                    if (web == current && !resumed && lifecycleGeneration == pausedGeneration) {
+                        current.onPause();
+                        current.pauseTimers();
+                    }
+                }
+            };
+            current.evaluateJavascript(backgroundScript(true, pausedGeneration), result -> pause.run());
+            current.postDelayed(pause, 1000);
+        }
         super.onPause();
     }
     @Override protected void onDestroy() {

@@ -5,6 +5,7 @@ export type Layer = {
   type:
     | 'text'
     | 'image'
+    | 'video'
     | 'clock'
     | 'counter'
     | 'weather'
@@ -175,6 +176,19 @@ export type Asset = {
   folderId: string | null;
   createdAt: string | null;
   readOnly?: boolean;
+  kind?: 'image' | 'video';
+  mime?: string;
+  durationMs?: number;
+  fps?: number;
+  profile?: 'economy' | 'quality';
+  poster?: {
+    filename: string;
+    url: string;
+    bytes: number;
+    sha256: string;
+    width: number;
+    height: number;
+  };
 };
 export type MediaFolder = {
   readOnly?: boolean;
@@ -265,8 +279,8 @@ export function newLayer(type: Layer['type'], assetId?: string): Layer {
     type,
     x: 10,
     y: 10,
-    width: type === 'image' ? 40 : 75,
-    height: type === 'image' ? 60 : 25,
+    width: type === 'image' || type === 'video' ? 40 : 75,
+    height: type === 'image' || type === 'video' ? 60 : 25,
     text: type === 'text' ? 'Your message here' : '',
     assetId,
     fontSize: 96,

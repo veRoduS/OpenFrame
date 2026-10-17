@@ -18,7 +18,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.10.14'
+VERSION = '0.10.15'
+MEDIA_LIMIT = 25 * 1024 * 1024
+CACHE_LIMIT = 256 * 1024 * 1024
+MEDIA_NAME = r'[a-f0-9-]{36}\.(?:webp|mp4|woff2|woff|ttf|otf)'
+
 HOSTED_SERVER_CODE = '1962'
 HOSTED_SERVER_ORIGIN = 'https://openframe.blackfalcon.cloud'
 
@@ -155,24 +159,65 @@ class Agent:
         with self.opener.open(request, timeout=10) as response:
             return json.load(response)
 
+    @staticmethod
+    def validate_asset(asset):
+        filename = asset.get('filename', '')
+        size = asset.get('bytes')
+        if not re.fullmatch(MEDIA_NAME, filename) or asset.get('url') != '/media/' + filename or not re.fullmatch(r'[a-f0-9]{64}', asset.get('sha256', '')):
+            raise ValueError('Invalid asset path or checksum')
+        if size is not None and (not isinstance(size, int) or isinstance(size, bool) or not 0 <= size <= MEDIA_LIMIT):
+            raise ValueError('Invalid media size')
+
+    @staticmethod
+    def file_hash(target):
+        digest = hashlib.sha256()
+        with target.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(65536), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def prepare_cache(self, assets):
+        for asset in assets:
+            self.validate_asset(asset)
+        keep = {asset['filename'] for asset in assets}
+        keep.update(asset['filename'] for asset in self.state.get('manifest', {}).get('assets', []))
+        media = self.cache / 'media'
+        for target in media.iterdir():
+            if target.is_file() and target.name not in keep:
+                target.unlink()
+        used = sum(target.stat().st_size for target in media.iterdir() if target.is_file())
+        needed = sum(asset.get('bytes', MEDIA_LIMIT) for asset in assets if not (media / asset['filename']).is_file())
+        if used + needed > CACHE_LIMIT or needed > shutil.disk_usage(media).free:
+            raise ValueError('Media cache full; keeping the current publication')
+
     def download(self, asset):
-        filename = asset['filename']
-        if not re.fullmatch(r'[a-f0-9-]{36}\.(?:webp|woff2|woff|ttf|otf)', filename) or asset['url'] != '/media/' + filename:
-            raise ValueError('Invalid asset path')
-        target = self.cache / 'media' / filename
-        if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == asset['sha256']:
+        self.validate_asset(asset)
+        target = self.cache / 'media' / asset['filename']
+        if target.is_file() and target.stat().st_size <= MEDIA_LIMIT and self.file_hash(target) == asset['sha256']:
             return
+        used = sum(path.stat().st_size for path in target.parent.iterdir() if path.is_file())
         req = urllib.request.Request(self.server + asset['url'], headers={'Authorization': 'Bearer ' + self.credentials['token'], **self.access_headers})
-        with self.opener.open(req, timeout=45) as response:
-            data = response.read(25 * 1024 * 1024 + 1)
-        if len(data) > 25 * 1024 * 1024 or hashlib.sha256(data).hexdigest() != asset['sha256']:
-            raise ValueError('Image checksum mismatch or download too large')
-        temporary = target.with_suffix('.part')
-        with temporary.open('wb') as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, target)
+        temporary = target.with_name(target.name + '.part')
+        try:
+            digest = hashlib.sha256()
+            total = 0
+            with self.opener.open(req, timeout=45) as response, temporary.open('wb') as stream:
+                while True:
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MEDIA_LIMIT or used + total > CACHE_LIMIT or (asset.get('bytes') is not None and total > asset['bytes']):
+                        raise ValueError('Media download too large or cache full')
+                    digest.update(chunk)
+                    stream.write(chunk)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if digest.hexdigest() != asset['sha256'] or (asset.get('bytes') is not None and total != asset['bytes']):
+                raise ValueError('Media checksum or size mismatch')
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def sync(self):
         if not self.credentials:
@@ -206,13 +251,14 @@ class Agent:
                     response['weather'][key]['observation'] = previous['observation']
                     response['weather'][key]['observationStatus'] = 'unavailable'
             manifest = response['manifest']
-            if manifest.get('schemaVersion') not in (1, 2, 3, 4):
+            if manifest.get('schemaVersion') not in (1, 2, 3, 4, 5):
                 raise ValueError('Unsupported playlist schema')
             command = response.get('command')
             force_refresh = command and command['type'] == 'refresh' and command['id'] != self.state.get('commandAck')
             verify = self.verified_revision != manifest['revision'] or force_refresh
+            self.prepare_cache(manifest['assets'])
             for asset in manifest['assets']:
-                if verify:
+                if verify or not (self.cache / 'media' / asset['filename']).is_file():
                     self.download(asset)
                 asset['url'] = '/media/' + asset['filename']
             self.verified_revision = manifest['revision']
@@ -339,7 +385,7 @@ class Agent:
                     state['error'] = agent.error or state.get('error')
                     data = json.dumps(state).encode()
                     content_type = 'application/json'
-                elif re.fullmatch(r'/media/[a-f0-9-]{36}\.(?:webp|woff2|woff|ttf|otf)', route):
+                elif re.fullmatch('/media/' + MEDIA_NAME, route):
                     target = agent.cache / 'media' / route.split('/')[-1]
                     if not target.is_file():
                         self.send_error(404)
@@ -347,7 +393,7 @@ class Agent:
                     data = None
                     extension = target.suffix.lower()
                     content_type = {
-                        '.webp': 'image/webp', '.woff2': 'font/woff2',
+                        '.mp4': 'video/mp4', '.webp': 'image/webp', '.woff2': 'font/woff2',
                         '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf',
                     }[extension]
                 elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/weather-icons.js', '/image-layout.js', '/shape.js', '/stocks.js', '/data-feeds.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
@@ -357,15 +403,51 @@ class Agent:
                 else:
                     self.send_error(404)
                     return
-                self.send_response(200)
+                size = target.stat().st_size if target else len(data)
+                start, end = 0, size - 1
+                range_header = self.headers.get('Range') if target else None
+                if range_header:
+                    try:
+                        match = re.fullmatch(r'bytes=(\d*)-(\d*)', range_header)
+                        if not match or not any(match.groups()) or size == 0:
+                            raise ValueError('Invalid range')
+                        first, last = match.groups()
+                        if first:
+                            start = int(first)
+                            end = min(int(last), size - 1) if last else size - 1
+                        else:
+                            suffix = int(last)
+                            if suffix <= 0:
+                                raise ValueError('Invalid suffix')
+                            start = max(0, size - suffix)
+                        if start >= size or end < start:
+                            raise ValueError('Unsatisfiable range')
+                    except ValueError:
+                        self.send_response(416)
+                        self.send_header('Content-Range', 'bytes */' + str(size))
+                        self.send_header('Content-Length', '0')
+                        self.end_headers()
+                        return
+                self.send_response(206 if range_header else 200)
+                if target:
+                    self.send_header('Accept-Ranges', 'bytes')
+                if range_header:
+                    self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
                 self.send_header('Content-Type', content_type)
-                self.send_header('Content-Length', str(target.stat().st_size if target else len(data)))
+                self.send_header('Content-Length', str(end - start + 1))
                 self.send_header('Cache-Control', 'private, max-age=31536000, immutable' if target else 'no-store')
                 self.send_header('X-Content-Type-Options', 'nosniff')
                 self.end_headers()
                 if target:
                     with target.open('rb') as stream:
-                        shutil.copyfileobj(stream, self.wfile, length=65536)
+                        stream.seek(start)
+                        remaining = end - start + 1
+                        while remaining:
+                            chunk = stream.read(min(65536, remaining))
+                            if not chunk:
+                                break
+                            self.wfile.write(chunk)
+                            remaining -= len(chunk)
                 else:
                     self.wfile.write(data)
 

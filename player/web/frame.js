@@ -50,8 +50,100 @@ function waitFor(promise, signal, timeout = 15000) {
   });
 }
 
+// Staging opens only the poster. A media source exists only on the visible frame.
+function videoController(box, layer, asset) {
+  let video = null,
+    timer = null,
+    disposed = false,
+    failed = false,
+    error = null;
+  const release = () => {
+    clearTimeout(timer);
+    timer = null;
+    if (!video) return;
+    const current = video;
+    video = null;
+    current.removeEventListener('playing', playing);
+    current.removeEventListener('error', fallback);
+    current.removeEventListener('waiting', waiting);
+    current.removeEventListener('stalled', waiting);
+    current.pause();
+    current.removeAttribute('src');
+    current.load();
+    current.remove();
+  };
+  const fail = (message) => {
+    if (disposed || failed) return;
+    failed = true;
+    error = message;
+    box.dataset.videoState = 'poster';
+    release();
+  };
+  const fallback = () => fail('Video playback failed; showing its poster.');
+  const waiting = () => {
+    if (disposed || failed || timer !== null) return;
+    timer = setTimeout(
+      () => fail('Video playback stalled; showing its poster.'),
+      8000,
+    );
+  };
+  const playing = () => {
+    clearTimeout(timer);
+    timer = null;
+    if (video) video.style.visibility = 'visible';
+    box.dataset.videoState = 'playing';
+  };
+  return {
+    ready: Promise.resolve(),
+    getError: () => error,
+    activate() {
+      if (disposed || failed || video) return;
+      try {
+        video = document.createElement('video');
+        video.muted = true;
+        video.defaultMuted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'none';
+        video.setAttribute('muted', '');
+        video.setAttribute('playsinline', '');
+        Object.assign(video.style, imageStyle(layer), {
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          visibility: 'hidden',
+        });
+        video.addEventListener('playing', playing);
+        video.addEventListener('error', fallback);
+        video.addEventListener('waiting', waiting);
+        video.addEventListener('stalled', waiting);
+        box.append(video);
+        timer = setTimeout(
+          () => fail('Video did not start; showing its poster.'),
+          5000,
+        );
+        box.dataset.videoState = 'starting';
+        video.src = asset.url;
+        void Promise.resolve(video.play()).catch(fallback);
+      } catch {
+        fallback();
+      }
+    },
+    dispose() {
+      disposed = true;
+      release();
+    },
+  };
+}
+
 export async function prepareFrame(host, item, assets, rotation, signal) {
   const { slide } = item;
+  if (
+    slide.layers.filter(
+      (layer) => layer.type === 'video' && !layer.removedMedia,
+    ).length > 1
+  )
+    throw new Error('A slide may contain only one video');
   const element = document.createElement('div');
   element.className = 'slide-frame';
   element.dataset.slideId = slide.id;
@@ -70,6 +162,7 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
   });
   host.append(element);
   const images = [],
+    posters = new Set(),
     controllers = [],
     layouts = [];
   let disposed = false;
@@ -113,7 +206,7 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
         textAlign: layer.align,
       });
       element.append(box);
-      if (layer.type === 'image') {
+      if (layer.type === 'image' || layer.type === 'video') {
         if (layer.removedMedia) {
           const placeholder = document.createElement('div');
           placeholder.className = 'removed-media-placeholder';
@@ -127,7 +220,14 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
           image.decoding = 'async';
           image.loading = 'eager';
           Object.assign(image.style, imageStyle(layer));
-          image.src = asset.url;
+          image.src = layer.type === 'video' ? asset.poster?.url : asset.url;
+          if (layer.type === 'video') {
+            if (!asset.poster?.url)
+              throw new Error('A video poster is missing');
+            posters.add(image);
+            // A damaged poster cannot trap this playlist on endless preparation retries.
+            controllers.push(videoController(box, layer, asset));
+          }
           images.push(image);
           box.append(image);
         }
@@ -163,7 +263,14 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
     // Decode the same image elements that will be shown; no speculative image copies.
     await waitFor(
       Promise.all([
-        ...images.map((image) => image.decode()),
+        ...images.map((image) => {
+          const decoded = image.decode();
+          return posters.has(image)
+            ? waitFor(decoded, signal, 5000).catch((error) => {
+                if (signal.aborted) throw error;
+              })
+            : decoded;
+        }),
         ...controllers.map((controller) => controller.ready),
         document.fonts?.ready || Promise.resolve(),
       ]),
@@ -181,6 +288,13 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
     return {
       element,
       slideId: slide.id,
+      hasVideo: slide.layers.some(
+        (layer) => layer.type === 'video' && !layer.removedMedia,
+      ),
+      getError: () =>
+        controllers
+          .map((controller) => controller.getError?.())
+          .find(Boolean) || null,
       dispose,
       activate() {
         if (disposed) throw new Error('Prepared frame was disposed');
@@ -195,6 +309,9 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
 }
 
 export function commitFrame(next, previous, transition = {}) {
+  const mediaCut = next.hasVideo || previous?.hasVideo;
+  // Release the outgoing decoder synchronously before any incoming src/play call.
+  if (mediaCut) previous?.dispose();
   next.activate();
   next.element.style.visibility = 'visible';
   next.element.setAttribute('aria-hidden', 'false');
@@ -204,6 +321,7 @@ export function commitFrame(next, previous, transition = {}) {
     previous.element.setAttribute('aria-hidden', 'true');
   };
   if (
+    mediaCut ||
     !previous ||
     !['fade', 'slide-left', 'slide-right'].includes(transition.type) ||
     !next.element.animate ||

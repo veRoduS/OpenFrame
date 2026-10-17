@@ -20,6 +20,8 @@ Counters automatically count down to future targets and count up from past targe
 
 Images are decoded, resized to at most 1920 pixels per dimension, and stored as WebP. Upload limit: 15 MB and 25 megapixels. Text is rendered as text, never as executable HTML.
 
+Videos can be uploaded from Media or **Add media** in the slide editor. Choose Economy (720p) or Quality (1080p) before uploading MP4, MOV, or WebM, up to 100 MiB and 60 seconds. The server creates a silent H.264 playback file and a poster; original files are not retained. Each slide can contain one video, which loops for that item's playlist duration. Library/editor previews stay still; playlist preview plays video. Transitions involving video use Cut. Updated players download complete clips once and play locally, including offline. Upgrade players before publishing video playlists; see [cached video and acceptance](video-support.md).
+
 **Settings**, including Data feeds, Stock quotes, and Fonts, is available only to admins. Admins can upload WOFF2, WOFF, TTF, or OTF custom fonts (up to 10 MB each). Select a built-in or custom family under **Appearance** in the slide editor. A font in use by a saved slide or published playlist cannot be removed. Published screens download the font with the playlist and keep it available offline.
 
 ## Finding slides, playlists, and screens

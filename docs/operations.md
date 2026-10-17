@@ -17,6 +17,8 @@ In PowerShell use `Copy-Item .env.example .env`. Read the unique initial passwor
 
 Do not run multiple server containers against one SQLite volume. This is a single-server deployment, not an HA cluster. Production and development data are separate: Docker uses a named volume, local Node uses `./data` by default.
 
+Video processing requires FFmpeg and ffprobe, included in the Docker image. Local Node installations need them on PATH. Conversion runs through one bounded background worker; temporary video jobs do not survive a server restart, but completed media does. See [video limits, source retention, and proxy configuration](video-support.md#server-operation).
+
 ## Configuration
 
 | Variable | Default | Meaning |

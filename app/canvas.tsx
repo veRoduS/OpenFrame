@@ -284,7 +284,7 @@ export function SlideCanvas({
     const cropping =
       cropMode &&
       selected === layer.id &&
-      layer.type === 'image' &&
+      (layer.type === 'image' || layer.type === 'video') &&
       layer.fit === 'cover' &&
       asset;
     if (layer.lockMode === 'movement' && !cropping) return;
@@ -359,7 +359,8 @@ export function SlideCanvas({
           corner,
           ((event.clientX - startX) / bounds.width) * 100,
           ((event.clientY - startY) / bounds.height) * 100,
-          layer.type === 'image' && layer.lockAspect !== false,
+          (layer.type === 'image' || layer.type === 'video') &&
+            layer.lockAspect !== false,
         ),
       );
     const end = () => {
@@ -421,13 +422,17 @@ export function SlideCanvas({
             display: 'block',
           }}
         >
-          {layer.type === 'image' && layer.removedMedia ? (
+          {(layer.type === 'image' || layer.type === 'video') &&
+          layer.removedMedia ? (
             <span className="removed-media-placeholder">Removed media</span>
-          ) : layer.type === 'image' ? (
+          ) : layer.type === 'image' || layer.type === 'video' ? (
             <img
               draggable={false}
               alt=""
-              src={assets.find((a) => a.id === layer.assetId)?.url}
+              src={(() => {
+                const asset = assets.find((a) => a.id === layer.assetId);
+                return layer.type === 'video' ? asset?.poster?.url : asset?.url;
+              })()}
               style={imageStyle(layer) as React.CSSProperties}
             />
           ) : layer.type === 'data' ? (
@@ -513,7 +518,8 @@ export function SlideCanvas({
                         : e.key === 'ArrowDown'
                           ? step
                           : 0,
-                      layer.type === 'image' && layer.lockAspect !== false,
+                      (layer.type === 'image' || layer.type === 'video') &&
+                        layer.lockAspect !== false,
                     ),
                   );
                 }}

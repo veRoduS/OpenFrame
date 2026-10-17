@@ -9,6 +9,7 @@ The server runs in Docker. Raspberry Pi players and the experimental Android TV 
 - Visual slide editor with text, images, cropping, backgrounds, and resize controls.
 - Clock, count-up/countdown, and NWS weather widgets with ZIP lookup and shared location caching.
 - Media folders, tags, search, and bulk organization.
+- Server-optimized video uploads with silent, locally cached playback and poster previews.
 - Playlists with start/end dates and next-slide preparation.
 - Screen pairing, heartbeat status, remote controls, and recovery Wi-Fi.
 - Optional Cloudflare Tunnel or WireGuard connectivity for off-site screens.

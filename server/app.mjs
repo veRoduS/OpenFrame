@@ -12,6 +12,7 @@ import { mountManagedVpn } from './managed-vpn.mjs';
 import { mountRecovery } from './recovery.mjs';
 import { createWeatherCache } from './weather.mjs';
 import { createZipLookup } from './zip.mjs';
+import { mountVideos } from './video.mjs';
 import packageInfo from '../package.json' with { type: 'json' };
 import multer from 'multer';
 import sharp from 'sharp';
@@ -47,6 +48,7 @@ export function createApp({
     (androidReleaseDir || process.env.ANDROID_RELEASE_DIR ? 'local' : 'github'),
   androidReleaseFetch,
   androidReleaseNow,
+  videoProcessor,
 } = {}) {
   const root = path.resolve(dataDir);
   mkdirSync(path.join(root, 'media'), { recursive: true });
@@ -470,7 +472,7 @@ export function createApp({
       ];
     if (kind === 'slide')
       return item.layers.flatMap((l) =>
-        l.type === 'image' && !l.removedMedia
+        ['image', 'video'].includes(l.type) && !l.removedMedia
           ? [['asset', l.assetId]]
           : l.type === 'data' && l.data?.feedId
             ? [['data-feed', l.data.feedId]]
@@ -480,7 +482,9 @@ export function createApp({
       return [
         ...(item.fork ? [['playlist', item.fork.masterId]] : []),
         ...item.items.map((i) => ['slide', i.slideId]),
-        ...(item.published?.assets || []).map((a) => ['asset', a.id]),
+        ...(item.published?.assets || [])
+          .filter((a) => !a.id.endsWith('-poster'))
+          .map((a) => ['asset', a.id]),
       ];
     if (kind === 'device' && item.playlistId)
       return [['playlist', item.playlistId]];
@@ -926,13 +930,15 @@ export function createApp({
   });
   function checkImages(slide, user) {
     for (const layer of slide.layers) {
-      if (layer.type !== 'image') continue;
+      if (!['image', 'video'].includes(layer.type)) continue;
       if (layer.removedMedia) continue;
       const asset = allRecords('asset').find(
         (item) => item.id === layer.assetId,
       );
       if (!asset || !accounts.canViewAsset(user, asset.id))
         throw fail(404, 'Referenced item not found');
+      if ((asset.kind === 'video') !== (layer.type === 'video'))
+        throw fail(400, 'The media type must match its image or video layer');
     }
   }
   function checkFonts(slide) {
@@ -1131,7 +1137,8 @@ export function createApp({
         name: slide.name,
       });
       for (const layer of slide.layers) {
-        if (layer.type !== 'image' || !layer.assetId) continue;
+        if (!['image', 'video'].includes(layer.type) || !layer.assetId)
+          continue;
         if (layer.removedMedia) continue;
         const asset = allRecords('asset').find(
           (item) => item.id === layer.assetId,
@@ -1407,10 +1414,13 @@ export function createApp({
     }
   }
   function playlistAssets(items) {
-    const imageIds = new Set(
+    const mediaIds = new Set(
       items.flatMap((item) =>
         item.slide.layers
-          .filter((layer) => layer.type === 'image' && !layer.removedMedia)
+          .filter(
+            (layer) =>
+              ['image', 'video'].includes(layer.type) && !layer.removedMedia,
+          )
           .map((layer) => layer.assetId),
       ),
     );
@@ -1419,10 +1429,12 @@ export function createApp({
         item.slide.layers.map((layer) => layer.fontId).filter(Boolean),
       ),
     );
-    const assets = [...imageIds].map((id) => {
+    const assets = [...mediaIds].flatMap((id) => {
       const asset = allRecords('asset').find((item) => item.id === id);
       if (!asset) throw fail(404, 'Referenced media not found');
-      return asset;
+      return asset.kind === 'video'
+        ? [asset, { id: `${asset.id}-poster`, kind: 'image', ...asset.poster }]
+        : [asset];
     });
     for (const id of fontIds) {
       const font = db
@@ -1500,19 +1512,21 @@ export function createApp({
       dataFeeds.validateLayers(item.slide, accounts.context.getStore()?.user);
     return {
       schemaVersion: items.some((i) =>
-        i.slide.layers.some((l) => l.type === 'data'),
+        i.slide.layers.some((l) => l.type === 'video'),
       )
-        ? 4
-        : items.some((item) =>
-              item.slide.layers.some(
-                (layer) =>
-                  ['shape', 'stocks'].includes(layer.type) ||
-                  (layer.type === 'weather' &&
-                    layer.weather?.layout === 'vertical'),
-              ),
-            )
-          ? 3
-          : 2,
+        ? 5
+        : items.some((i) => i.slide.layers.some((l) => l.type === 'data'))
+          ? 4
+          : items.some((item) =>
+                item.slide.layers.some(
+                  (layer) =>
+                    ['shape', 'stocks'].includes(layer.type) ||
+                    (layer.type === 'weather' &&
+                      layer.weather?.layout === 'vertical'),
+                ),
+              )
+            ? 3
+            : 2,
       revision: randomUUID(),
       name: p.name,
       publishedAt: new Date().toISOString(),
@@ -1560,10 +1574,12 @@ export function createApp({
       playlist.published = {
         ...published,
         schemaVersion: items.some((i) =>
-          i.slide.layers.some((l) => l.type === 'data'),
+          i.slide.layers.some((l) => l.type === 'video'),
         )
-          ? 4
-          : published.schemaVersion,
+          ? 5
+          : items.some((i) => i.slide.layers.some((l) => l.type === 'data'))
+            ? 4
+            : published.schemaVersion,
         revision: randomUUID(),
         publishedAt: new Date().toISOString(),
         items,
@@ -1672,6 +1688,60 @@ export function createApp({
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+  });
+  const videos = mountVideos({
+    app,
+    admin,
+    root,
+    context: accounts.context,
+    processor: videoProcessor,
+    validate(userId, fields) {
+      const user = db
+        .prepare('SELECT * FROM users WHERE id=? AND disabled=0')
+        .get(userId);
+      if (!user)
+        throw fail(403, 'The uploading account is no longer available');
+      // The worker may run after this user's role or memberships have changed.
+      const state = accounts.context.getStore();
+      if (state) state.user = user;
+      if (
+        state?.groupId &&
+        (!db.prepare('SELECT id FROM groups WHERE id=?').get(state.groupId) ||
+          (user.role !== 'admin' && !accounts.member(user, state.groupId)))
+      )
+        throw fail(403, 'The uploading account no longer has group access');
+      const { folderId = null } = assetPatchSchema.parse({
+        folderId: fields.folderId || null,
+      });
+      if (folderId) requireRecord('folder', folderId);
+      const slideId = fields.shareWithSlideId || '';
+      let slideGrants = [];
+      if (slideId) {
+        requireRecord('slide', slideId);
+        if (!canShare(user, 'slide', slideId))
+          throw fail(
+            403,
+            'Only the slide owner or admin can share its audience',
+          );
+        slideGrants = grants('slide', slideId);
+      }
+      return { folderId, slideGrants };
+    },
+    save(asset, { slideGrants }) {
+      db.exec('SAVEPOINT video_asset');
+      try {
+        const saved = put('asset', asset);
+        for (const grant of slideGrants)
+          db.prepare(
+            'INSERT OR IGNORE INTO resource_grants VALUES (?,?,?,?)',
+          ).run('asset', asset.id, grant.userId, grant.groupId);
+        db.exec('RELEASE video_asset');
+        return saved;
+      } catch (error) {
+        db.exec('ROLLBACK TO video_asset; RELEASE video_asset');
+        throw error;
+      }
+    },
   });
   const fontUpload = multer({
     storage: multer.memoryStorage(),
@@ -1891,7 +1961,7 @@ export function createApp({
     if (allRecords('folder').some((f) => f.parentId === req.params.id))
       throw fail(409, 'Move subfolders out of this folder before deleting it');
     if (allRecords('asset').some((a) => a.folderId === req.params.id))
-      throw fail(409, 'Move the images out of this folder before deleting it');
+      throw fail(409, 'Move the media out of this folder before deleting it');
     remove('folder', req.params.id);
     res.json({ ok: true });
   });
@@ -1910,7 +1980,7 @@ export function createApp({
       patch.action === 'delete' &&
       assets.some((asset) => !canShare(req.user, 'asset', asset.id))
     )
-      throw fail(403, 'Only the media owner or admin can delete images');
+      throw fail(403, 'Only the media owner or admin can delete media');
     validateFolder(patch.folderId);
     const deletedIds = new Set(
       patch.action === 'delete' ? assets.map((asset) => asset.id) : [],
@@ -1919,7 +1989,7 @@ export function createApp({
       let changed = false;
       const layers = slide.layers.map((layer) => {
         if (
-          layer.type !== 'image' ||
+          !['image', 'video'].includes(layer.type) ||
           layer.removedMedia ||
           !deletedIds.has(layer.assetId)
         )
@@ -1939,7 +2009,7 @@ export function createApp({
       ),
     }));
     if (updated.some((a) => a.tags.length > 30))
-      throw fail(400, 'An image can have at most 30 tags');
+      throw fail(400, 'A media file can have at most 30 tags');
     // Validate the entire selection before making any changes.
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -1961,7 +2031,9 @@ export function createApp({
             return slide === item.slide ? item : { ...item, slide };
           });
           const publishedAssets = (published.assets || []).filter(
-            (asset) => !deletedIds.has(asset.id),
+            (asset) =>
+              !deletedIds.has(asset.id) &&
+              !deletedIds.has(asset.id.replace(/-poster$/, '')),
           );
           if (
             !changed &&
@@ -1999,7 +2071,10 @@ export function createApp({
       throw error;
     }
     if (patch.action === 'delete')
-      for (const a of assets) {
+      for (const a of assets.flatMap((asset) => [
+        asset,
+        ...(asset.poster ? [asset.poster] : []),
+      ])) {
         try {
           unlinkSync(path.join(root, 'media', a.filename));
         } catch (error) {
@@ -2020,7 +2095,9 @@ export function createApp({
           .get(req.params.filename);
         if (font) return next();
         const asset = allRecords('asset').find(
-          (a) => a.filename === req.params.filename,
+          (a) =>
+            a.filename === req.params.filename ||
+            a.poster?.filename === req.params.filename,
         );
         if (!asset || !accounts.canViewAsset(user, asset.id))
           return res.status(404).json({ error: 'Not found' });
@@ -2039,7 +2116,7 @@ export function createApp({
     },
     (req, res) => {
       if (
-        !/^[a-f0-9-]{36}\.(?:webp|woff2|woff|ttf|otf)$/.test(
+        !/^[a-f0-9-]{36}\.(?:webp|mp4|woff2|woff|ttf|otf)$/.test(
           req.params.filename,
         ) ||
         !existsSync(path.join(root, 'media', req.params.filename))
@@ -2052,7 +2129,11 @@ export function createApp({
           : 'private, max-age=31536000, immutable',
       );
       const format = path.extname(req.params.filename).slice(1);
-      res.type(fontFormats[format]?.mime || 'image/webp');
+      res.type(
+        format === 'mp4'
+          ? 'video/mp4'
+          : fontFormats[format]?.mime || 'image/webp',
+      );
       res.sendFile(path.join(root, 'media', req.params.filename));
     },
   );
@@ -2270,6 +2351,7 @@ export function createApp({
     db,
     seedInitialAdmin: accounts.seedInitialAdmin,
     close: () => {
+      videos.close();
       weather.close();
       stocks.close();
       zipLookup.close();

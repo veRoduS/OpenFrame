@@ -2,6 +2,12 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.24.1] - 2026-10-17
+
+- Add bounded video optimization jobs, poster-based media editing, and schema 5 publications.
+- Optimize MP4/MOV/WebM sources into silent H.264 at 720p or 1080p, up to 60 seconds and 25 MiB, with cached WebP posters. Docker includes FFmpeg; local installs need FFmpeg and ffprobe.
+- Video publications require player 0.10.15 or newer. Upgrade players before publishing video; existing image/widget publications retain their schema support. Physical Onn acceptance remains pending; see [video support](docs/video-support.md).
+
 ## [0.24.0] - 2026-10-07
 
 - Release automatic application metrics ingestion and workspace management improvements with an API one-pager.

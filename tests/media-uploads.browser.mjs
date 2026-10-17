@@ -121,17 +121,15 @@ try {
     release = resolve;
   });
   responseGate = hold;
-  await page
-    .locator('.media-library input[type="file"]')
-    .setInputFiles([
-      file('first.png'),
-      {
-        name: 'invalid.png',
-        mimeType: 'image/png',
-        buffer: Buffer.from('not an image'),
-      },
-      file('last.png'),
-    ]);
+  await page.locator('.media-library input[type="file"]').setInputFiles([
+    file('first.png'),
+    {
+      name: 'invalid.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('not an image'),
+    },
+    file('last.png'),
+  ]);
   const panel = page.getByRole('region', { name: 'Media uploads' });
   await panel.getByText('Uploading media', { exact: true }).waitFor();
   await panel
@@ -206,6 +204,167 @@ try {
     .getByRole('button', { name: 'Dismiss upload notification', exact: true })
     .click();
   await panel.waitFor({ state: 'detached' });
+  let poll = 0;
+  const videoAsset = {
+    id: 'video-asset',
+    name: 'loop.mov',
+    kind: 'video',
+    mime: 'video/mp4',
+    url: '/media/loop.mp4',
+    width: 1280,
+    height: 720,
+    bytes: 512000,
+    durationMs: 12000,
+    fps: 30,
+    profile: 'economy',
+    poster: {
+      filename: 'poster.webp',
+      url: '/media/poster.webp',
+      bytes: 9000,
+      sha256: 'a'.repeat(64),
+      width: 1280,
+      height: 720,
+    },
+    tags: [],
+    folderId: mediaFolder.id,
+    createdAt: new Date().toISOString(),
+  };
+  await page.route('**/api/videos', async (route) => {
+    const body = route.request().postDataBuffer().toString('latin1');
+    assert.ok(body.includes('profile') && body.includes('economy'));
+    await route.fulfill({
+      status: 202,
+      json: { id: 'video-job', status: 'queued' },
+    });
+  });
+  await page.route('**/api/video-jobs/video-job', async (route) => {
+    poll++;
+    await route.fulfill({
+      json:
+        poll < 2
+          ? { id: 'video-job', status: 'processing' }
+          : { id: 'video-job', status: 'done', asset: videoAsset },
+    });
+  });
+  const replacementVideo = {
+    ...videoAsset,
+    id: 'replacement-video',
+    name: 'replacement.webm',
+    url: '/media/replacement.webm',
+  };
+  await page.route('**/api/library', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.assets.push(videoAsset);
+    body.assets.push(replacementVideo);
+    await route.fulfill({ response, json: body });
+  });
+  await page.locator('.media-library input[type="file"]').setInputFiles({
+    name: 'loop.mov',
+    mimeType: '',
+    buffer: Buffer.from('synthetic video'),
+  });
+  await panel.getByText('Processing video…', { exact: true }).waitFor();
+  await panel.getByText('Upload complete', { exact: true }).waitFor();
+  assert.equal(await panel.locator('li[data-status="done"]').count(), 1);
+  assert.equal(
+    await page.locator('.media-entry .media-video-badge').count(),
+    2,
+  );
+  assert.equal(await page.locator('.media-entry video').count(), 0);
+  assert.match(
+    await page
+      .locator('.media-entry-info')
+      .filter({ hasText: 'loop.mov' })
+      .locator('.media-dimensions')
+      .textContent(),
+    /MB/,
+  );
+  await panel
+    .getByRole('button', { name: 'Dismiss upload notification', exact: true })
+    .click();
+  await panel.waitFor({ state: 'detached' });
+  const videoSlide = await api(page, '/api/slides', 'POST', {
+    name: 'Video editor regression',
+    width: 1920,
+    height: 1080,
+    layers: [],
+  });
+  await page.reload();
+  await page.getByRole('button', { name: /^Slides/ }).click();
+  await page
+    .getByRole('button', { name: 'Edit Video editor regression', exact: true })
+    .click();
+  const editor = page.locator('.slide-editor');
+  const layerList = editor.locator('.layer-list');
+  await editor.getByRole('button', { name: 'Add media', exact: true }).click();
+  await page.getByRole('button', { name: 'Add loop.mov', exact: true }).click();
+  assert.equal(
+    await layerList.getByRole('button', { name: /loop\.mov/ }).count(),
+    1,
+  );
+  await editor.getByRole('button', { name: 'Add media', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Add replacement.webm', exact: true })
+    .click();
+  await page
+    .getByText(
+      'A slide can contain one video. Replace the existing video first.',
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(
+    await layerList.locator('button').filter({ hasText: 'loop.mov' }).count(),
+    1,
+  );
+  await page.keyboard.press('Escape');
+  await layerList.getByRole('button', { name: /loop\.mov/ }).click();
+  await editor
+    .getByRole('button', { name: 'Replace video', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Add replacement.webm', exact: true })
+    .click();
+  let savedVideoSlide;
+  await page.route(`**/api/slides/${videoSlide.id}`, async (route) => {
+    if (route.request().method() === 'PUT') {
+      savedVideoSlide = route.request().postDataJSON();
+      await route.fulfill({ json: savedVideoSlide });
+    } else await route.continue();
+  });
+  await editor.getByRole('button', { name: 'Save slide', exact: true }).click();
+  await page.getByText('All changes saved', { exact: true }).waitFor();
+  assert.equal(
+    savedVideoSlide.layers.filter((layer) => layer.type === 'video').length,
+    1,
+  );
+  assert.equal(
+    savedVideoSlide.layers.find((layer) => layer.type === 'video').assetId,
+    replacementVideo.id,
+  );
+  await layerList.getByRole('button', { name: /replacement\.webm/ }).click();
+  await editor
+    .getByRole('button', { name: 'Replace video', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Add first.png', exact: true })
+    .click();
+  await page
+    .getByText(
+      'Choose a video to replace this layer. Image and video layers keep their media type.',
+      { exact: true },
+    )
+    .waitFor();
+  assert.equal(
+    await page.getByRole('dialog', { name: 'Replace video' }).count(),
+    1,
+  );
+  await page.keyboard.press('Escape');
+  await page.unrouteAll({ behavior: 'wait' });
+  await editor
+    .getByRole('button', { name: 'Back to slides', exact: true })
+    .click();
+  await page.getByRole('button', { name: /^Media/ }).click();
   // A file already accepted for processing is confirmed, while queued files stop.
   let confirm;
   responseGate = new Promise((resolve) => {

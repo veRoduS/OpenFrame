@@ -145,7 +145,7 @@ final class PlayerAgent {
         if (response.getBoolean("approved")) {
             JSONObject manifest = response.getJSONObject("manifest");
             int schemaVersion = manifest.getInt("schemaVersion");
-            if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3 && schemaVersion != 4) throw new IOException("Unsupported playlist schema");
+            if (schemaVersion != 1 && schemaVersion != 2 && schemaVersion != 3 && schemaVersion != 4 && schemaVersion != 5) throw new IOException("Unsupported playlist schema");
             nextRevision = manifest.getString("revision");
             JSONArray assets = manifest.getJSONArray("assets");
             boolean verify = !nextRevision.equals(verifiedRevision) || execute;
@@ -155,9 +155,20 @@ final class PlayerAgent {
                 JSONArray old = oldManifest.getJSONArray("assets");
                 for (int i = 0; i < old.length(); i++) keep.add(old.getJSONObject(i).getString("filename"));
             }
-            for (int i = 0; i < assets.length(); i++) keep.add(assets.getJSONObject(i).getString("filename"));
+            for (int i = 0; i < assets.length(); i++) {
+                validateAsset(assets.getJSONObject(i));
+                keep.add(assets.getJSONObject(i).getString("filename"));
+            }
             File[] files = media.listFiles();
             if (files != null) for (File file : files) if (!keep.contains(file.getName())) Files.deleteIfExists(file.toPath());
+            long used = 0, needed = 0;
+            files = media.listFiles();
+            if (files != null) for (File file : files) used += file.length();
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject asset = assets.getJSONObject(i);
+                if (!new File(media, asset.getString("filename")).isFile()) needed += asset.optLong("bytes", IMAGE_LIMIT);
+            }
+            if (used + needed > CACHE_LIMIT || needed > media.getUsableSpace()) throw new IOException("Media cache full; keeping the current publication");
             for (int i = 0; i < assets.length(); i++) {
                 checkInterrupted();
                 JSONObject asset = assets.getJSONObject(i);
@@ -169,7 +180,7 @@ final class PlayerAgent {
         response.remove("command");
         response.put("commandAck", execute ? command.getString("id") : state.opt("commandAck"));
         response.put("generation", state.optLong("generation") + (execute ? 1 : 0));
-        // Atomic commit occurs only after every image has passed its checksum.
+        // Atomic commit occurs only after every media file has passed its checksum.
         checkInterrupted();
         saveJson(new File(directory, "state.json"), response);
         state = response;
@@ -214,14 +225,15 @@ final class PlayerAgent {
 
     static void validateAsset(JSONObject asset) throws Exception {
         String filename = asset.getString("filename");
-        if (!filename.matches("[a-f0-9-]{36}\\.(webp|woff2|woff|ttf|otf)") || !asset.getString("url").equals("/media/" + filename)
+        if (!filename.matches("[a-f0-9-]{36}\\.(webp|mp4|woff2|woff|ttf|otf)") || !asset.getString("url").equals("/media/" + filename)
                 || !asset.getString("sha256").matches("[a-f0-9]{64}")) throw new IOException("Invalid asset");
+        if (asset.has("bytes") && (asset.getLong("bytes") < 0 || asset.getLong("bytes") > IMAGE_LIMIT)) throw new IOException("Invalid media size");
     }
 
     private void download(JSONObject asset) throws Exception {
         File target = new File(media, asset.getString("filename"));
         String checksum = asset.getString("sha256");
-        if (target.isFile() && checksum.equals(hashFile(target))) return;
+        if (target.isFile() && target.length() <= IMAGE_LIMIT && checksum.equals(hashFile(target))) return;
         long used = 0;
         File[] files = media.listFiles();
         if (files != null) for (File file : files) used += file.length();
@@ -236,12 +248,12 @@ final class PlayerAgent {
                 while ((count = input.read(buffer)) != -1) {
                     checkInterrupted();
                     total += count;
-                    if (total > IMAGE_LIMIT || used + total > CACHE_LIMIT) throw new IOException("Media cache full");
+                    if (total > IMAGE_LIMIT || used + total > CACHE_LIMIT || (asset.has("bytes") && total > asset.getLong("bytes"))) throw new IOException("Media cache full");
                     output.write(buffer, 0, count);
                 }
                 output.getFD().sync();
             }
-            if (!checksum.equals(hashFile(temporary))) throw new IOException("Image checksum mismatch");
+            if (!checksum.equals(hashFile(temporary)) || (asset.has("bytes") && temporary.length() != asset.getLong("bytes"))) throw new IOException("Media checksum or size mismatch");
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             connection.disconnect();

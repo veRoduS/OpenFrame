@@ -40,7 +40,7 @@ export class Playback {
   status(phase, error = null) {
     this.report({
       phase,
-      error,
+      error: error || this.current?.getError?.() || null,
       slideId: this.current?.slideId || null,
       preparationMs: Math.round(this.preparationMs),
       missedDeadlines: this.missedDeadlines,

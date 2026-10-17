@@ -20,6 +20,7 @@ export const layerSchema = z
     type: z.enum([
       'text',
       'image',
+      'video',
       'clock',
       'counter',
       'weather',
@@ -121,16 +122,17 @@ export const layerSchema = z
     'Layer must fit inside the slide',
   )
   .refine(
-    (l) => l.type !== 'image' || !!l.assetId || l.removedMedia,
-    'Choose an image',
+    (l) =>
+      !['image', 'video'].includes(l.type) || !!l.assetId || l.removedMedia,
+    'Choose an image or video',
   )
   .refine(
-    (l) => l.type === 'image' || l.removedMedia === undefined,
-    'Only image layers can be marked as removed media',
+    (l) => ['image', 'video'].includes(l.type) || l.removedMedia === undefined,
+    'Only media layers can be marked as removed media',
   )
   .refine(
-    (l) => l.type === 'image' || l.assetId === undefined,
-    'Only image layers can reference media',
+    (l) => ['image', 'video'].includes(l.type) || l.assetId === undefined,
+    'Only image or video layers can reference media',
   )
   .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter')
   .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather')
@@ -149,7 +151,15 @@ export const slideSchema = z.object({
   width: z.number().int().min(320).max(3840),
   height: z.number().int().min(320).max(3840),
   background: color.default('#ffffff'),
-  layers: z.array(layerSchema).max(50),
+  layers: z
+    .array(layerSchema)
+    .max(50)
+    .refine(
+      (layers) =>
+        layers.filter((layer) => layer.type === 'video' && !layer.removedMedia)
+          .length <= 1,
+      'A slide can contain only one video',
+    ),
 });
 export const folderSchema = z.object({
   name: z.string().trim().min(1).max(80),

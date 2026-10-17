@@ -4,6 +4,12 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.10.15] - 2026-10-17
+
+- Cache and play silent video locally with bounded storage, byte ranges, lifecycle cleanup, and poster fallback.
+- Accept schema 5 from server 0.24.1 while preserving schemas 1–4; cap media at 25 MiB per file and 256 MiB total, protecting current playback during downloads.
+- Use one active video with poster-only preparation, cut transitions, silent loops, startup/stall error reporting, and guarded Android background/resume cleanup. Desktop and native tests pass; physical Onn/Pi and long-duration playback acceptance remain outstanding.
+
 ## [0.10.14] - 2026-10-07
 
 - Allow workspace previews to display the actual published playlist without saving the draft.

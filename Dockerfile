@@ -20,6 +20,7 @@ WORKDIR /app
 RUN npm install -g pnpm@11.19.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile && mkdir /data && chown node:node /data
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/dist ./dist
 COPY server ./server
 COPY docs/data-feeds-api.md ./docs/

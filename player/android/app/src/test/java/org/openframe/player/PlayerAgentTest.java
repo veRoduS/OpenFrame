@@ -25,6 +25,8 @@ public class PlayerAgentTest {
     private String responseType = "application/json";
     private final AtomicInteger enrollments = new AtomicInteger();
     private final byte[] image = "test image bytes".getBytes(StandardCharsets.UTF_8);
+    private final AtomicInteger mediaRequests = new AtomicInteger();
+    private static final String VIDEO = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.mp4";
     private static final String FILE = "12345678-1234-1234-1234-123456789012.webp";
 
     @Before public void start() throws Exception {
@@ -45,7 +47,8 @@ public class PlayerAgentTest {
                     lastRequest = new JSONObject(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                     code = status;
                     body = (syncBody != null ? syncBody : code == 200 ? response.toString() : new JSONObject().put("code", unauthorizedCode).toString()).getBytes(StandardCharsets.UTF_8);
-                } else if (path.equals("/media/" + FILE)) {
+                } else if (path.equals("/media/" + FILE) || path.equals("/media/" + VIDEO)) {
+                    mediaRequests.incrementAndGet();
                     body = image;
                 } else { code = 404; body = new byte[0]; }
                 exchange.getResponseHeaders().set("Content-Type", responseType);
@@ -147,7 +150,7 @@ public class PlayerAgentTest {
         JSONObject manifest = new JSONObject(player.snapshot()).getJSONObject("manifest");
         assertEquals(3, manifest.getInt("schemaVersion"));
         assertEquals(105, manifest.getJSONObject("stocks").getJSONObject("WMT").getInt("price"));
-        response.getJSONObject("manifest").put("schemaVersion", 5);
+        response.getJSONObject("manifest").put("schemaVersion", 6);
         player.tick();
         assertEquals(3, new JSONObject(player.snapshot()).getJSONObject("manifest").getInt("schemaVersion"));
     }
@@ -234,6 +237,44 @@ public class PlayerAgentTest {
         JSONObject offline = new JSONObject(restarted.snapshot());
         assertEquals("one", offline.getJSONObject("manifest").getString("revision"));
         assertFalse(offline.getJSONObject("connection").getBoolean("connected"));
+    }
+
+    @Test public void schemaFiveCachesVideoAndPosterAndReusesThemOffline() throws Exception {
+        publish("video", PlayerAgent.sha256(image));
+        JSONObject manifest = response.getJSONObject("manifest");
+        JSONObject poster = manifest.getJSONArray("assets").getJSONObject(0);
+        poster.put("id", "clip-poster").put("kind", "image").put("bytes", image.length);
+        JSONObject video = new JSONObject().put("id", "clip").put("kind", "video")
+                .put("filename", VIDEO).put("url", "/media/" + VIDEO).put("bytes", image.length)
+                .put("sha256", PlayerAgent.sha256(image)).put("poster", new JSONObject(poster.toString()));
+        manifest.put("schemaVersion", 5).getJSONArray("assets").put(video);
+        PlayerAgent player = agent(); player.tick(); player.tick();
+        assertEquals(2, mediaRequests.get());
+        assertEquals(5, new JSONObject(player.snapshot()).getJSONObject("manifest").getInt("schemaVersion"));
+        assertArrayEquals(image, Files.readAllBytes(new java.io.File(player.media, VIDEO).toPath()));
+        status = 503;
+        PlayerAgent restarted = agent(); restarted.tick();
+        assertEquals(5, new JSONObject(restarted.snapshot()).getJSONObject("manifest").getInt("schemaVersion"));
+        assertEquals(2, mediaRequests.get());
+        assertTrue(new java.io.File(restarted.media, FILE).isFile());
+    }
+
+    @Test public void fullCacheRejectsIncomingBeforeDownloadingAndKeepsCurrentPublication() throws Exception {
+        publish("current", PlayerAgent.sha256(image));
+        PlayerAgent player = agent(); player.tick();
+        java.io.File active = new java.io.File(player.media, FILE);
+        try (java.io.RandomAccessFile sparse = new java.io.RandomAccessFile(active, "rw")) {
+            sparse.setLength(PlayerAgent.CACHE_LIMIT - 4);
+        }
+        publish("incoming", PlayerAgent.sha256(image));
+        JSONObject asset = response.getJSONObject("manifest").getJSONArray("assets").getJSONObject(0);
+        asset.put("filename", VIDEO).put("url", "/media/" + VIDEO).put("bytes", image.length);
+        player.tick();
+        assertEquals("current", new JSONObject(player.snapshot()).getJSONObject("manifest").getString("revision"));
+        assertEquals(1, mediaRequests.get());
+        assertTrue(active.exists());
+        assertFalse(new java.io.File(player.media, VIDEO).exists());
+        assertEquals(0, player.media.listFiles((dir, name) -> name.endsWith(".part")).length);
     }
 
     @Test public void proxyFailurePreservesPairingButExplicitRevocationClearsIt() throws Exception {

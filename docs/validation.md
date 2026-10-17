@@ -1,5 +1,15 @@
 # Validation record
 
+## Local server 0.24.1 / player 0.10.15: cached video framework
+
+Checked on 2026-10-17: all 221 Node tests, 96 Python tests, and 33 native Java tests pass. Node coverage includes real FFmpeg encoding, real Python-agent integration, job ownership and cancellation, queue bounds, permissions changing during conversion, video/poster publication and deletion, and authorized byte ranges. Synthetic landscape/portrait inputs verify H.264, stripped audio, frame-rate/resolution limits, poster generation, and duration rejection. Native tests cover offline verified caches and local bounded range streams; all Android production Java compiles against the official API 35 platform with the Java 8 target.
+
+Five Chromium browser suites pass: media uploads, editor locks, player video, player startup, and transitions. They cover video-job progress, poster-only library/editor views, one-video insertion/replacement, real MP4 autoplay/loops, prepared posters without another media source, release-before-open transitions, blank/background cleanup, corrupt-video fallback/error reporting, stale lifecycle command rejection, and existing image playback. Lint, TypeScript, production web build, version consistency, repository checks, and diff hygiene pass. The installed Vite/compiler binaries were used directly because the environment's pnpm wrapper could not initialize its home directory.
+
+Schema 5 video publications require player 0.10.15+; upgrade players first. Existing image/widget publications preserve schemas 2/3/4, and the updated players continue accepting schemas 1–4. The explicit compatibility review records the conditional upgrade requirement. The cache protects current and incoming publications within 256 MiB; each optimized video is capped at 25 MiB.
+
+This is local source work. No deployment, source push, signed APK build/publication, or Docker rebuild was performed. FFmpeg is added to the runtime Dockerfile, but the changed image still needs container acceptance. Physical Onn/Pi decoding, offline power cycles, dropped frames, thermals, and a 24-hour run remain outstanding; follow [video acceptance](video-support.md#acceptance).
+
 ## GitHub milestone 0.22.0: shared folders, upload progress, and library fixes
 
 Checked on 2026-10-06: all 189 Node tests and 92 Python tests pass, including real Python-agent integration. The five browser suites for library access, media uploads, tag selection, playlist picking, and populated responsive UI layouts use disposable or mocked content. They verify global folder navigation with admin-only folder controls, protected read-only content, actual sequential upload progress and confirmations, cancellation/partial failures, visible-tag catalogs and bulk changes, and 30-slide preview sizing/scrolling at 1280×900, 1280×720, 390×844, and 320×568. Static checks, production build, versions, compatibility, repository hygiene, and Pi shell syntax pass.

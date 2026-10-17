@@ -24,6 +24,103 @@ class PlayerTests(unittest.TestCase):
     def response(self, revision='one', assets=None, command=None):
         return {'approved': True, 'blank': False, 'rotation': 0, 'manifest': {'schemaVersion': 1, 'revision': revision, 'items': [], 'assets': assets or []}, 'command': command}
 
+    def asset(self, data, filename='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.mp4'):
+        return {'id': 'clip', 'kind': 'video', 'filename': filename, 'url': '/media/' + filename,
+                'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+
+    def test_schema_five_video_and_poster_survive_offline_restart_without_download(self):
+        clip, poster = b'optimized silent mp4', b'poster image'
+        video = self.asset(clip)
+        sidecar = self.asset(poster, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.webp')
+        sidecar.update(id='clip-poster', kind='image')
+        video['poster'] = {key: sidecar[key] for key in ('filename', 'url', 'bytes', 'sha256')}
+        response = self.response('video', [video, sidecar])
+        response['manifest']['schemaVersion'] = 5
+        with patch.object(self.agent, 'request', return_value=response), patch.object(self.agent.opener, 'open', side_effect=[io.BytesIO(clip), io.BytesIO(poster)]) as opened:
+            self.agent.sync()
+            self.agent.sync()
+        self.assertEqual(opened.call_count, 2)
+        restarted = module.Agent(self.config, self.tmp.name)
+        self.assertEqual(restarted.state['manifest']['assets'][0]['poster']['url'], sidecar['url'])
+        with patch.object(restarted.opener, 'open', side_effect=AssertionError('Offline playback cannot fetch content')):
+            restarted.download(video)
+            restarted.download(sidecar)
+
+    def test_download_reads_bounded_chunks_and_cleans_interruption_and_bad_checksums(self):
+        data = b'x' * 200000
+        class Chunks(io.BytesIO):
+            def read(inner, size=-1):
+                self.assertEqual(size, 65536)
+                return super().read(size)
+        asset = self.asset(data)
+        with patch.object(self.agent.opener, 'open', return_value=Chunks(data)):
+            self.agent.download(asset)
+        target = self.agent.cache / 'media' / asset['filename']
+        self.assertEqual(target.read_bytes(), data)
+        broken = self.asset(b'new bytes')
+        with patch.object(self.agent.opener, 'open', return_value=io.BytesIO(b'wrong data')):
+            with self.assertRaises(ValueError):
+                self.agent.download(broken)
+        self.assertEqual(target.read_bytes(), data)
+        self.assertFalse(list(target.parent.glob('*.part')))
+        class Interrupted(io.BytesIO):
+            def read(inner, size=-1):
+                if inner.tell():
+                    raise OSError('Transfer interrupted')
+                return super().read(3)
+        with patch.object(self.agent.opener, 'open', return_value=Interrupted(b'new bytes')):
+            with self.assertRaises(OSError):
+                self.agent.download(broken)
+        self.assertEqual(target.read_bytes(), data)
+        self.assertFalse(list(target.parent.glob('*.part')))
+
+    def test_cache_preflight_protects_current_and_prunes_obsolete_and_partial_files(self):
+        old = self.asset(b'old-current')
+        target = self.agent.cache / 'media' / old['filename']
+        target.write_bytes(b'old-current')
+        self.agent.state = self.response('old', [old])
+        incoming = self.asset(b'new-incoming', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.mp4')
+        obsolete = target.parent / 'obsolete.part'
+        obsolete.write_bytes(b'leftover')
+        with patch.object(module, 'CACHE_LIMIT', 20):
+            with self.assertRaisesRegex(ValueError, 'keeping the current'):
+                self.agent.prepare_cache([incoming])
+        self.assertEqual(target.read_bytes(), b'old-current')
+        self.assertFalse(obsolete.exists())
+        with patch.object(module.shutil, 'disk_usage', return_value=type('Disk', (), {'free': 0})()):
+            with self.assertRaises(ValueError):
+                self.agent.prepare_cache([incoming])
+        self.assertTrue(target.exists())
+        self.agent.state = self.response('incoming', [incoming])
+        self.agent.prepare_cache([incoming])
+        self.assertFalse(target.exists())
+
+    def test_local_mp4_ranges_are_bounded_and_support_suffix_and_unsatisfiable_requests(self):
+        asset = self.asset(b'0123456789')
+        (self.agent.cache / 'media' / asset['filename']).write_bytes(b'0123456789')
+        server = module.http.server.ThreadingHTTPServer(('127.0.0.1', 0), self.agent.handler())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            url = 'http://127.0.0.1:' + str(server.server_port) + asset['url']
+            for header, expected, content_range in [(None, b'0123456789', None), ('bytes=2-4', b'234', 'bytes 2-4/10'), ('bytes=7-', b'789', 'bytes 7-9/10'), ('bytes=-3', b'789', 'bytes 7-9/10'), ('bytes=8-99', b'89', 'bytes 8-9/10')]:
+                request = module.urllib.request.Request(url, headers={'Range': header} if header else {})
+                with module.urllib.request.urlopen(request) as response:
+                    self.assertEqual(response.status, 206 if header else 200)
+                    self.assertEqual(response.headers['Content-Type'], 'video/mp4')
+                    self.assertEqual(response.headers['Accept-Ranges'], 'bytes')
+                    self.assertEqual(response.headers.get('Content-Range'), content_range)
+                    self.assertEqual(response.read(), expected)
+            for header in ('bytes=10-', 'bytes=4-2', 'bytes=-0', 'bytes=1-2,4-5', 'bytes=-', 'bad'):
+                with self.assertRaises(module.urllib.error.HTTPError) as error:
+                    module.urllib.request.urlopen(module.urllib.request.Request(url, headers={'Range': header}))
+                self.assertEqual(error.exception.code, 416)
+                self.assertEqual(error.exception.headers['Content-Range'], 'bytes */10')
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_complete_manifest_survives_offline_restart(self):
         with patch.object(self.agent, 'request', return_value=self.response()):
             self.agent.sync()
@@ -53,7 +150,7 @@ class PlayerTests(unittest.TestCase):
         with patch.object(self.agent, 'request', return_value=response):
             self.agent.sync()
         self.assertEqual(self.agent.state['manifest']['stocks']['WMT']['price'], 105)
-        response['manifest']['schemaVersion'] = 5
+        response['manifest']['schemaVersion'] = 6
         with patch.object(self.agent, 'request', return_value=response):
             with self.assertRaises(ValueError):
                 self.agent.sync()
@@ -145,7 +242,7 @@ class PlayerTests(unittest.TestCase):
     def test_failed_download_does_not_replace_last_good_manifest(self):
         with patch.object(self.agent, 'request', return_value=self.response()):
             self.agent.sync()
-        with patch.object(self.agent, 'request', return_value=self.response('two', [{'id': 'image'}])), patch.object(self.agent, 'download', side_effect=OSError('Incomplete')):
+        with patch.object(self.agent, 'request', return_value=self.response('two', [self.asset(b'image')])), patch.object(self.agent, 'download', side_effect=OSError('Incomplete')):
             with self.assertRaises(OSError):
                 self.agent.sync()
         state = json.loads((Path(self.tmp.name) / 'state.json').read_text())
@@ -257,8 +354,10 @@ class PlayerTests(unittest.TestCase):
         self.assertIn('Reboot disabled', self.agent.error)
 
     def test_unchanged_publication_does_not_reread_images_on_each_heartbeat(self):
-        asset = {'id': 'one', 'filename': 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.webp'}
-        with patch.object(self.agent, 'request', side_effect=lambda *args: self.response(assets=[asset.copy()])), patch.object(self.agent, 'download') as download:
+        asset = self.asset(b'cached')
+        def save(asset):
+            (self.agent.cache / 'media' / asset['filename']).write_bytes(b'cached')
+        with patch.object(self.agent, 'request', side_effect=lambda *args: self.response(assets=[asset.copy()])), patch.object(self.agent, 'download', side_effect=save) as download:
             self.agent.sync()
             self.agent.sync()
         self.assertEqual(download.call_count, 1)

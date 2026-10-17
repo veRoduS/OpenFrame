@@ -62,7 +62,7 @@ After installation, edit `/etc/openframe/config.json` and restart `openframe-age
 
 The agent serves its player at `http://127.0.0.1:8080`, accessible only on the Pi. Device credentials are stored with restricted permissions in `/var/lib/openframe/identity.json`. Downloaded images are checksum-verified before a new manifest replaces the current one. The last complete manifest remains on disk and plays after an offline restart. Before the first successful publication download, there is no offline content to show.
 
-Blanking and rotation are cached. A revoked device stops playback when it next contacts the server; revocation cannot reach an offline device. Old downloaded assets are retained in this initial version. Monitor SD-card capacity when frequently replacing large image libraries.
+Blanking and rotation are cached. A revoked device stops playback when it next contacts the server; revocation cannot reach an offline device. The media cache has a 256 MiB budget and retains the current and incoming publication while an update downloads. Obsolete and failed partial files are removed. Keep room for both publications; an update that cannot fit leaves the current content intact. Videos download in bounded chunks and play locally; physical Pi video performance remains unvalidated.
 
 Restart is a narrowly scoped, acknowledged command. The Pi user receives sudo access only to `/usr/sbin/reboot`; the server cannot send arbitrary shell commands. Commands are acknowledged durably before execution to avoid reboot loops. A power failure in that interval may require queuing the restart again.
 

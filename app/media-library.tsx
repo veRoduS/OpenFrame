@@ -139,6 +139,9 @@ export function MediaLibrary({
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [shareUpload, setShareUpload] = useState(false);
+  const [videoProfile, setVideoProfile] = useState<'economy' | 'quality'>(
+    'economy',
+  );
   const uploadInput = useRef<HTMLInputElement>(null);
   const filtered = visibleMedia(assets, {
     folder,
@@ -428,15 +431,28 @@ export function MediaLibrary({
               checked={shareUpload}
               onChange={(event) => setShareUpload(event.target.checked)}
             />
-            Share uploaded images with this slide’s audience
+            Share uploaded media with this slide’s audience
           </label>
         )}
+        <label className="media-share-upload">
+          Video quality
+          <select
+            aria-label="Video quality"
+            value={videoProfile}
+            onChange={(event) =>
+              setVideoProfile(event.target.value as 'economy' | 'quality')
+            }
+          >
+            <option value="economy">Economy · 720p</option>
+            <option value="quality">Quality · 1080p</option>
+          </select>
+        </label>
         <input
           ref={uploadInput}
           id={onPick ? undefined : 'workspace-media-upload'}
           type="file"
           multiple
-          accept="image/*"
+          accept="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
           hidden
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -447,6 +463,7 @@ export function MediaLibrary({
                   files,
                   currentFolder?.id || null,
                   shareUpload ? shareWithSlideId : undefined,
+                  videoProfile,
                 );
               });
           }}
@@ -748,9 +765,12 @@ export function MediaLibrary({
                     <img
                       draggable={false}
                       loading="lazy"
-                      src={a.url}
+                      src={a.kind === 'video' ? a.poster?.url : a.url}
                       alt={a.name}
                     />
+                    {a.kind === 'video' && (
+                      <span className="media-video-badge">VIDEO</span>
+                    )}
                   </button>
                   <div className="media-entry-info">
                     <button
@@ -762,7 +782,9 @@ export function MediaLibrary({
                       {a.name}
                     </button>
                     <span className="media-dimensions">
-                      {a.width} x {a.height} / {(a.bytes / 1024).toFixed(0)} KB
+                      {a.kind === 'video'
+                        ? `${Math.round((a.durationMs || 0) / 1000)} sec · ${(a.bytes / (1024 * 1024)).toFixed(1)} MB`
+                        : `${a.width} x ${a.height} / ${(a.bytes / 1024).toFixed(0)} KB`}
                     </span>
                     <span
                       className="media-folder-name"

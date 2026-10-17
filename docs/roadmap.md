@@ -9,6 +9,7 @@
 - Playlist entry timing, optional start/expiration windows, active-status indicators, and duplicate confirmation.
 - Explicit publication snapshots, pairing/assignment, rotation/blanking, readiness reports, refresh/restart/revocation.
 - Verified offline asset cache and prepared-frame playback; Pi installation and image-customization scripts.
+- Experimental cached video: bounded server optimization, poster-based editing, and local Android/Pi playback with a bounded cache. Real Onn playback acceptance remains outstanding; see [video support](video-support.md).
 - Optional off-site Cloudflare Tunnel/Access and existing WireGuard client configuration import.
 - Experimental opt-in WireGuard hosting, per-approved-screen peer registration, and first-boot Pi Wi-Fi hotspot enrollment. Native networking and image/hardware validation remain outstanding; see [acceptance checks](managed-wireguard.md#acceptance-checks).
 
@@ -19,6 +20,7 @@ These are acceptance requirements, not completed work or promised release dates:
 - Clean Docker build/start and volume backup/restore on a real Docker host.
 - Actual first boot, HDMI framing, Wi-Fi recovery, provisioning, and package compatibility on Raspberry Pi OS Lite.
 - Sustained Zero 2 W memory/transition measurements with representative heavy image/widget slides.
+- Onn 1080p video validation with both quality profiles, offline restart, interrupted downloads, and a 24-hour memory/dropped-frame run.
 - Real WireGuard and Cloudflare Access connectivity/credential-rotation validation.
 - Dependency/security review and first GitHub CI execution.
 
@@ -26,6 +28,6 @@ Automated Node/Python checks and focused desktop/mobile browser regressions exis
 
 ## Future work
 
-Potential milestones, subject to owner prioritization: player update delivery with rollback; bounded cache cleanup; better backup/restore; recurring schedules; richer snapshot-based widgets; MFA; remote screenshots; video support. These are not currently implemented. Individual accounts and group sharing are covered in [Users and groups](users-and-groups.md). Arbitrary embedded web pages and unbounded live widgets need special scrutiny on low-memory devices.
+Potential milestones, subject to owner prioritization: player update delivery with rollback; better backup/restore; recurring schedules; richer snapshot-based widgets; MFA; remote screenshots; synchronized video playback. These are not currently implemented. Individual accounts and group sharing are covered in [Users and groups](users-and-groups.md). Arbitrary embedded web pages and unbounded live widgets need special scrutiny on low-memory devices.
 
 Keep the core local-first: no mandatory hosted account, telemetry endpoint, subscription service, or cloud runtime dependency. Connectivity providers remain optional. Major release designation is reserved for an explicit owner decision, not the completion of any item on this page.

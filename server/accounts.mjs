@@ -232,12 +232,12 @@ export function createAccounts(db) {
           WHERE d.kind='device'
         )
         SELECT 1 FROM visible s, json_each(s.body, '$.layers') layer
-          WHERE s.kind='slide' AND json_extract(layer.value, '$.type')='image'
+          WHERE s.kind='slide' AND json_extract(layer.value, '$.type') IN ('image','video')
           AND json_extract(layer.value, '$.assetId')=@assetId
         UNION ALL
         SELECT 1 FROM playlists p, json_each(p.body, '$.published.items') item,
           json_each(item.value, '$.slide.layers') layer
-          WHERE json_extract(layer.value, '$.type')='image'
+          WHERE json_extract(layer.value, '$.type') IN ('image','video')
           AND json_extract(layer.value, '$.assetId')=@assetId
         LIMIT 1`,
       )
@@ -259,7 +259,7 @@ export function createAccounts(db) {
         return slides.some((slide) =>
           slide?.layers.some(
             (layer) =>
-              layer.type === 'image' &&
+              ['image', 'video'].includes(layer.type) &&
               !layer.removedMedia &&
               layer.assetId === id,
           ),

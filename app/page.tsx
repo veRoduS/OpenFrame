@@ -2619,7 +2619,7 @@ function Editor({
       delete next.starterText;
     }
     if (
-      current.type === 'image' &&
+      (current.type === 'image' || current.type === 'video') &&
       current.lockAspect !== false &&
       (patch.width !== undefined || patch.height !== undefined)
     ) {
@@ -2683,7 +2683,7 @@ function Editor({
         ? '#ffffff'
         : '#202923';
     const asset = assets.find((a) => a.id === assetId);
-    if (type === 'image' && asset) {
+    if ((type === 'image' || type === 'video') && asset) {
       layer.height =
         (((layer.width * slide.width) / slide.height) * asset.height) /
         asset.width;
@@ -2700,10 +2700,38 @@ function Editor({
     setMedia(null);
   }
   function chooseImage(assetId: string) {
-    if (media === 'add') add('image', assetId);
-    else if (media && typeof media === 'object') {
+    const asset = assets.find((entry) => entry.id === assetId);
+    if (!asset) return;
+    const kind = asset.kind === 'video' ? 'video' : 'image';
+    if (media === 'add') {
+      if (
+        kind === 'video' &&
+        slide.layers.some(
+          (layer) => layer.type === 'video' && !layer.removedMedia,
+        )
+      ) {
+        setError(
+          'A slide can contain one video. Replace the existing video first.',
+        );
+        return;
+      }
+      add(kind, assetId);
+    } else if (media && typeof media === 'object') {
       const target = slide.layers.find((layer) => layer.id === media.replace);
-      if (target?.type === 'image' && target.lockMode !== 'full') {
+      if (
+        (target?.type === 'image' || target?.type === 'video') &&
+        target.type !== kind
+      ) {
+        setError(
+          `Choose a ${target.type} to replace this layer. Image and video layers keep their media type.`,
+        );
+        return;
+      }
+      if (
+        (target?.type === 'image' || target?.type === 'video') &&
+        target.type === kind &&
+        target.lockMode !== 'full'
+      ) {
         change({
           ...slide,
           layers: slide.layers.map((layer) =>
@@ -2907,8 +2935,8 @@ function Editor({
                     <Type size={20} />
                   </IconButton>
                   <IconButton
-                    label="Add image"
-                    caption="Image"
+                    label="Add media"
+                    caption="Media"
                     onClick={() => setMedia('add')}
                   >
                     <ImagePlus size={20} />
@@ -2999,7 +3027,7 @@ function Editor({
                     ) : (
                       <Square size={16} />
                     )
-                  ) : layer.type === 'image' ? (
+                  ) : layer.type === 'image' || layer.type === 'video' ? (
                     <Images size={16} />
                   ) : layer.type === 'counter' ? (
                     <Timer size={16} />
@@ -3030,7 +3058,10 @@ function Editor({
                                   : layer.removedMedia
                                     ? 'Removed media'
                                     : assets.find((a) => a.id === layer.assetId)
-                                        ?.name || 'Image'}
+                                        ?.name ||
+                                      (layer.type === 'video'
+                                        ? 'Video'
+                                        : 'Image')}
                   </span>
                   <small>{slide.layers.length - i}</small>
                 </button>
@@ -3082,7 +3113,7 @@ function Editor({
                 interactive
                 cropMode={
                   cropMode &&
-                  current?.type === 'image' &&
+                  (current?.type === 'image' || current?.type === 'video') &&
                   current.fit === 'cover'
                 }
                 onCrop={(id, crop) =>
@@ -3203,8 +3234,10 @@ function Editor({
               >
                 <PropertySection
                   title={
-                    current.type === 'image'
-                      ? 'Source image'
+                    current.type === 'image' || current.type === 'video'
+                      ? current.type === 'video'
+                        ? 'Source video'
+                        : 'Source image'
                       : current.type === 'text'
                         ? 'Content'
                         : 'Widget settings'
@@ -3219,14 +3252,24 @@ function Editor({
                       onChange={(e) => patchLayer({ text: e.target.value })}
                     />
                   )}
-                  {current.type === 'image' && (
+                  {(current.type === 'image' || current.type === 'video') && (
                     <>
                       <div className="property-image-preview">
-                        {currentAsset && <img src={currentAsset.url} alt="" />}
+                        {currentAsset && (
+                          <img
+                            src={
+                              currentAsset.kind === 'video'
+                                ? currentAsset.poster?.url
+                                : currentAsset.url
+                            }
+                            alt=""
+                          />
+                        )}
                         <span>
                           {current.removedMedia
                             ? 'Removed media'
-                            : currentAsset?.name || 'Image'}
+                            : currentAsset?.name ||
+                              (current.type === 'video' ? 'Video' : 'Image')}
                         </span>
                       </div>
                       <button
@@ -3235,7 +3278,7 @@ function Editor({
                         onClick={() => setMedia({ replace: current.id })}
                       >
                         <ImagePlus size={16} />
-                        Replace image
+                        Replace {current.type === 'video' ? 'video' : 'image'}
                       </button>
                     </>
                   )}
@@ -3699,7 +3742,7 @@ function Editor({
                       </label>
                     ))}
                   </div>
-                  {current.type === 'image' && (
+                  {(current.type === 'image' || current.type === 'video') && (
                     <label
                       className="property-switch"
                       htmlFor="lock-image-aspect"
@@ -3736,10 +3779,14 @@ function Editor({
                 {current.type !== 'shape' && current.type !== 'data' && (
                   <PropertySection
                     title={
-                      current.type === 'image' ? 'Image display' : 'Typography'
+                      current.type === 'video'
+                        ? 'Video display'
+                        : current.type === 'image'
+                          ? 'Image display'
+                          : 'Typography'
                     }
                   >
-                    {current.type !== 'image' ? (
+                    {current.type !== 'image' && current.type !== 'video' ? (
                       <>
                         <label>
                           Font family
@@ -4029,10 +4076,10 @@ function Editor({
         <Modal
           title={
             media && typeof media === 'object'
-              ? 'Replace image'
-              : 'Add an image'
+              ? `Replace ${slide.layers.find((layer) => layer.id === media.replace)?.type === 'video' ? 'video' : 'image'}`
+              : 'Add media'
           }
-          description="Choose an image from your media library."
+          description="Choose an image or video from your media library."
           open={media !== null}
           onClose={() => setMedia(null)}
           wide

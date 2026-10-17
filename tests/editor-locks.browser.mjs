@@ -131,13 +131,13 @@ try {
     ).slides.find((item) => item.id === slide.id);
   }
   async function addImage() {
-    await page.getByRole('button', { name: 'Add image', exact: true }).click();
+    await page.getByRole('button', { name: 'Add media', exact: true }).click();
     assert.equal(
       await page
-        .getByRole('dialog', { name: 'Add an image', exact: true })
+        .getByRole('dialog', { name: 'Add media', exact: true })
         .locator('[data-slot="dialog-title"]')
         .textContent(),
-      'Add an image',
+      'Add media',
     );
     await page
       .getByRole('button', { name: 'Add Second.png', exact: true })

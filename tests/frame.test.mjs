@@ -22,6 +22,7 @@ function fixture(t) {
       this.clientWidth = 400;
       this.clientHeight = 200;
       this.decoded = deferred();
+      this.events = new Map();
       created.push(this);
     }
     append(element) {
@@ -39,6 +40,22 @@ function fixture(t) {
     }
     removeAttribute(key) {
       delete this[key];
+    }
+    addEventListener(type, callback) {
+      this.events.set(type, callback);
+    }
+    removeEventListener(type) {
+      this.events.delete(type);
+    }
+    pause() {
+      this.paused = true;
+    }
+    play() {
+      this.playCalled = true;
+      return Promise.resolve();
+    }
+    load() {
+      this.loadCalled = true;
     }
     decode() {
       this.decodeCalled = true;
@@ -417,4 +434,220 @@ void test('counter widgets do not schedule work until visible and release timers
   assert.equal([...timers.values()][0].delay, 86400000);
   controller.dispose();
   assert.equal(timers.size, 0);
+});
+
+async function preparedVideo(f, signal = new AbortController().signal) {
+  const promise = prepareFrame(
+    f.host,
+    item([layer('video', { assetId: 'clip' })]),
+    [
+      {
+        id: 'clip',
+        url: '/media/clip.mp4',
+        poster: { url: '/media/poster.webp' },
+      },
+    ],
+    0,
+    signal,
+  );
+  await flush();
+  const poster = f.created.filter((e) => e.tagName === 'img').at(-1);
+  poster.decoded.resolve();
+  f.font.resolve();
+  await flush();
+  await f.paint();
+  await f.paint();
+  return promise;
+}
+void test('video staging decodes only the poster and release precedes opening the next decoder', async (t) => {
+  const f = fixture(t);
+  const old = await preparedVideo(f);
+  assert.equal(f.created.filter((e) => e.tagName === 'video').length, 0);
+  old.activate();
+  const outgoing = f.created.find((e) => e.tagName === 'video');
+  assert.equal(outgoing.muted, true);
+  assert.equal(outgoing.loop, true);
+  assert.equal(outgoing.playsInline, true);
+  assert.equal(outgoing.src, '/media/clip.mp4');
+  assert.equal(outgoing.style.visibility, 'hidden');
+  outgoing.events.get('playing')();
+  assert.equal(outgoing.style.visibility, 'visible');
+  const incoming = await preparedVideo(f);
+  assert.equal(f.created.filter((e) => e.tagName === 'video').length, 1);
+  const activate = incoming.activate.bind(incoming);
+  incoming.activate = () => {
+    assert.equal(outgoing.paused, true);
+    assert.equal(outgoing.src, undefined);
+    assert.equal(outgoing.loadCalled, true);
+    activate();
+  };
+  incoming.element.animate = () => {
+    throw new Error('Videos must cut');
+  };
+  assert.equal(commitFrame(incoming, old, { type: 'fade' }), undefined);
+  assert.equal(f.host.children.length, 1);
+  incoming.dispose();
+  const videos = f.created.filter((e) => e.tagName === 'video');
+  assert.ok(
+    videos.every((e) => e.src === undefined && e.paused && e.loadCalled),
+  );
+});
+void test('video startup timeout and decode errors retain a poster and never reject frame preparation', async (t) => {
+  const f = fixture(t);
+  const frame = await preparedVideo(f);
+  const timers = new Map();
+  let id = 0;
+  t.mock.method(globalThis, 'setTimeout', (fn, delay) => {
+    assert.equal(delay, 5000);
+    timers.set(++id, fn);
+    return id;
+  });
+  t.mock.method(globalThis, 'clearTimeout', (key) => timers.delete(key));
+  frame.activate();
+  assert.equal(timers.size, 1);
+  [...timers.values()][0]();
+  assert.equal(timers.size, 0);
+  const video = f.created.find((e) => e.tagName === 'video');
+  assert.equal(video.src, undefined);
+  assert.equal(frame.element.children[0].dataset.videoState, 'poster');
+  frame.activate();
+  assert.equal(f.created.filter((e) => e.tagName === 'video').length, 1);
+  frame.dispose();
+});
+void test('aborting active video clears source, event listeners and startup watchdog', async (t) => {
+  const f = fixture(t),
+    abort = new AbortController();
+  const frame = await preparedVideo(f, abort.signal);
+  frame.activate();
+  const video = f.created.find((e) => e.tagName === 'video');
+  abort.abort();
+  assert.equal(video.src, undefined);
+  assert.equal(video.events.size, 0);
+  assert.equal(video.paused, true);
+  assert.equal(f.host.children.length, 0);
+});
+void test('rejected video autoplay shows the prepared poster without retrying the decoder', async (t) => {
+  const f = fixture(t);
+  const frame = await preparedVideo(f);
+  t.mock.method(f.host.constructor.prototype, 'play', () =>
+    Promise.reject(new Error('Playback unavailable')),
+  );
+  frame.activate();
+  await flush();
+  assert.equal(frame.element.children[0].dataset.videoState, 'poster');
+  assert.equal(f.created.find((e) => e.tagName === 'video').src, undefined);
+  frame.activate();
+  assert.equal(f.created.filter((e) => e.tagName === 'video').length, 1);
+  frame.dispose();
+});
+void test('a malformed slide cannot open multiple videos', async (t) => {
+  const f = fixture(t);
+  await assert.rejects(
+    prepareFrame(
+      f.host,
+      item([layer('video'), layer('video')]),
+      [],
+      0,
+      new AbortController().signal,
+    ),
+    /only one video/,
+  );
+  assert.equal(f.created.filter((e) => e.tagName === 'video').length, 0);
+  assert.equal(f.host.children.length, 0);
+});
+void test('a damaged poster still completes video preparation and can advance', async (t) => {
+  const f = fixture(t);
+  const promise = prepareFrame(
+    f.host,
+    item([layer('video', { assetId: 'clip' })]),
+    [
+      {
+        id: 'clip',
+        url: '/media/clip.mp4',
+        poster: { url: '/media/poster.webp' },
+      },
+    ],
+    0,
+    new AbortController().signal,
+  );
+  await flush();
+  f.created
+    .find((e) => e.tagName === 'img')
+    .decoded.reject(new Error('Corrupt poster'));
+  f.font.resolve();
+  await flush();
+  await f.paint();
+  await f.paint();
+  const frame = await promise;
+  assert.equal(frame.element.dataset.ready, 'true');
+  frame.dispose();
+});
+void test('removed video placeholders allow one active video and do not require media cuts alone', async (t) => {
+  const f = fixture(t);
+  const promise = prepareFrame(
+    f.host,
+    item([
+      layer('video', { removedMedia: true }),
+      layer('video', { assetId: 'clip' }),
+    ]),
+    [
+      {
+        id: 'clip',
+        url: '/media/clip.mp4',
+        poster: { url: '/media/poster.webp' },
+      },
+    ],
+    0,
+    new AbortController().signal,
+  );
+  await flush();
+  f.created.find((e) => e.tagName === 'img').decoded.resolve();
+  f.font.resolve();
+  await flush();
+  await f.paint();
+  await f.paint();
+  const frame = await promise;
+  assert.equal(frame.hasVideo, true);
+  frame.dispose();
+  const removed = prepareFrame(
+    f.host,
+    item([layer('video', { removedMedia: true })]),
+    [],
+    0,
+    new AbortController().signal,
+  );
+  await flush();
+  await f.paint();
+  await f.paint();
+  const placeholder = await removed;
+  assert.equal(placeholder.hasVideo, false);
+  placeholder.dispose();
+});
+void test('persistent waiting after playback starts uses one bounded watchdog and reports fallback', async (t) => {
+  const f = fixture(t),
+    frame = await preparedVideo(f),
+    timers = new Map();
+  let id = 0;
+  t.mock.method(globalThis, 'setTimeout', (fn, delay) => {
+    timers.set(++id, { fn, delay });
+    return id;
+  });
+  t.mock.method(globalThis, 'clearTimeout', (key) => timers.delete(key));
+  frame.activate();
+  const video = f.created.find((e) => e.tagName === 'video');
+  assert.equal([...timers.values()][0].delay, 5000);
+  video.events.get('playing')();
+  assert.equal(timers.size, 0);
+  video.events.get('waiting')();
+  video.events.get('stalled')();
+  assert.equal(timers.size, 1);
+  assert.equal([...timers.values()][0].delay, 8000);
+  video.events.get('playing')();
+  assert.equal(timers.size, 0);
+  video.events.get('waiting')();
+  [...timers.values()][0].fn();
+  assert.equal(timers.size, 0);
+  assert.match(frame.getError(), /stalled.*poster/);
+  assert.equal(video.src, undefined);
+  frame.dispose();
 });
