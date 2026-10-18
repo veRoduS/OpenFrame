@@ -2,6 +2,12 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.25.0] - 2026-10-18
+
+- Release cached video media and application maintenance improvements from local revisions 0.24.1–0.24.2.
+- Add bounded server-side optimization, poster-based editing, and silent H.264 playback from each player's local cache. Upgrade players to 0.11.0 before publishing video; existing image/widget publications retain their compatible schemas.
+- Harden upload rollback and resource limits, release unused fonts, remove obsolete tooling, and add browser/native Android/dependency checks to CI. See the [release notes](docs/release-notes/0.25.0.md); physical Onn/Pi video acceptance remains outstanding.
+
 ## [0.24.2] - 2026-10-17
 
 - Bound multipart fields/parts, return validation errors as 4xx, roll back failed image saves, and preserve font metadata when file removal fails.

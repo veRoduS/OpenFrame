@@ -4,6 +4,12 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.11.0] - 2026-10-18
+
+- Release bounded offline video playback and player resource cleanup from local revisions 0.10.15–0.10.16.
+- Support schema 5 video with verified 256 MiB local caches, byte ranges, one active decoder, silent loops, and poster fallback. Multiple players can replay independently without repeatedly downloading clips.
+- Bound Pi API responses and release unused custom fonts. Retain schemas 1–4 and existing pairing; physical Onn/Pi video and long-duration acceptance remain outstanding.
+
 ## [0.10.16] - 2026-10-17
 
 - Bound Pi API responses to Android's 4 MiB limit, preserving the current cached publication on oversized responses.
