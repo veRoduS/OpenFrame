@@ -1,5 +1,15 @@
 # Validation record
 
+## GitHub milestone server 0.25.0 / player 0.11.0
+
+Checked on October 18, 2026: the approved source milestone preserves both local revisions below. The annotated `v0.25.0` tag points to `aefa9264da9a6c89528e11b36e6e01f5eb311942`. Local milestone version/compatibility/repository checks, lint, TypeScript, production build, and 25 release-tool tests pass.
+
+The first hosted run exposed a workflow context error before tests started: browser tool paths used `runner.temp` in job-level environment settings. Moving path initialization into a step fixed it. [Main-branch CI](https://github.com/veRoduS/OpenFrame/actions/runs/39136730828) and [the corrected publication workflow](https://github.com/veRoduS/OpenFrame/actions/runs/39136730872) passed code/dependency checks, Node/Python tests, all seven selected Chromium suites, native Android JVM tests, and native AMD64/ARM64 Docker startup, image codec, login, replacement, and managed WireGuard helper checks. Publication checks use the immutable tagged source with the corrected workflow definition from main.
+
+[Android publication](https://github.com/veRoduS/OpenFrame/actions/runs/39136603330) passed `testDebugUnitTest`, `lintRelease`, `assembleRelease`, and APK package/alignment/signature verification using the existing key. The published player 0.11.0 archive and latest metadata identify source commit `aefa9264da9a6c89528e11b36e6e01f5eb311942`; the APK SHA-256 is `442b1ac8bfedb1f4a37d2d5ab41bea230f7e79541a214db0d108184052c8f839`.
+
+These hosted checks close the CI, native ARM64 container, and signed APK build gaps recorded during local work. Physical Onn/Pi installation, decoding, offline power cycles, and 24-hour playback acceptance remain outstanding. Upgrade players before assigning schema 5 video; see the [release notes](release-notes/0.25.0.md).
+
 ## Local server 0.24.2 / player 0.10.16: project health cleanup
 
 Checked on October 17, 2026 (America/Chicago): all 228 Node tests, 97 Python tests, and 33 native Java tests pass. Node coverage includes real Python-agent integration and FFmpeg conversion, bounded multipart fields, atomic image-save rollback with injected database/grant failures, and consistent font deletion. Player tests cover the Pi's 4 MiB response cap, preserved offline state, shared font references, and cancelled/late font loads. Native Java compiles against the official API 35 platform; no native implementation changed in this revision.

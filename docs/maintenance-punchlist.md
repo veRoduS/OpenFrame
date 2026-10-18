@@ -2,7 +2,8 @@
 
 Review started October 17, 2026 (America/Chicago), from local commit `ad73b70`.
 Scope: tracked source, dependencies, automated checks, player resource lifecycle,
-upload consistency, and documentation. Changes stay local. This is a targeted
+upload consistency, and documentation. The reviewed changes are included in
+the approved server 0.25.0 / player 0.11.0 milestone. This is a targeted
 engineering review, not a claim of exhaustive security or hardware acceptance.
 
 | ID | Priority | Finding and intended result | Owner | Status |
@@ -14,7 +15,7 @@ engineering review, not a claim of exhaustive security or hardware acceptance.
 | H5 | Medium | Release player font faces when no visible/prepared frame uses them, including cancelled pending loads. | Sol 6.1, player | Done; unit and real-font browser checks pass |
 | H6 | Medium | Ignore stale editor font-load completions after deletion/replacement or unmount. | Luna, frontend | Done; deferred-load browser regression passes |
 | H7 | High | Patch source-map-js and formatter/tinypool; remove shadcn's unused CLI dependency tree, including vulnerable braces and MCP SDK. | Root + Luna | Done; full and production audits report zero advisories |
-| H8 | Medium | Require FFmpeg, dependency audit, Chromium regressions, and Android JVM checks in CI. | Sol 6.1, automation + Root | Configured and locally validated; GitHub execution awaits an authorized push |
+| H8 | Medium | Require FFmpeg, dependency audit, Chromium regressions, and Android JVM checks in CI. | Sol 6.1, automation + Root | Done; hosted code, Chromium, Android JVM, and native AMD64/ARM64 checks pass |
 | H9 | Low | Remove the one-off 0.16.0 publication retry workflow; retain current release workflows. | Root | Done |
 | H10 | Medium | Correct stale current-state documentation and record repeatable maintenance/acceptance checks. | Root | Done |
 | H11 | Low | Replace leftover image-only library/search/batch/delete wording now that the library supports video. | Root | Done |
@@ -42,6 +43,8 @@ optimization, poster/media integrity, container replacement, and stopped-volume
 backup/restore. Disposable containers, volumes, and archives were removed; no
 deployment or publication occurred.
 
+The approved 0.25.0 milestone subsequently passed [hosted release checks](https://github.com/veRoduS/OpenFrame/actions/runs/39136730872), including both native container architectures. [Android 0.11.0 publication](https://github.com/veRoduS/OpenFrame/actions/runs/39136603330) passed JVM tests, release lint, signed build, and existing-signer verification. See the [validation record](validation.md) for the release evidence and remaining device acceptance.
+
 ## Keep deliberately
 
 - Account migrations, old player schema support, and the small `create-superadmin`
@@ -59,8 +62,7 @@ deployment or publication occurred.
 ## Acceptance outside this source cleanup
 
 - Physical Onn/Pi video and offline power-cycle testing, including a 24-hour run.
-- Signed APK build/installation with the existing key.
-- Native ARM64 container acceptance and execution of the updated GitHub CI jobs;
-  local amd64 build/start and backup/restore checks have passed.
+- Physical installation of the published signed APK; the existing-key build and
+  publication have passed.
 - Consider extracting cohesive editor/server modules when modifying those areas;
   avoid a broad rewrite of large working modules solely to reduce line counts.
