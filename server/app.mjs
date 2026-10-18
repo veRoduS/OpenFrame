@@ -1687,7 +1687,13 @@ export function createApp({
   });
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+    limits: {
+      fileSize: 15 * 1024 * 1024,
+      files: 1,
+      fields: 2,
+      fieldSize: 1024,
+      parts: 3,
+    },
   });
   const videos = mountVideos({
     app,
@@ -1745,7 +1751,13 @@ export function createApp({
   });
   const fontUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+    limits: {
+      fileSize: 10 * 1024 * 1024,
+      files: 1,
+      fields: 1,
+      fieldSize: 1024,
+      parts: 2,
+    },
   });
   const fontFormats = {
     woff2: { signature: 'wOF2', mime: 'font/woff2' },
@@ -1845,8 +1857,19 @@ export function createApp({
         409,
         'Remove this font from slides and published playlists first',
       );
-    db.prepare('DELETE FROM custom_fonts WHERE id=?').run(req.params.id);
-    unlinkSync(path.join(root, 'media', font.filename));
+    db.exec('SAVEPOINT font_delete');
+    try {
+      db.prepare('DELETE FROM custom_fonts WHERE id=?').run(req.params.id);
+      try {
+        unlinkSync(path.join(root, 'media', font.filename));
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      db.exec('RELEASE font_delete');
+    } catch (error) {
+      db.exec('ROLLBACK TO font_delete; RELEASE font_delete');
+      throw error;
+    }
     res.json({ ok: true });
   });
   app.post('/api/assets', admin, upload.single('file'), async (req, res) => {
@@ -1894,26 +1917,41 @@ export function createApp({
     const filename = `${id}.webp`;
     if (folderId) requireRecord('folder', folderId);
     writeFileSync(path.join(root, 'media', filename), buffer);
-    const asset = put('asset', {
-      id,
-      filename,
-      name: req.file.originalname.slice(0, 200),
-      width: info.width,
-      height: info.height,
-      bytes: buffer.length,
-      sha256: hash(buffer),
-      url: `/media/${filename}`,
-      tags: [],
-      folderId,
-      createdAt: new Date().toISOString(),
-    });
-    for (const grant of slideGrants)
-      db.prepare('INSERT OR IGNORE INTO resource_grants VALUES (?,?,?,?)').run(
-        'asset',
-        id,
-        grant.userId,
-        grant.groupId,
-      );
+    let asset;
+    try {
+      db.exec('SAVEPOINT image_asset');
+      try {
+        asset = put('asset', {
+          id,
+          filename,
+          name: req.file.originalname.slice(0, 200),
+          width: info.width,
+          height: info.height,
+          bytes: buffer.length,
+          sha256: hash(buffer),
+          url: `/media/${filename}`,
+          tags: [],
+          folderId,
+          createdAt: new Date().toISOString(),
+        });
+        for (const grant of slideGrants)
+          db.prepare(
+            'INSERT OR IGNORE INTO resource_grants VALUES (?,?,?,?)',
+          ).run('asset', id, grant.userId, grant.groupId);
+        db.exec('RELEASE image_asset');
+      } catch (error) {
+        db.exec('ROLLBACK TO image_asset; RELEASE image_asset');
+        throw error;
+      }
+    } catch (error) {
+      try {
+        unlinkSync(path.join(root, 'media', filename));
+      } catch (cleanupError) {
+        if (cleanupError.code !== 'ENOENT')
+          console.error('Unused image file could not be removed', cleanupError);
+      }
+      throw error;
+    }
     res.status(201).json(asset);
   });
   function validateFolder(id) {
@@ -2317,7 +2355,9 @@ export function createApp({
         ? 400
         : err.code === 'LIMIT_FILE_SIZE'
           ? 413
-          : err.status || 500;
+          : err instanceof multer.MulterError
+            ? 400
+            : err.status || 500;
     if (status === 500) console.error(err);
     res.status(status).json({
       ...(req.path.startsWith('/api/data-feeds')

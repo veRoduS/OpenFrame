@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import 'shadcn/tailwind.css';
+@import './base-ui-variants.css';
 .accounts {
   display: grid;
   gap: 24px;

@@ -117,7 +117,7 @@ To roll back, stop the failed deployment and use the previous source tag. Do not
 | Counter/schedule time is wrong | Pi system date/time, timezone, and time synchronization after boot |
 | Transition holds an old slide | Inspect preparation error/delayed-switch count; reduce slide complexity and test on hardware |
 | Offline first boot is blank | Initial provisioning and first publication download require connectivity |
-| Pi fills its SD card | Cached assets are retained; monitor disk use and plan maintenance |
+| Player reports a full cache | Media cache is bounded to 256 MiB including current/incoming publications; reduce publication size and check free storage. Never delete the active cache during an update |
 
 Pi diagnostics: `sudo systemctl status openframe-agent`, `sudo journalctl -u openframe-agent -n 100`, and `sudo journalctl -u openframe-firstboot -n 100`. WireGuard/Cloudflare-specific checks are in their guides. Do not attach unredacted logs or configuration to public issues. For administrator recovery, follow [Users and groups](users-and-groups.md#upgrade-and-recovery); do not delete your database.
 

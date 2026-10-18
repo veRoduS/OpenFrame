@@ -1,5 +1,17 @@
 # Validation record
 
+## Local server 0.24.2 / player 0.10.16: project health cleanup
+
+Checked on October 17, 2026 (America/Chicago): all 228 Node tests, 97 Python tests, and 33 native Java tests pass. Node coverage includes real Python-agent integration and FFmpeg conversion, bounded multipart fields, atomic image-save rollback with injected database/grant failures, and consistent font deletion. Player tests cover the Pi's 4 MiB response cap, preserved offline state, shared font references, and cancelled/late font loads. Native Java compiles against the official API 35 platform; no native implementation changed in this revision.
+
+Ten Chromium suites pass: media uploads, editor locks, player video, player startup, transitions, player fonts, editor font settings, library selection, workspace UI, and responsive UI layout. These cover real font reuse/disposal and deferred stale editor loads as well as the retained Base UI state styles after removing the shadcn CLI dependency. A clean frozen install, lint, TypeScript, production build, formatting of changed implementation files, shell syntax, version/repository checks, and compatible engineering review pass.
+
+The initial full dependency audit reported five development-tool advisories (three high, two critical); production packages had none. Removing the unused generator dependency tree and updating oxfmt/source-map-js reduces the audited package total from 529 to 301. Repeated full and production-only audits report zero known vulnerabilities. CI now explicitly provisions FFmpeg, runs selected browser and native Android regressions without signing, and gates high/critical dependency advisories. The obsolete one-time 0.16.0 release-retry workflow is removed.
+
+A local native amd64 Docker build passes using an ignored Dockerfile adapted for the session's CA secret mounts and checkout read permissions. Disposable containers with external networking disabled verify server 0.24.2 health/UI, generated administrator login, real H.264 video optimization/audio removal, poster/checksum integrity, persistence after container replacement, and stopped-volume backup/restore. Temporary containers, volumes, and the backup archive were removed. The production Dockerfile and Compose configuration are unchanged.
+
+This is local source work; no deployment, source push, GitHub workflow execution, or signed APK publication occurred. Physical Onn/Pi and long-duration acceptance, the existing-key APK build/install, and native ARM64 container validation remain outstanding. See the completed [maintenance punchlist](maintenance-punchlist.md) for findings, retained compatibility files, and follow-up work.
+
 ## Local server 0.24.1 / player 0.10.15: cached video framework
 
 Checked on 2026-10-17: all 221 Node tests, 96 Python tests, and 33 native Java tests pass. Node coverage includes real FFmpeg encoding, real Python-agent integration, job ownership and cancellation, queue bounds, permissions changing during conversion, video/poster publication and deletion, and authorized byte ranges. Synthetic landscape/portrait inputs verify H.264, stripped audio, frame-rate/resolution limits, poster generation, and duration rejection. Native tests cover offline verified caches and local bounded range streams; all Android production Java compiles against the official API 35 platform with the Java 8 target.

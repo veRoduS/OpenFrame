@@ -4,6 +4,11 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.10.16] - 2026-10-17
+
+- Bound Pi API responses to Android's 4 MiB limit, preserving the current cached publication on oversized responses.
+- Reference-count custom fonts across visible/prepared frames and release unused faces, including late completions after cancellation. Existing schemas 1–5 and media contracts remain supported.
+
 ## [0.10.15] - 2026-10-17
 
 - Cache and play silent video locally with bounded storage, byte ranges, lifecycle cleanup, and poster fallback.

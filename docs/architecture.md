@@ -3,7 +3,7 @@
 The experimental [Android TV player](android-tv.md) lives in `player/android/`. Its native Java agent implements enrollment/sync and private, checksum-verified media caching. A restricted WebView serves the shared `player/web/` assets from an intercepted app-only HTTPS origin; a bounded telemetry bridge reports playback without exposing device credentials. Android packaging is independent of the Pi Python agent and the server image.
 
 ```text
-Administrator browser -> Express API -> SQLite + processed images
+Management browser -> Express API -> SQLite + processed media
                               ^
                               | outbound polling from each player
                               |
@@ -34,6 +34,8 @@ NWS weather uses a separate persisted `weather_cache` table and a timestamped `w
 `DATA_DIR` contains `openframe.sqlite` (with WAL/SHM sidecars while active) and `media/`. SQLite records contain JSON slide/playlist/device/asset/folder data. Users, user sessions, groups, memberships, invitation hashes, resource ownership, and sharing grants have separate tables. `server/accounts.mjs` binds authenticated requests to an asynchronous request context; record reads and writes check access in that context. Player requests keep device-token authorization. Global reference checks prevent deletion of content still used outside the requesting user's library. Uploaded images become bounded-resolution WebP assets. Server-side publication snapshots contain copied slide/configuration/asset metadata, independent of later draft edits. See [users and migration](users-and-groups.md).
 
 The Pi defaults to `/var/lib/openframe` for identity, cached state, manifests, and media. Its service serves only `127.0.0.1:8080`. Cache content survives server/network outages and offline restarts after a successful first download. Both agents use a 256 MiB media budget, retain current and incoming assets during an update, and prune obsolete files. A changed server origin requires fresh approval.
+
+Both agents cap API JSON responses at 4 MiB and preserve the previous publication if a response exceeds that limit. Custom font faces are shared by current/prepared frames and removed from the browser when the final frame releases them, including cancelled loads.
 
 Video uploads use disk-backed temporary storage and one bounded FFmpeg worker. The server generates silent H.264 MP4 files and WebP posters, retaining neither original inputs nor incomplete results. Video publications use schema 5 and include both files for verified offline caching. The shared renderer stages posters, opens one video source only when visible, and releases it before the next video starts. Video transitions use Cut; errors fall back to a poster and normal playlist timing continues. Local Android and Pi media serving supports byte ranges. See [video support](video-support.md).
 

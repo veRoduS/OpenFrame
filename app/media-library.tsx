@@ -330,8 +330,8 @@ export function MediaLibrary({
     folder: 'New folder',
     'rename-folder': 'Edit folder',
     asset: 'Image details',
-    move: 'Move selected images',
-    tags: 'Tag selected images',
+    move: 'Move selected media',
+    tags: 'Tag selected media',
   };
   const readOnlyAsset = mode === 'asset' && !!activeAsset?.readOnly;
   return (
@@ -343,7 +343,7 @@ export function MediaLibrary({
         groups={[]}
         statuses={[]}
         filter={{ query: search, group: '', status: tag }}
-        searchPlaceholder="Search images or tags"
+        searchPlaceholder="Search media or tags"
         onChange={(next) => {
           setSearch(next.query);
           setTag(next.status);
@@ -374,7 +374,7 @@ export function MediaLibrary({
           <label className="slide-sort-control">
             Sort by
             <select
-              aria-label="Sort images"
+              aria-label="Sort media"
               value={sort}
               onChange={(e) => setSort(e.target.value)}
             >
@@ -629,7 +629,7 @@ export function MediaLibrary({
                 <span className="media-folder-path">{currentFolderPath}</span>
               )}
             </div>
-            <span>{filtered.length} images</span>
+            <span>{filtered.length} media files</span>
             {isAdmin && currentFolder && !onPick && (
               <>
                 <button disabled={busy} onClick={() => open('rename-folder')}>
@@ -696,7 +696,7 @@ export function MediaLibrary({
                     Tags
                   </button>
                   <Tool
-                    label="Delete selected images"
+                    label="Delete selected media"
                     disabled={busy}
                     onClick={() => {
                       setError('');
@@ -836,8 +836,8 @@ export function MediaLibrary({
               <Images size={32} />
               <p>
                 {search || tag
-                  ? 'No matching images.'
-                  : 'No images in this folder.'}
+                  ? 'No matching media.'
+                  : 'No media in this folder.'}
               </p>
               {(search || tag) && (
                 <button
@@ -855,7 +855,7 @@ export function MediaLibrary({
                 disabled={busy}
               >
                 <Upload size={16} />
-                Upload images
+                Upload media
               </button>
             </div>
           )}
@@ -873,11 +873,11 @@ export function MediaLibrary({
             {readOnlyAsset
               ? 'This image is shared through content and is read-only.'
               : mode === 'tags'
-                ? `${selection.length} images selected`
+                ? `${selection.length} media files selected`
                 : mode === 'asset'
                   ? 'Name, folder, and tags'
                   : mode === 'move'
-                    ? `${selection.length} images selected`
+                    ? `${selection.length} media files selected`
                     : 'Media folder'}
           </DialogDescription>
           <form
@@ -1009,12 +1009,12 @@ export function MediaLibrary({
           <AlertDialogTitle>
             {deleting === 'folder'
               ? `Delete ${currentFolder?.name}?`
-              : `Delete ${selection.length} selected images?`}
+              : `Delete ${selection.length} selected media files?`}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {deleting === 'folder'
-              ? 'A folder must have no images or subfolders before it can be deleted.'
-              : 'Slides and published playlists will show a “Removed media” placeholder wherever these images were used.'}
+              ? 'A folder must have no media or subfolders before it can be deleted.'
+              : 'Slides and published playlists will show a “Removed media” placeholder wherever this media was used.'}
           </AlertDialogDescription>
           {error && (
             <p role="alert" className="inline-error">

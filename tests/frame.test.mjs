@@ -11,6 +11,7 @@ const flush = async () => {
 function fixture(t) {
   const created = [],
     frames = [],
+    faces = [],
     font = deferred();
   class Element {
     constructor(tag) {
@@ -62,10 +63,21 @@ function fixture(t) {
       return this.decoded.promise;
     }
   }
+  const fontSet = new Set();
+  fontSet.ready = font.promise;
   const globals = {
     document: {
       createElement: (tag) => new Element(tag),
-      fonts: { ready: font.promise },
+      fonts: fontSet,
+    },
+    FontFace: class {
+      constructor(family, source) {
+        Object.assign(this, { family, source, pending: deferred() });
+        faces.push(this);
+      }
+      load() {
+        return this.pending.promise;
+      }
     },
     innerWidth: 1920,
     innerHeight: 1080,
@@ -84,7 +96,7 @@ function fixture(t) {
     frames.splice(0).forEach((cb) => cb());
     await flush();
   };
-  return { host, font, created, paint };
+  return { host, font, created, paint, faces, fontSet };
 }
 const layer = (type, extra = {}) => ({
   id: type,
@@ -107,6 +119,147 @@ const item = (layers) => ({
     height: 1080,
     layers,
   },
+});
+
+const customFont = (id) => ({ id, kind: 'font', url: `/media/${id}.woff2` });
+const fontItem = (id) =>
+  item([layer('image', { removedMedia: true, fontId: id })]);
+async function finishFontFrame(f, pending) {
+  f.font.resolve();
+  await flush();
+  await f.paint();
+  await f.paint();
+  return pending;
+}
+
+void test('current and prepared frames share fonts until their last disposal', async (t) => {
+  const f = fixture(t),
+    abort = new AbortController();
+  const current = prepareFrame(
+    f.host,
+    fontItem('shared'),
+    [customFont('shared')],
+    0,
+    abort.signal,
+  );
+  const prepared = prepareFrame(
+    f.host,
+    fontItem('shared'),
+    [customFont('shared')],
+    0,
+    new AbortController().signal,
+  );
+  assert.equal(f.faces.length, 1);
+  f.faces[0].pending.resolve(f.faces[0]);
+  const [visible, next] = await Promise.all([
+    finishFontFrame(f, current),
+    finishFontFrame(f, prepared),
+  ]);
+  visible.activate();
+  assert.equal(f.fontSet.size, 1);
+  abort.abort();
+  visible.dispose();
+  assert.equal(f.fontSet.size, 1);
+  next.dispose();
+  next.dispose();
+  assert.equal(f.fontSet.size, 0);
+  const replacement = prepareFrame(
+    f.host,
+    fontItem('shared'),
+    [customFont('shared')],
+    0,
+    new AbortController().signal,
+  );
+  assert.equal(f.faces.length, 2);
+  f.faces[1].pending.resolve(f.faces[1]);
+  (await finishFontFrame(f, replacement)).dispose();
+  assert.equal(f.fontSet.size, 0);
+});
+
+void test('cancelled pending fonts cannot resurrect or remove a replacement load', async (t) => {
+  const f = fixture(t),
+    abort = new AbortController();
+  const cancelled = prepareFrame(
+    f.host,
+    fontItem('race'),
+    [customFont('race')],
+    0,
+    abort.signal,
+  );
+  abort.abort();
+  await assert.rejects(cancelled, { name: 'AbortError' });
+  const replacement = prepareFrame(
+    f.host,
+    fontItem('race'),
+    [customFont('race')],
+    0,
+    new AbortController().signal,
+  );
+  assert.equal(f.faces.length, 2);
+  f.faces[0].pending.resolve(f.faces[0]);
+  await flush();
+  assert.equal(f.fontSet.size, 0);
+  f.faces[1].pending.resolve(f.faces[1]);
+  const frame = await finishFontFrame(f, replacement);
+  assert.deepEqual([...f.fontSet], [f.faces[1]]);
+  frame.dispose();
+  assert.equal(f.fontSet.size, 0);
+});
+
+void test('late rejected cancelled font leaves a shared replacement load intact', async (t) => {
+  const f = fixture(t),
+    abort = new AbortController();
+  const cancelled = prepareFrame(
+    f.host,
+    fontItem('retry'),
+    [customFont('retry')],
+    0,
+    abort.signal,
+  );
+  abort.abort();
+  await assert.rejects(cancelled, { name: 'AbortError' });
+  const first = prepareFrame(
+    f.host,
+    fontItem('retry'),
+    [customFont('retry')],
+    0,
+    new AbortController().signal,
+  );
+  f.faces[0].pending.reject(new Error('Old request failed'));
+  await flush();
+  const second = prepareFrame(
+    f.host,
+    fontItem('retry'),
+    [customFont('retry')],
+    0,
+    new AbortController().signal,
+  );
+  assert.equal(f.faces.length, 2);
+  f.faces[1].pending.resolve(f.faces[1]);
+  const frames = await Promise.all([
+    finishFontFrame(f, first),
+    finishFontFrame(f, second),
+  ]);
+  frames.forEach((frame) => frame.dispose());
+  assert.equal(f.fontSet.size, 0);
+});
+
+void test('font preparation failure releases faces acquired earlier in the frame', async (t) => {
+  const f = fixture(t);
+  const pending = prepareFrame(
+    f.host,
+    item([
+      layer('image', { removedMedia: true, fontId: 'available' }),
+      layer('image', { removedMedia: true, fontId: 'missing' }),
+    ]),
+    [customFont('available')],
+    0,
+    new AbortController().signal,
+  );
+  f.faces[0].pending.resolve(f.faces[0]);
+  await assert.rejects(pending, /font is missing/);
+  assert.equal(f.fontSet.size, 0);
+  assert.equal(f.host.children.length, 0);
 });
 
 void test('frame waits for the actual image nodes, widgets, fonts and layout before committing', async (t) => {

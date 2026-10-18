@@ -18,7 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.10.15'
+VERSION = '0.10.16'
+JSON_LIMIT = 4 * 1024 * 1024
 MEDIA_LIMIT = 25 * 1024 * 1024
 CACHE_LIMIT = 256 * 1024 * 1024
 MEDIA_NAME = r'[a-f0-9-]{36}\.(?:webp|mp4|woff2|woff|ttf|otf)'
@@ -157,7 +158,10 @@ class Agent:
             headers['Authorization'] = 'Bearer ' + self.credentials['token']
         request = urllib.request.Request(self.server + endpoint, data=json.dumps(body).encode() if body is not None else None, headers=headers)
         with self.opener.open(request, timeout=10) as response:
-            return json.load(response)
+            data = response.read(JSON_LIMIT + 1)
+        if len(data) > JSON_LIMIT:
+            raise ValueError('Player API response exceeds size limit')
+        return json.loads(data)
 
     @staticmethod
     def validate_asset(asset):

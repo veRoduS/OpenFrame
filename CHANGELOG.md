@@ -2,6 +2,12 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.24.2] - 2026-10-17
+
+- Bound multipart fields/parts, return validation errors as 4xx, roll back failed image saves, and preserve font metadata when file removal fails.
+- Ignore stale editor font loads. Replace the installed shadcn CLI with the small attributed CSS variant subset the UI uses; patch formatter/source-map tooling. The dependency audit drops from 529 to 301 packages with no reported advisories.
+- Remove the obsolete 0.16.0 release retry workflow. Add FFmpeg, browser, native Android, and high-severity dependency checks to CI; document the [maintenance punchlist](docs/maintenance-punchlist.md).
+
 ## [0.24.1] - 2026-10-17
 
 - Add bounded video optimization jobs, poster-based media editing, and schema 5 publications.

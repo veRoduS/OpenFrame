@@ -250,6 +250,7 @@ export default function App() {
   );
   const [library, setLibrary] = useState<Library>(emptyLibrary);
   const [fonts, setFonts] = useState<CustomFont[]>([]);
+  const loadedFontUrls = useRef(new Map<string, string>());
   const [view, setView] = useState<View>(workspaceView);
   const [libraryState, setLibraryState] = useState<
     'loading' | 'ready' | 'failed'
@@ -452,8 +453,24 @@ export default function App() {
     if (view !== 'media')
       history.replaceState(history.state, '', routeFor(view));
   }, [auth, view, routeFor, editing, playlist, preview]);
-  const refreshFonts = async () =>
-    setFonts(await api<CustomFont[]>('/api/fonts'));
+  const refreshFonts = async () => {
+    const next = await api<CustomFont[]>('/api/fonts');
+    setFonts((current) =>
+      current.length === next.length &&
+      current.every((font, index) => {
+        const other = next[index];
+        return (
+          font.id === other.id &&
+          font.family === other.family &&
+          font.format === other.format &&
+          font.bytes === other.bytes &&
+          font.url === other.url
+        );
+      })
+        ? current
+        : next,
+    );
+  };
   const run = (action: () => Promise<void>, message = '') => {
     void (async () => {
       setError('');
@@ -492,23 +509,55 @@ export default function App() {
     if (auth?.authenticated) refreshFonts().catch((e) => setError(e.message));
   }, [auth]);
   useEffect(() => {
+    let cancelled = false;
+    const wanted = new Map(
+      fonts.map((font) => [customFontAlias(font.id), font]),
+    );
     for (const face of document.fonts) {
       if (!face.family.startsWith('OpenFrameFont_')) continue;
-      if (!fonts.some((font) => customFontAlias(font.id) === face.family))
+      const font = wanted.get(face.family);
+      const loadedUrl = loadedFontUrls.current.get(face.family);
+      if (!font || (loadedUrl && loadedUrl !== font.url)) {
         document.fonts.delete(face);
+        loadedFontUrls.current.delete(face.family);
+      } else if (!loadedUrl) {
+        // Preserve a face installed before this effect (for example after HMR).
+        loadedFontUrls.current.set(face.family, font.url);
+      }
     }
     for (const font of fonts) {
-      if (
-        [...document.fonts].some(
-          (face) => face.family === customFontAlias(font.id),
-        )
-      )
-        continue;
-      void new FontFace(customFontAlias(font.id), `url("${font.url}")`)
+      const alias = customFontAlias(font.id);
+      if (loadedFontUrls.current.get(alias) === font.url) continue;
+      void new FontFace(alias, `url("${font.url}")`)
         .load()
-        .then((face) => document.fonts.add(face))
-        .catch(() => setError(`Could not load the ${font.family} font file.`));
+        .then((face) => {
+          if (
+            cancelled ||
+            !fonts.some(
+              (current) =>
+                customFontAlias(current.id) === alias &&
+                current.url === font.url,
+            )
+          )
+            return;
+          document.fonts.add(face);
+          loadedFontUrls.current.set(alias, font.url);
+        })
+        .catch(() => {
+          if (
+            !cancelled &&
+            fonts.some(
+              (current) =>
+                customFontAlias(current.id) === alias &&
+                current.url === font.url,
+            )
+          )
+            setError(`Could not load the ${font.family} font file.`);
+        });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [fonts]);
   useEffect(() => {
     if (!auth?.authenticated || view !== 'devices') return;
@@ -979,7 +1028,7 @@ export default function App() {
                               ? 'WORKSPACE CONFIGURATION'
                               : view === 'password'
                                 ? 'MY ACCOUNT'
-                                : 'IMAGE LIBRARY'}
+                                : 'MEDIA LIBRARY'}
                   </span>
                   <h1>{viewInfo[view].title}</h1>
                 </div>

@@ -32,11 +32,18 @@ jobs:
           python-version: '3.13'
       - run: npm install --global pnpm@11.19.0
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
       - run: pnpm version:check
       - run: pnpm compatibility:check
       - run: pnpm repository:check
       - run: pnpm typecheck
       - run: pnpm lint
+      - name: Install and verify video test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - run: pnpm test
         env:
           OPENFRAME_PYTHON: python3
@@ -47,6 +54,92 @@ jobs:
           bash -n player/install.sh
           bash -n player/firstboot.sh
           bash -n player/build-image.sh
+
+  browser:
+    name: Browser regressions (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_TOOLS: ${{ runner.temp }}/openframe-browser-tools
+      OPENFRAME_PLAYWRIGHT: file://${{ runner.temp }}/openframe-browser-tools/node_modules/playwright/index.mjs
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm install --global pnpm@11.19.0
+      - run: pnpm install --frozen-lockfile
+      - name: Install and verify video test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
+      - name: Install isolated Playwright and Chromium
+        run: |
+          npm install --prefix "$PLAYWRIGHT_TOOLS" --no-audit --no-fund --ignore-scripts --save-exact playwright@1.58.2
+          node "$PLAYWRIGHT_TOOLS/node_modules/playwright/cli.js" install --with-deps chromium
+          node --input-type=module <<'JS'
+          import {appendFileSync} from 'node:fs';
+          const {chromium} = await import(process.env.OPENFRAME_PLAYWRIGHT);
+          appendFileSync(process.env.GITHUB_ENV, `OPENFRAME_BROWSER_EXECUTABLE=${chromium.executablePath()}\n`);
+          JS
+      - run: pnpm build
+      # Keep these sequential: each owns its temporary server/database/browser.
+      - name: Media upload progress and persistence
+        timeout-minutes: 4
+        run: node tests/media-uploads.browser.mjs
+      - name: Editor locks and image replacement
+        timeout-minutes: 4
+        run: node tests/editor-locks.browser.mjs
+      - name: Player video decode and lifecycle
+        timeout-minutes: 4
+        run: node tests/player-video.browser.mjs
+      - name: Player custom-font lifecycle
+        timeout-minutes: 4
+        run: node tests/player-fonts.browser.mjs
+      - name: Editor custom-font lifecycle
+        timeout-minutes: 4
+        run: node tests/font-settings.browser.mjs
+      - name: Player startup and browser timers
+        timeout-minutes: 4
+        run: node tests/player-startup.browser.mjs
+      - name: Transition rendering and cleanup
+        timeout-minutes: 4
+        run: node tests/transitions.browser.mjs
+
+  android:
+    name: Android native JVM tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      # Native integration tests start the real server with disposable data.
+      - run: npm install --global pnpm@11.19.0
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Run debug JVM tests without release signing
+        working-directory: player/android
+        run: ./gradlew --no-daemon --max-workers=2 testDebugUnitTest
 
   docker:
     name: Docker (${{ matrix.arch }})

@@ -2,7 +2,7 @@
 
 ## Available in source
 
-- Single-administrator management and Docker-hosted server with persistent SQLite/media storage.
+- Individual accounts, group sharing, administrator controls, and a Docker-hosted server with persistent SQLite/media storage.
 - Text/images, image cropping and resize handles, backgrounds, vertical alignment, and text auto-sizing.
 - Clock formats (HH:MM/HH:MM:SS, 12/24 hour), automatic counters with affixes and goal messages, and NWS hourly weather with shared server caching and offline snapshots.
 - Media folders, tags, sorting, search, and batch operations.
@@ -22,7 +22,7 @@ These are acceptance requirements, not completed work or promised release dates:
 - Sustained Zero 2 W memory/transition measurements with representative heavy image/widget slides.
 - Onn 1080p video validation with both quality profiles, offline restart, interrupted downloads, and a 24-hour memory/dropped-frame run.
 - Real WireGuard and Cloudflare Access connectivity/credential-rotation validation.
-- Dependency/security review and first GitHub CI execution.
+- Repeat dependency/security review and run the current CI workflow before release.
 
 Automated Node/Python checks and focused desktop/mobile browser regressions exist. They do not prove physical display smoothness, a bootable appliance image, or production security. No prebuilt hardware-tested SD-card image is supplied.
 

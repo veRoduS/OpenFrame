@@ -6,7 +6,7 @@ import { imageStyle } from './image-layout.js';
 const fontLoads = new Map();
 const fontAlias = (id) => `OpenFrameFont_${id.replaceAll('-', '')}`;
 
-async function prepareFonts(slide, assets, signal) {
+async function prepareFonts(slide, assets, signal, fonts) {
   for (const id of new Set(
     slide.layers.map((layer) => layer.fontId).filter(Boolean),
   )) {
@@ -16,15 +16,34 @@ async function prepareFonts(slide, assets, signal) {
       (asset) => asset.kind === 'font' && asset.id === id,
     );
     if (!font) throw new Error('A selected font is missing from the playlist');
-    let loading = fontLoads.get(id);
-    if (!loading) {
+    let entry = fontLoads.get(id);
+    if (!entry) {
       const face = new FontFace(fontAlias(id), `url("${font.url}")`);
-      loading = face.load().then((loaded) => document.fonts.add(loaded));
-      fontLoads.set(id, loading);
-      loading.catch(() => fontLoads.delete(id));
+      entry = { face, references: 0 };
+      entry.loading = face.load().then((loaded) => {
+        // FontFace loading cannot be aborted. A cancelled frame must not add a
+        // late completion back to the document after releasing its last owner.
+        if (entry.references) document.fonts.add(loaded);
+        return loaded;
+      });
+      fontLoads.set(id, entry);
+      entry.loading.catch(() => {
+        if (fontLoads.get(id) === entry) fontLoads.delete(id);
+      });
     }
-    await waitFor(loading, signal);
+    entry.references++;
+    fonts.set(id, entry);
+    await waitFor(entry.loading, signal);
   }
+}
+
+function releaseFonts(fonts) {
+  for (const [id, entry] of fonts) {
+    if (--entry.references) continue;
+    if (fontLoads.get(id) === entry) fontLoads.delete(id);
+    document.fonts.delete(entry.face);
+  }
+  fonts.clear();
 }
 
 function waitFor(promise, signal, timeout = 15000) {
@@ -162,6 +181,7 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
   });
   host.append(element);
   const images = [],
+    fonts = new Map(),
     posters = new Set(),
     controllers = [],
     layouts = [];
@@ -170,6 +190,7 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
     if (disposed) return;
     disposed = true;
     signal.removeEventListener('abort', dispose);
+    releaseFonts(fonts);
     controllers.forEach((controller) => {
       try {
         controller.dispose();
@@ -187,7 +208,7 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
   try {
     if (signal.aborted)
       throw new DOMException('Preparation cancelled', 'AbortError');
-    await prepareFonts(slide, assets, signal);
+    await prepareFonts(slide, assets, signal, fonts);
     for (const layer of slide.layers) {
       const box = document.createElement('div');
       box.className = 'layer';

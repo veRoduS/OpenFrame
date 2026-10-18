@@ -6,6 +6,9 @@ import {
   readFileSync,
   writeFileSync,
   existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
 } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +17,130 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
+
+void test('image and font multipart uploads bound text fields and reject invalid parts with client errors', async (t) => {
+  const { request, dir } = await fixture(t);
+  const png = await sharp({
+    create: { width: 1, height: 1, channels: 3, background: '#447755' },
+  })
+    .png()
+    .toBuffer();
+  for (const { endpoint, name, bytes, fields } of [
+    { endpoint: '/api/assets', name: 'test.png', bytes: png, fields: 2 },
+    {
+      endpoint: '/api/fonts',
+      name: 'test.woff2',
+      bytes: Buffer.from('wOF2test'),
+      fields: 1,
+    },
+  ]) {
+    for (const invalid of [
+      'fields',
+      'field-size',
+      'unexpected-file',
+      'files',
+    ]) {
+      const form = new FormData();
+      form.append('file', new Blob([bytes]), name);
+      if (invalid === 'fields')
+        for (let index = 0; index <= fields; index++)
+          form.append(`extra${index}`, 'unused');
+      if (invalid === 'field-size') form.append('extra', 'a'.repeat(1025));
+      if (invalid === 'unexpected-file')
+        form.append('unexpected', new Blob([bytes]), name);
+      if (invalid === 'files') form.append('file', new Blob([bytes]), name);
+      const response = await request(endpoint, 'POST', form);
+      assert.equal(response.status, 400, `${endpoint}: ${invalid}`);
+    }
+  }
+  assert.deepEqual(readdirSync(path.join(dir, 'media')), []);
+  const folder = (await request('/api/folders', 'POST', { name: 'Uploads' }))
+    .data;
+  const slide = (await request('/api/slides', 'POST', slideData())).data;
+  const image = new FormData();
+  image.append('folderId', folder.id);
+  image.append('shareWithSlideId', slide.id);
+  image.append('file', new Blob([png]), 'valid.png');
+  const uploaded = await request('/api/assets', 'POST', image);
+  assert.equal(uploaded.status, 201);
+  assert.equal(uploaded.data.folderId, folder.id);
+  const font = new FormData();
+  font.append('family', 'Upload Test');
+  font.append('file', new Blob([Buffer.from('wOF2test')]), 'valid.woff2');
+  assert.equal((await request('/api/fonts', 'POST', font)).status, 201);
+});
+
+void test('image save failures roll back metadata and grants and remove the new file', async (t) => {
+  const { request, db, dir } = await fixture(t);
+  t.mock.method(console, 'error', () => {});
+  const slide = (await request('/api/slides', 'POST', slideData())).data;
+  const recipients = [randomUUID(), randomUUID()].sort();
+  for (const userId of recipients)
+    db.prepare('INSERT INTO resource_grants VALUES (?,?,?,?)').run(
+      'slide',
+      slide.id,
+      userId,
+      '',
+    );
+  const png = await sharp({
+    create: { width: 1, height: 1, channels: 3, background: '#447755' },
+  })
+    .png()
+    .toBuffer();
+  for (const [table, condition] of [
+    ['records', "NEW.kind='asset'"],
+    ['resource_grants', `NEW.kind='asset' AND NEW.userId='${recipients[1]}'`],
+  ]) {
+    db.exec(`CREATE TRIGGER fail_image_save BEFORE INSERT ON ${table}
+      WHEN ${condition} BEGIN SELECT RAISE(ABORT,'image save test'); END`);
+    const form = new FormData();
+    form.append('file', new Blob([png]), 'failed.png');
+    form.append('shareWithSlideId', slide.id);
+    assert.equal((await request('/api/assets', 'POST', form)).status, 500);
+    assert.deepEqual(readdirSync(path.join(dir, 'media')), []);
+    for (const table of ['records', 'resource_access', 'resource_grants'])
+      assert.equal(
+        db
+          .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE kind='asset'`)
+          .get().n,
+        0,
+        `${table} must roll back`,
+      );
+    db.exec('DROP TRIGGER fail_image_save');
+  }
+  assert.equal((await uploadImage(request)).status, 201);
+});
+
+void test('font deletion tolerates missing files and retains metadata after filesystem failure', async (t) => {
+  const { request, db, dir } = await fixture(t);
+  t.mock.method(console, 'error', () => {});
+  for (const missing of [true, false]) {
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from('wOF2test')]), 'test.woff2');
+    form.append('family', missing ? 'Missing Font' : 'Blocked Font');
+    const uploaded = await request('/api/fonts', 'POST', form);
+    assert.equal(uploaded.status, 201);
+    const id = uploaded.data.id;
+    const font = db.prepare('SELECT * FROM custom_fonts WHERE id=?').get(id);
+    const filename = path.join(dir, 'media', font.filename);
+    unlinkSync(filename);
+    if (!missing) mkdirSync(filename);
+    assert.equal(
+      (await request(`/api/fonts/${id}`, 'DELETE')).status,
+      missing ? 200 : 500,
+    );
+    assert.equal(
+      !!db.prepare('SELECT 1 FROM custom_fonts WHERE id=?').get(id),
+      !missing,
+    );
+    if (!missing) {
+      rmSync(filename, { recursive: true });
+      writeFileSync(filename, 'wOF2test');
+      assert.equal((await request(`/api/fonts/${id}`, 'DELETE')).status, 200);
+      assert.equal(existsSync(filename), false);
+    }
+  }
+});
 
 void test('library publication status and published preview preserve the actual screen version', async (t) => {
   const { request } = await fixture(t);

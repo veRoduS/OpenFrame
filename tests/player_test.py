@@ -28,6 +28,34 @@ class PlayerTests(unittest.TestCase):
         return {'id': 'clip', 'kind': 'video', 'filename': filename, 'url': '/media/' + filename,
                 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
 
+    def test_api_json_reads_are_bounded_and_oversized_sync_preserves_cache(self):
+        media = b'offline cached media'
+        asset = self.asset(media)
+        target = self.agent.cache / 'media' / asset['filename']
+        target.write_bytes(media)
+        current = self.response('current', [asset])
+        with patch.object(self.agent, 'request', return_value=current):
+            self.agent.sync()
+        saved = (self.agent.cache / 'state.json').read_bytes()
+
+        class Bounded(io.BytesIO):
+            def read(inner, size=-1):
+                self.assertEqual(size, module.JSON_LIMIT + 1)
+                return super().read(size)
+
+        exact = json.dumps(self.response('next')).encode()
+        exact += b' ' * (module.JSON_LIMIT - len(exact))
+        with patch.object(self.agent.opener, 'open', return_value=Bounded(exact)):
+            self.assertEqual(self.agent.request('/api/player/sync')['manifest']['revision'], 'next')
+        with patch.object(self.agent.opener, 'open', return_value=Bounded(exact + b' ')):
+            with self.assertRaisesRegex(ValueError, 'exceeds size limit'):
+                self.agent.sync()
+        self.assertEqual(self.agent.state['manifest']['revision'], 'current')
+        self.assertEqual((self.agent.cache / 'state.json').read_bytes(), saved)
+        self.assertEqual(target.read_bytes(), media)
+        with patch.object(self.agent.opener, 'open', return_value=Bounded(b'{"token":"test","code":"ABC123"}')):
+            self.assertEqual(self.agent.request('/api/player/enroll', {'name': 'Test'})['code'], 'ABC123')
+
     def test_schema_five_video_and_poster_survive_offline_restart_without_download(self):
         clip, poster = b'optimized silent mp4', b'poster image'
         video = self.asset(clip)
