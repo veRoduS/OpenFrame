@@ -1,0 +1,19 @@
+name: Complete approved 0.25.0 publication
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-0.25.0.yml']
+
+# Retry only the approved immutable tag using the corrected CI definition.
+# Remove this temporary trigger after publication completes.
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    if: github.repository == 'veRoduS/OpenFrame'
+    uses: ./.github/workflows/publish-images.yml
+    with:
+      tag: v0.25.0

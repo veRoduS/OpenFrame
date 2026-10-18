@@ -59,10 +59,11 @@ jobs:
     name: Browser regressions (Chromium)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      PLAYWRIGHT_TOOLS: ${{ runner.temp }}/openframe-browser-tools
-      OPENFRAME_PLAYWRIGHT: file://${{ runner.temp }}/openframe-browser-tools/node_modules/playwright/index.mjs
     steps:
+      - name: Configure isolated browser tools
+        run: |
+          printf 'PLAYWRIGHT_TOOLS=%s/openframe-browser-tools\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'OPENFRAME_PLAYWRIGHT=file://%s/openframe-browser-tools/node_modules/playwright/index.mjs\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
