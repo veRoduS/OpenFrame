@@ -257,15 +257,17 @@ export function DataCardOptions({
           onChange={(event) => patch({ prefix: event.target.value })}
         />
       </label>
-      <label>
-        Supporting text
-        <input
-          value={card.subtitle}
-          maxLength={100}
-          placeholder="Describe this metric"
-          onChange={(event) => patch({ subtitle: event.target.value })}
-        />
-      </label>
+      {config.mode !== 'progress' && (
+        <label>
+          Supporting text
+          <input
+            value={card.subtitle}
+            maxLength={100}
+            placeholder="Describe this metric"
+            onChange={(event) => patch({ subtitle: event.target.value })}
+          />
+        </label>
+      )}
       <label>
         Header badge
         <select

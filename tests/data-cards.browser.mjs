@@ -425,6 +425,14 @@ try {
     await playback.locator(`${visible} svg`).first().textContent(),
     /92\.0/,
   );
+  assert.doesNotMatch(
+    await playback.locator(`${visible} svg`).nth(0).textContent(),
+    /Curbside/,
+  );
+  assert.doesNotMatch(
+    await playback.locator(`${visible} svg`).nth(1).textContent(),
+    /Zero-substitution/,
+  );
   assert.equal(
     await playback.locator(`${visible} [data-card-part="row"]`).count(),
     7,

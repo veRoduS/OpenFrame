@@ -21,7 +21,7 @@ For a progress card, **Gauge maximum** controls the ring scale, while **Fixed ta
 
 For a bar-chart card, choose **Row layout → Mini table** or **Channel breakdown**. **Visible rows** limits the display to the first 1–8 categories; four is the default. A mini table can select a second categories field as **Row delta field**. Deltas match the primary rows by exact category label, so reordering the comparison data does not move changes to the wrong row. Missing matches omit the badge. Changing the data feed clears comparison bindings to the previous feed.
 
-**Supporting text** describes the metric. Optional **Footer labels** add context at the bottom of the card. Labels are user-entered text; OpenFrame does not certify or verify the underlying metric. Keep the existing last-updated display enabled when data freshness matters. Unavailable data and stale snapshots retain their normal status handling.
+**Supporting text** describes metric, line, and breakdown cards. Radial cards use a compact goal badge beside the gauge without supporting text underneath. Optional **Footer labels** add context at the bottom of the card. Labels are user-entered text; OpenFrame does not certify or verify the underlying metric. Keep the existing last-updated display enabled when data freshness matters. Unavailable data and stale snapshots retain their normal status handling.
 
 ## Publication and players
 

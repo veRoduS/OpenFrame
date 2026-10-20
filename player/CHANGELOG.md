@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.11.4] - 2026-10-20
+
+- Expand split card gauges, plots, and primary values; fit goal badges to their labels and remove radial supporting text.
+
 ## [0.11.3] - 2026-10-20
 
 - Place raised percent and magnitude units directly beside values without estimated-width gaps.

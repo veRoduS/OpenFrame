@@ -329,21 +329,24 @@ export function renderDataCard(
     description += `. ${message}`;
   } else if (config.mode === 'metric') {
     const bodyDelta = card.badge !== 'delta' && delta;
-    const deltaWidth = bodyDelta ? Math.min(125, bodyWidth * 0.44) : 0;
-    const baseline = bodyTop + bodyHeight / 2 + (card.subtitle ? 5 : 16);
+    const deltaWidth = bodyDelta
+      ? Math.min(125, bodyWidth * 0.44, textWidth(delta, 12) + 18)
+      : 0;
+    const baseline = bodyTop + bodyHeight / 2 + (card.subtitle ? 5 : 20);
     lockup(
       surface,
       16,
       baseline,
       rawValue,
       bodyWidth - (bodyDelta ? deltaWidth + 12 : 0),
+      56,
     );
-    if (bodyDelta) pill(surface, width - 16, baseline - 17, delta, deltaWidth);
+    if (bodyDelta) pill(surface, width - 16, baseline - 20, delta, deltaWidth);
     if (card.subtitle)
       wrap(
         surface,
         16,
-        baseline + 24,
+        baseline + 28,
         card.subtitle,
         bodyWidth,
         12,
@@ -353,7 +356,7 @@ export function renderDataCard(
   } else if (config.mode === 'progress') {
     const stacked = bodyHeight > bodyWidth * 1.1;
     const radius = Math.min(
-      stacked ? 86 : 51,
+      stacked ? 100 : 68,
       bodyHeight / (stacked ? 3.4 : 2) - 6,
     );
     const cx = stacked ? width / 2 : 16 + radius + 6;
@@ -387,9 +390,6 @@ export function renderDataCard(
       'text-anchor': 'middle',
       'letter-spacing': '1',
     });
-    const goalX = stacked ? 16 : cx + radius + 20;
-    const goalWidth = stacked ? bodyWidth : width - goalX - 16;
-    const goalY = stacked ? cy + radius + 32 : cy - (card.subtitle ? 14 : 0);
     const target = config.targetField
       ? snapshot.data[config.targetField]
       : config.target;
@@ -397,6 +397,10 @@ export function renderDataCard(
       Number.isFinite(target) && target > 0
         ? `Goal: ${formatted(target)}`
         : 'Goal unavailable';
+    const goalSpace = stacked ? bodyWidth : width - cx - radius - 36;
+    const goalWidth = Math.min(goalSpace, textWidth(goal, 12) + 20);
+    const goalX = stacked ? (width - goalWidth) / 2 : cx + radius + 20;
+    const goalY = stacked ? cy + radius + 32 : cy;
     node(surface, 'rect', {
       x: goalX,
       y: goalY - 15,
@@ -404,25 +408,16 @@ export function renderDataCard(
       height: 28,
       rx: 9,
       fill: 'rgba(169,221,247,0.35)',
+      'data-card-part': 'goal-badge',
     });
     label(surface, goalX + 10, goalY + 4, goal, 12, goalWidth - 20, {
       'data-card-part': 'goal',
     });
-    if (card.subtitle)
-      wrap(
-        surface,
-        goalX,
-        goalY + 32,
-        card.subtitle,
-        goalWidth,
-        12,
-        Math.max(1, Math.min(3, Math.floor((bodyBottom - goalY - 28) / 17))),
-      );
     description += `. ${formatted(rawValue)}. ${goal}. Scale maximum ${scaleMax}`;
   } else if (config.mode === 'line') {
     const latest = points.at(-1);
     const compact = bodyHeight < 125;
-    const valueSize = compact ? 30 : 36;
+    const valueSize = compact ? 36 : 44;
     const valueWidth = lockup(
       surface,
       16,
@@ -437,12 +432,12 @@ export function renderDataCard(
         width - 16,
         bodyTop + valueSize * 0.92,
         clean(card.subtitle, 100),
-        11,
+        10,
         bodyWidth - valueWidth - 12,
         { 'text-anchor': 'end' },
       );
-    const top = bodyTop + Math.min(54, bodyHeight - 32),
-      bottom = bodyBottom - 19;
+    const top = bodyTop + Math.min(48, bodyHeight - 36),
+      bottom = bodyBottom - 14;
     let low = Math.min(...points.map((p) => p.value)),
       high = Math.max(...points.map((p) => p.value));
     if (high === low) {
@@ -459,13 +454,13 @@ export function renderDataCard(
     const x = (p) =>
       firstTime === lastTime
         ? width / 2
-        : 20 +
+        : 16 +
           clamp(
             (Date.parse(p.time) - firstTime) / (lastTime - firstTime),
             0,
             1,
           ) *
-            (width - 40);
+            (width - 32);
     const y = (value) =>
       bottom - ((value - low) / (high - low)) * (bottom - top);
     const coordinates = points.map((p) => [x(p), y(p.value)]);
@@ -491,8 +486,8 @@ export function renderDataCard(
       fill: `url(#${id}-fill)`,
     });
     node(surface, 'line', {
-      x1: 20,
-      x2: width - 20,
+      x1: 16,
+      x2: width - 16,
       y1: bottom,
       y2: bottom,
       stroke: '#E8EEF5',
@@ -500,8 +495,8 @@ export function renderDataCard(
     });
     if (low < 0 && high > 0)
       node(surface, 'line', {
-        x1: 20,
-        x2: width - 20,
+        x1: 16,
+        x2: width - 16,
         y1: y(0),
         y2: y(0),
         stroke: '#E8EEF5',
@@ -661,7 +656,8 @@ export function renderDataCard(
     if (points.length > rows.length)
       description += `. Showing ${rows.length} of ${points.length} categories`;
   }
-  if (card.subtitle) description += `. ${clean(card.subtitle, 100)}`;
+  if (card.subtitle && config.mode !== 'progress')
+    description += `. ${clean(card.subtitle, 100)}`;
   if (delta) description += `. Change ${delta}`;
   if (footerHeight) {
     const group = node(surface, 'g', { 'data-card-part': 'footer' });
