@@ -374,7 +374,7 @@ export function renderDataCard(
   node(surface, 'rect', {
     width,
     height: headerHeight,
-    fill: thresholdColor || (card.header === 'navy' ? NAVY : BLUE),
+    fill: card.header === 'navy' ? NAVY : BLUE,
     'data-card-part': 'header',
   });
   const pill = (
@@ -436,7 +436,7 @@ export function renderDataCard(
       node(spark, 'path', {
         d: 'M -1.2 -4.5 L -1.8 -9.5 Q 0 -10.5 1.8 -9.5 L 1.2 -4.5 Z',
         transform: `rotate(${angle})`,
-        fill: threshold.state === 'yellow' && thresholdColor ? NAVY : YELLOW,
+        fill: YELLOW,
       });
     focalWidth = 28;
   }
@@ -448,13 +448,7 @@ export function renderDataCard(
     12,
     width - 32 - focalWidth,
     {
-      fill: thresholdColor
-        ? threshold.state === 'yellow'
-          ? NAVY
-          : '#FFFFFF'
-        : card.header === 'navy'
-          ? SKY
-          : '#FFFFFF',
+      fill: card.header === 'navy' ? SKY : '#FFFFFF',
       'letter-spacing': '0.6',
       'data-card-part': 'title',
     },
@@ -1122,7 +1116,7 @@ export function renderDataCard(
     height: height - 2,
     rx: 15,
     fill: 'none',
-    stroke: thresholdColor || (secondary ? SKY : 'rgba(0,83,226,0.2)'),
+    stroke: secondary ? SKY : 'rgba(0,83,226,0.2)',
     'stroke-width': 2,
   });
   svg.setAttribute('aria-label', description);

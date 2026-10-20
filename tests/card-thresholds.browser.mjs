@@ -295,6 +295,23 @@ try {
         .getAttribute('stroke'),
       { red: '#B91C1C', yellow: '#FFC220', green: '#166534' }[state],
     );
+    assert.equal(
+      await active
+        .locator('svg')
+        .nth(1)
+        .locator('[data-card-part="header"]')
+        .getAttribute('fill'),
+      '#0053E2',
+    );
+    assert.equal(
+      await active
+        .locator('svg')
+        .nth(1)
+        .locator(':scope > rect')
+        .last()
+        .getAttribute('stroke'),
+      'rgba(0,83,226,0.2)',
+    );
     assert.ok(
       await playback.evaluate(
         () =>
@@ -376,7 +393,7 @@ try {
     ],
   );
   assert.ok(cases.every((entry) => !entry.text.includes('SCORE')));
-  assert.equal(cases[1].titleColor, '#001E60');
+  assert.ok(cases.every((entry) => entry.titleColor === '#FFFFFF'));
   assert.equal(cases[0].navy, '#001E60');
   assert.match(cases[6].text, /Goal unavailable/);
   assert.match(cases[7].text, /Check color thresholds/);

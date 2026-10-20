@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.14.1] - 2026-10-20
+
+- Apply gauge goal colors only to the circle, preserving header and border styling
+
 ## [0.14.0] - 2026-10-20
 
 - Display optional red/yellow/green card thresholds, live gauge goals, and per-row table colors.

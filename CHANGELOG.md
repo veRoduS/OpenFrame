@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.28.1] - 2026-10-20
+
+- Keep goal-colored card headers and borders in their configured style
+
 ## [0.28.0] - 2026-10-20
 
 - Add optional red/yellow/green goal colors with higher/lower comparisons, live gauge targets, and per-row table status.
