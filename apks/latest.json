@@ -1,12 +1,12 @@
 {
   "packageName": "org.openframe.player",
-  "versionName": "0.12.0",
-  "versionCode": 12000,
+  "versionName": "0.13.0",
+  "versionCode": 13000,
   "minSdk": 28,
-  "size": 106507,
-  "sha256": "d5eb664b677ba1af1bae6dc74a55dc793782bfc8b26a0c5b6f0453031361fa8b",
-  "apkUrl": "/downloads/android/openframe-player-0.12.0.apk",
-  "sourceCommit": "002da2a16d15e28e8be196ccf4428268cf96cf91",
+  "size": 108059,
+  "sha256": "954cf91f23ad326977e47c9b5b31d441f164c5f88fd0f99a0b157b1e4288f597",
+  "apkUrl": "/downloads/android/openframe-player-0.13.0.apk",
+  "sourceCommit": "bcfc180d0da1181016029b0bcdb31de9900a0d5e",
   "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
   "compatibility": {
     "protocols": {
@@ -54,11 +54,11 @@
       }
     },
     "reviewedWith": {
-      "server": "0.26.0",
-      "player": "0.12.0"
+      "server": "0.27.0",
+      "player": "0.13.0"
     },
     "impact": "compatible",
-    "summary": "Approved server 0.26.0/player 0.12.0 milestone includes optional split cards and current-series statistics. Manifest schemas 1-5, snapshots, sync, and update contracts are unchanged. Older data-capable players retain classic values; older card players ignore statistics. New players accept older publications; downgrade saves require removing unsupported card/showStats settings. Full 231 Node, 97 Python, 33 Android JVM tests, three Chromium regressions, clean dependency install/audits, and isolated AMD64 container persistence/restore checks pass. Physical Onn/Pi acceptance remains outstanding.",
-    "reviewedAt": "2026-10-20T02:44:31.507Z"
+    "summary": "Approved server 0.27.0/player 0.13.0 milestone includes numeric tables, 40-row ranges, card typography/alignment/padding, and multi-layer geometry tools. Primary modes, ingestion, snapshots, manifests, sync, and updates are unchanged. Older players ignore the new presentation fields and retain earlier row limits/offset behavior; upgrade to player 0.13.0 for all included features. New players retain older publications. Downgrade saves require removing unsupported card fields and reducing maxRows; arrangement uses ordinary coordinates. Feature validation passed 235 Node tests without skips, 97 Python tests, 33 Android JVM tests, and five Chromium suites; release-specific version/compatibility/APK checks, lint, typecheck, production build, repository checks, and dependency audit pass. Hosted build/signing and physical Onn/Pi acceptance are separate results.",
+    "reviewedAt": "2026-10-20T16:17:17.653Z"
   }
 }
