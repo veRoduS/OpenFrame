@@ -24,6 +24,24 @@ export const feedSchema = z
       ),
   })
   .strict();
+const dataCardSchema = z
+  .object({
+    style: z.enum(['plain', 'split']).default('split'),
+    header: z.enum(['blue', 'navy']).default('blue'),
+    badge: z.enum(['spark', 'delta', 'none']).default('spark'),
+    deltaText: z.string().max(32).default(''),
+    deltaField: z.string().max(40).default(''),
+    deltaUnit: z.string().max(12).default('%'),
+    prefix: z.string().max(8).default(''),
+    subtitle: z.string().max(100).default(''),
+    footer: z.string().max(80).default(''),
+    footerRight: z.string().max(40).default(''),
+    rows: z.enum(['table', 'bars']).default('table'),
+    rowDeltaField: z.string().max(40).default(''),
+    maxRows: z.number().int().min(1).max(8).default(4),
+    scaleMax: z.number().positive().max(1e12).default(100),
+  })
+  .strict();
 export const dataWidgetSchema = z
   .object({
     mode: z.enum(['metric', 'progress', 'line', 'bar']).default('metric'),
@@ -45,6 +63,7 @@ export const dataWidgetSchema = z
       .default('#dce5df'),
     showUpdated: z.boolean().default(true),
     staleAfterMinutes: z.number().int().min(1).max(10080).default(60),
+    card: dataCardSchema.optional(),
   })
   .strict();
 const number = z.number().min(-1e12).max(1e12);
@@ -177,6 +196,34 @@ export function mountDataFeeds(
           'INVALID_BINDING',
           'Progress target must reference a number field',
         );
+      if (config.card?.style === 'split') {
+        if (
+          (config.card.badge === 'delta' || config.mode === 'metric') &&
+          config.card.deltaField &&
+          !feed.fields.some(
+            (f) => f.key === config.card.deltaField && f.type === 'number',
+          )
+        )
+          throw fail(
+            400,
+            'INVALID_BINDING',
+            'Card change must reference a number field in the selected feed',
+          );
+        if (
+          config.mode === 'bar' &&
+          config.card.rows === 'table' &&
+          config.card.rowDeltaField &&
+          !feed.fields.some(
+            (f) =>
+              f.key === config.card.rowDeltaField && f.type === 'categories',
+          )
+        )
+          throw fail(
+            400,
+            'INVALID_BINDING',
+            'Row changes must reference a categories field in the selected feed',
+          );
+      }
     }
   }
   function snapshots(manifest, visible = () => true) {

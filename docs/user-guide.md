@@ -132,6 +132,8 @@ Give your integrator the [standalone API guide](data-feeds-api.md), [OpenAPI JSO
 
 In the slide editor's **Widgets** group, insert a Metric, Progress bar, Line graph, or Bar chart. Choose the feed and matching field. Progress can use a fixed target or a second number field, and can run vertically. Set title, units, decimals, and colors; resize the widget to fit. Charts use bounded data and automatic axes. Viewers need access to the feed as well as the slide. Manage Access shows the same View/Edit sharing controls as slides.
 
+Choose **Card style → Split header** for blue header tiles, superscript values, radial gauges, sparklines, or white-pill mini tables and channel breakdowns. Optional delta fields, goals, and footer labels use the same feed. Existing widgets stay Classic. The card appearance requires player **0.11.1+**; see [widget card setup](widget-cards.md) for examples and upgrade details.
+
 Publish the playlist layout once. Further data updates appear through normal player sync (usually about 15 seconds), without republishing or restarting the slide. An optional age label marks stale data after your chosen threshold. Offline Pi/Android players retain the latest cached snapshot, including after restart. They clear revoked data after a successful online sync. Upgrade players to **0.10.13 or later** before assigning slides with data widgets; ordinary older slides remain compatible.
 
 ## Generated starter text

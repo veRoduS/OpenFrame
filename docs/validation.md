@@ -1,5 +1,13 @@
 # Validation record
 
+## Local split header cards — server 0.25.1 / player 0.11.1
+
+Checked on October 19, 2026: 231 Node tests pass with real Python-agent integration and no skips; all 97 Python tests and 33 Android native JVM tests pass. TypeScript, lint, the production web build, version consistency, repository/documentation checks, and diff hygiene pass. No dependencies were added.
+
+The split card Chromium suite exercises the real editor's style choices, saved/reopened settings, comparison binding resets on feed changes, 320px controls, an eight-card published player gallery, live updates without replacing the active frame, safe SVG text, isolated clip/gradient IDs, zero gauges, negative/large values, dense rows, freshness/unavailable states, classic fallback, and widget disposal. Reference, edge-case, and mobile screenshots were visually inspected. Existing data-feed and player-startup browser regressions also pass. Tests use disposable local data and fictional metrics.
+
+Card settings preserve manifest schemas and feed payloads. Players before 0.11.1 retain the existing classic data rendering; the new appearance requires the updated shared renderer. Pi's local allowlist serves the added module, and Android's existing asset packaging includes it. No signed APK, source push, deployment, or physical Onn/Pi performance validation is part of this local revision.
+
 ## GitHub milestone server 0.25.0 / player 0.11.0
 
 Checked on October 18, 2026: the approved source milestone preserves both local revisions below. The annotated `v0.25.0` tag points to `aefa9264da9a6c89528e11b36e6e01f5eb311942`. Local milestone version/compatibility/repository checks, lint, TypeScript, production build, and 25 release-tool tests pass.

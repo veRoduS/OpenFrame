@@ -67,6 +67,8 @@ Server **0.20.0** conditionally emits manifest schema **4** for playlists contai
 
 Data snapshots travel separately as the optional top-level `dataFeeds` map in player sync and within previews. They do not change manifest revisions or trigger frame replacement. New players persist snapshots offline; a successful `unavailable` response clears inaccessible values. Tests cover live browser updates without slide replacement, widget lifecycle disposal, Pi/Android offline restart and clearing after reconnection. Desktop/JVM checks do not establish physical Pi or Android TV performance or acceptance.
 
+Server **0.25.1** adds optional `layer.data.card` settings. Shared player **0.11.1** renders the split header appearance; older data-capable players ignore these settings and render the existing primary field using Classic. Manifest schemas, feed snapshots, permissions, and polling are unchanged. New players accept older publications without card settings. Older servers reject the new optional object when saving slides, so remove `card` before importing a slide into an older server. Pi installations need the updated agent allowlist and complete web directory, including `data-cards.js`; Android packages the same renderer. See [card setup](widget-cards.md).
+
 ## Cached video compatibility
 
 Server **0.24.1** emits schema **5** for publications containing video layers. Upgrade Android/Pi players to **0.10.15+** before publishing video. Older players reject schema 5 and retain their last usable cached publication. Playlists without video keep schemas 2/3/4 as appropriate; updated players continue accepting schemas 1–4 from older servers. Removed video placeholders also require schema 5. Delete all video layers and republish to return to an earlier schema.

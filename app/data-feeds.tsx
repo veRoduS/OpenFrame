@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { DataFeedApplications } from './data-feed-applications';
+import { DataCardOptions, DataCardStylePicker } from './data-card-options';
 import { Button } from './components/ui/button';
 import {
   AlertDialog,
@@ -799,6 +800,7 @@ export function DataWidgetOptions({
   onChange: (value: NonNullable<Layer['data']>) => void;
 }) {
   const config = layer.data!;
+  const split = config.card?.style === 'split';
   const feed = feeds.find((f) => f.id === config.feedId);
   const expected =
     config.mode === 'line'
@@ -811,6 +813,10 @@ export function DataWidgetOptions({
     onChange({ ...config, ...value });
   return (
     <div className="data-widget-options">
+      <DataCardStylePicker
+        config={config}
+        onChange={(card) => patch({ card })}
+      />
       <label>
         Data feed
         <select
@@ -822,6 +828,11 @@ export function DataWidgetOptions({
               feedId: f?.id || null,
               field: f?.fields.find((v) => v.type === expected)?.key || '',
               targetField: '',
+              ...(config.card
+                ? {
+                    card: { ...config.card, deltaField: '', rowDeltaField: '' },
+                  }
+                : {}),
             });
           }}
         >
@@ -906,23 +917,32 @@ export function DataWidgetOptions({
               />
             </label>
           )}
-          <label>
-            Orientation
-            <select
-              value={config.orientation}
-              onChange={(e) =>
-                patch({
-                  orientation: e.target.value as typeof config.orientation,
-                })
-              }
-            >
-              <option value="horizontal">Horizontal</option>
-              <option value="vertical">Vertical</option>
-            </select>
-          </label>
+          {!split && (
+            <label>
+              Orientation
+              <select
+                value={config.orientation}
+                onChange={(e) =>
+                  patch({
+                    orientation: e.target.value as typeof config.orientation,
+                  })
+                }
+              >
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </select>
+            </label>
+          )}
         </>
       )}
-      {config.mode !== 'metric' && (
+      {split && (
+        <DataCardOptions
+          config={config}
+          feed={feed}
+          onChange={(card) => patch({ card })}
+        />
+      )}
+      {config.mode !== 'metric' && !split && (
         <>
           <label>
             Accent color

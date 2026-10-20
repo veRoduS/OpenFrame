@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp } from '../server/app.mjs';
+import { dataWidgetSchema } from '../server/data-feeds.mjs';
 
 const definition = {
   name: 'Production',
@@ -486,6 +487,264 @@ void test('widget bindings reject wrong types and field changes preserve stored 
       })
     ).status,
     200,
+  );
+});
+
+void test('card settings are optional, strict, and bounded without changing classic modes', () => {
+  const legacy = widget(randomUUID()).data;
+  assert.equal(Object.hasOwn(dataWidgetSchema.parse(legacy), 'card'), false);
+  const defaults = dataWidgetSchema.parse({ ...legacy, card: {} }).card;
+  assert.deepEqual(defaults, {
+    style: 'split',
+    header: 'blue',
+    badge: 'spark',
+    deltaText: '',
+    deltaField: '',
+    deltaUnit: '%',
+    prefix: '',
+    subtitle: '',
+    footer: '',
+    footerRight: '',
+    rows: 'table',
+    rowDeltaField: '',
+    maxRows: 4,
+    scaleMax: 100,
+  });
+  for (const card of [
+    null,
+    [],
+    { style: 'unknown' },
+    { header: 'red' },
+    { badge: 'icon' },
+    { rows: 'grid' },
+    { unexpected: true },
+    { maxRows: 0 },
+    { maxRows: 9 },
+    { maxRows: 1.5 },
+    { maxRows: '4' },
+    { scaleMax: 0 },
+    { scaleMax: -1 },
+    { scaleMax: 1e12 + 1 },
+    { scaleMax: Infinity },
+    { scaleMax: NaN },
+    { scaleMax: '100' },
+  ]) {
+    assert.equal(
+      dataWidgetSchema.safeParse({ ...legacy, card }).success,
+      false,
+    );
+  }
+  for (const [key, limit] of [
+    ['deltaText', 32],
+    ['deltaField', 40],
+    ['deltaUnit', 12],
+    ['prefix', 8],
+    ['subtitle', 100],
+    ['footer', 80],
+    ['footerRight', 40],
+    ['rowDeltaField', 40],
+  ]) {
+    assert.equal(
+      dataWidgetSchema.safeParse({
+        ...legacy,
+        card: { [key]: 'x'.repeat(limit) },
+      }).success,
+      true,
+      `${key} accepts its documented limit`,
+    );
+    assert.equal(
+      dataWidgetSchema.safeParse({
+        ...legacy,
+        card: { [key]: 'x'.repeat(limit + 1) },
+      }).success,
+      false,
+      `${key} rejects oversized text`,
+    );
+  }
+  for (const card of [
+    { style: 'plain', maxRows: 1, scaleMax: 0.01 },
+    { style: 'split', maxRows: 8, scaleMax: 1e12 },
+  ])
+    assert.equal(dataWidgetSchema.safeParse({ ...legacy, card }).success, true);
+});
+
+void test('card options persist, update, and publish with schema four and unchanged feed data', async (t) => {
+  const { admin, feed, write } = await fixture(t);
+  const card = {
+    style: 'split',
+    header: 'navy',
+    badge: 'delta',
+    deltaText: '+2.4% YoY',
+    deltaField: 'goal',
+    deltaUnit: '%',
+    prefix: '$',
+    subtitle: 'Weekly performance',
+    footer: 'Store median',
+    footerRight: 'Verified',
+    rows: 'table',
+    rowDeltaField: 'departments',
+    maxRows: 8,
+    scaleMax: 250,
+  };
+  const layers = [
+    widget(feed.id),
+    ...[
+      ['metric', 'completed'],
+      ['progress', 'completed'],
+      ['line', 'hourly'],
+      ['bar', 'departments'],
+    ].map(([mode, field]) => {
+      const layer = widget(feed.id, mode, field);
+      return { ...layer, data: { ...layer.data, card } };
+    }),
+  ];
+  const created = await admin('/api/slides', 'POST', {
+    ...slide(feed.id),
+    layers,
+  });
+  assert.equal(created.status, 201);
+  assert.equal(Object.hasOwn(created.data.layers[0].data, 'card'), false);
+  for (const layer of created.data.layers.slice(1))
+    assert.deepEqual(layer.data.card, card);
+  const saved = (await admin('/api/library')).data.slides.find(
+    (entry) => entry.id === created.data.id,
+  );
+  assert.deepEqual(saved.layers, created.data.layers);
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Split header cards',
+      items: [{ slideId: saved.id, duration: 30 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const preview = await admin(`/api/preview/${playlist.id}?version=published`);
+  assert.equal(preview.status, 200);
+  assert.equal(preview.data.schemaVersion, 4);
+  assert.deepEqual(preview.data.items[0].slide.layers, saved.layers);
+  assert.equal((await write()).status, 200);
+  const updatedData = (
+    await admin(`/api/preview/${playlist.id}?version=published`)
+  ).data;
+  assert.equal(updatedData.revision, preview.data.revision);
+  assert.deepEqual(updatedData.dataFeeds[feed.id].data, payload);
+
+  const updatedLayers = saved.layers.map((layer, index) =>
+    index === 4
+      ? {
+          ...layer,
+          data: {
+            ...layer.data,
+            card: { ...card, rows: 'bars', header: 'blue', maxRows: 3 },
+          },
+        }
+      : layer,
+  );
+  const updated = await admin(`/api/slides/${saved.id}`, 'PUT', {
+    ...saved,
+    layers: updatedLayers,
+  });
+  assert.equal(updated.status, 200);
+  const refreshed = (
+    await admin(`/api/preview/${playlist.id}?version=published`)
+  ).data;
+  assert.deepEqual(refreshed.items[0].slide.layers, updated.data.layers);
+  assert.notEqual(refreshed.revision, preview.data.revision);
+  assert.deepEqual(refreshed.dataFeeds[feed.id].data, payload);
+});
+
+void test('active card bindings use typed fields from the permitted feed and retain inactive settings', async (t) => {
+  const { admin, feed, user } = await fixture(t);
+  const otherFeed = await admin('/api/data-feeds', 'POST', {
+    name: 'Other feed',
+    fields: [
+      { key: 'externalDelta', type: 'number' },
+      { key: 'externalRows', type: 'categories' },
+    ],
+  });
+  assert.equal(otherFeed.status, 201);
+  const document = (mode, card) => {
+    const layer = widget(
+      feed.id,
+      mode,
+      mode === 'bar' ? 'departments' : mode === 'line' ? 'hourly' : 'completed',
+    );
+    return {
+      ...slide(feed.id),
+      layers: [{ ...layer, data: { ...layer.data, card } }],
+    };
+  };
+  for (const [mode, card] of [
+    ['progress', { badge: 'delta', deltaField: 'missing' }],
+    ['line', { badge: 'delta', deltaField: 'hourly' }],
+    ['bar', { badge: 'delta', deltaField: 'departments' }],
+    ['metric', { badge: 'spark', deltaField: 'missing' }],
+    ['metric', { badge: 'none', deltaField: 'externalDelta' }],
+    ['bar', { rowDeltaField: 'missing' }],
+    ['bar', { rowDeltaField: 'completed' }],
+    ['bar', { rowDeltaField: 'hourly' }],
+    ['bar', { rowDeltaField: 'externalRows' }],
+  ]) {
+    const rejected = await admin('/api/slides', 'POST', document(mode, card));
+    assert.equal(rejected.status, 400, JSON.stringify({ mode, card }));
+    assert.match(rejected.data.error, /must reference .* in the selected feed/);
+  }
+  for (const [mode, card] of [
+    ['metric', { deltaField: 'goal' }],
+    ['progress', { badge: 'spark', deltaField: 'missing' }],
+    ['line', { badge: 'none', deltaField: 'missing' }],
+    ['metric', { rowDeltaField: 'missing' }],
+    ['bar', { rows: 'bars', rowDeltaField: 'missing' }],
+    ['bar', { rows: 'table', rowDeltaField: 'departments' }],
+    [
+      'bar',
+      {
+        style: 'plain',
+        badge: 'delta',
+        deltaField: 'missing',
+        rowDeltaField: 'missing',
+      },
+    ],
+  ]) {
+    const accepted = await admin('/api/slides', 'POST', document(mode, card));
+    assert.equal(accepted.status, 201, JSON.stringify({ mode, card }));
+  }
+
+  const valid = document('bar', {
+    badge: 'delta',
+    deltaField: 'goal',
+    rowDeltaField: 'departments',
+  });
+  const saved = (await admin('/api/slides', 'POST', valid)).data;
+  const invalidEdit = document('bar', { rowDeltaField: 'goal' });
+  assert.equal(
+    (await admin(`/api/slides/${saved.id}`, 'PUT', invalidEdit)).status,
+    400,
+  );
+  assert.deepEqual(
+    (await admin('/api/library')).data.slides.find(
+      (entry) => entry.id === saved.id,
+    ).layers,
+    saved.layers,
+  );
+  const outsider = await user('card-outsider');
+  const denied = await outsider.call('/api/slides', 'POST', valid);
+  assert.equal(denied.status, 403);
+  assert.match(
+    denied.data.error,
+    /Viewing access to the data feed is required/,
+  );
+  assert.equal(
+    (
+      await admin(
+        '/api/slides',
+        'POST',
+        document('metric', { style: 'unknown' }),
+      )
+    ).status,
+    400,
   );
 });
 

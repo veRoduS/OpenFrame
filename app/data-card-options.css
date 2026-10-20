@@ -1,0 +1,134 @@
+.data-card-style-picker {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.data-card-style-picker legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.data-card-style-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.data-widget-options label.data-card-style-choice {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 2px solid var(--color-border, #dde3df);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-card, #fff);
+}
+.data-widget-options label.data-card-style-choice[data-selected='true'] {
+  border-color: #0053e2;
+  background: #f0f7ff;
+  color: #001e60;
+}
+.data-card-style-choice:focus-within {
+  outline: 2px solid #0053e2;
+  outline-offset: 2px;
+}
+.properties-panel .data-card-style-choice input[type='radio'],
+.data-card-style-choice input[type='radio'] {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 14px;
+  height: 14px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: #0053e2;
+  z-index: 1;
+}
+.data-card-style-visual {
+  display: grid;
+  grid-template-rows: 14px minmax(0, 1fr);
+  aspect-ratio: 1.45;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e0e7e3;
+  border-radius: 7px;
+  background: #fff;
+}
+.data-card-style-visual.is-split {
+  border-color: #cbdcfa;
+}
+.data-card-style-visual.is-split.is-breakdown {
+  background: #eaf6fd;
+  border-color: #a9ddf7;
+}
+.data-card-style-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px 0 21px;
+}
+.is-split .data-card-style-band {
+  background: #0053e2;
+}
+.data-card-style-visual.is-split[data-mode='line'] .data-card-style-band {
+  background: #001e60;
+}
+.data-card-style-band > span {
+  width: 60%;
+  height: 3px;
+  border-radius: 2px;
+  background: #526158;
+}
+.is-split .data-card-style-band > span {
+  background: #fff;
+}
+.data-card-style-band i {
+  width: 12px;
+  height: 5px;
+  border-radius: 4px;
+  background: #ffc220;
+}
+.data-card-style-visual svg {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.data-card-options {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.data-card-option-group {
+  display: grid;
+  gap: 12px;
+  padding-left: 12px;
+  border-left: 2px solid #a9ddf7;
+}
+.data-card-help {
+  margin: -8px 0 0;
+  color: var(--of-text-muted, #526158);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.data-card-footer-options {
+  border-top: 1px solid var(--color-border, #dde3df);
+  border-bottom: 1px solid var(--color-border, #dde3df);
+  padding: 12px 0;
+}
+.data-card-footer-options summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.data-card-footer-options > div {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+}

@@ -109,6 +109,12 @@ jobs:
       - name: Player startup and browser timers
         timeout-minutes: 4
         run: node tests/player-startup.browser.mjs
+      - name: Data feed widgets and live refresh
+        timeout-minutes: 4
+        run: node tests/data-feeds.browser.mjs
+      - name: Split header widget cards
+        timeout-minutes: 4
+        run: node tests/data-cards.browser.mjs
       - name: Transition rendering and cleanup
         timeout-minutes: 4
         run: node tests/transitions.browser.mjs

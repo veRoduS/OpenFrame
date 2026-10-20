@@ -3809,17 +3809,21 @@ function Editor({
                 </PropertySection>
                 {current.type === 'data' && (
                   <PropertySection title="Appearance">
-                    <label>
-                      Text color
-                      <input
-                        type="color"
-                        value={current.color}
-                        onChange={(event) =>
-                          patchLayer({ color: event.target.value })
-                        }
-                      />
-                    </label>
+                    {current.data?.card?.style !== 'split' && (
+                      <label>
+                        Text color
+                        <input
+                          type="color"
+                          value={current.color}
+                          onChange={(event) =>
+                            patchLayer({ color: event.target.value })
+                          }
+                        />
+                      </label>
+                    )}
                     <p className="muted">
+                      {current.data?.card?.style === 'split' &&
+                        'Split header cards use a fixed blue and yellow palette. '}
                       Text and chart scale with the widget. Resize its box to
                       fit your slide.
                     </p>

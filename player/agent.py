@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.11.0'
+VERSION = '0.11.1'
 JSON_LIMIT = 4 * 1024 * 1024
 MEDIA_LIMIT = 25 * 1024 * 1024
 CACHE_LIMIT = 256 * 1024 * 1024
@@ -400,7 +400,7 @@ class Agent:
                         '.mp4': 'video/mp4', '.webp': 'image/webp', '.woff2': 'font/woff2',
                         '.woff': 'font/woff', '.ttf': 'font/ttf', '.otf': 'font/otf',
                     }[extension]
-                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/weather-icons.js', '/image-layout.js', '/shape.js', '/stocks.js', '/data-feeds.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
+                elif route in ('/', '/index.html', '/player.js', '/player.css', '/widgets.js', '/text-layout.js', '/counter.js', '/clock.js', '/weather.js', '/weather-icons.js', '/image-layout.js', '/shape.js', '/stocks.js', '/data-feeds.js', '/data-cards.js', '/playback.js', '/frame.js', '/wifi-off.svg'):
                     filename = 'index.html' if route == '/' else route[1:]
                     data = (web / filename).read_bytes()
                     content_type = {'html': 'text/html', 'js': 'text/javascript', 'css': 'text/css', 'svg': 'image/svg+xml'}[filename.split('.')[-1]]

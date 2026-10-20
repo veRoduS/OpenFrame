@@ -1,3 +1,5 @@
+import { renderDataCard } from './data-cards.js';
+
 let snapshots = {};
 const listeners = new Set();
 export function setDataFeedSnapshots(value) {
@@ -18,6 +20,8 @@ export function renderDataWidget(
   color = '#202923',
   now = Date.now(),
 ) {
+  if (config.card?.style === 'split')
+    return renderDataCard(element, config, snapshot, now);
   const vertical =
     config.mode === 'progress' && config.orientation === 'vertical';
   const width = vertical ? 300 : 640,

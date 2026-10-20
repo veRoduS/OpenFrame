@@ -1,5 +1,22 @@
 import { v4 as uuid } from 'uuid';
 
+export type DataCardConfig = {
+  style: 'plain' | 'split';
+  header: 'blue' | 'navy';
+  badge: 'spark' | 'delta' | 'none';
+  deltaText: string;
+  deltaField: string;
+  deltaUnit: string;
+  prefix: string;
+  subtitle: string;
+  footer: string;
+  footerRight: string;
+  rows: 'table' | 'bars';
+  rowDeltaField: string;
+  maxRows: number;
+  scaleMax: number;
+};
+
 export type Layer = {
   id: string;
   type:
@@ -49,6 +66,7 @@ export type Layer = {
     track: string;
     showUpdated: boolean;
     staleAfterMinutes: number;
+    card?: DataCardConfig;
   };
   stocks?: { name: string; symbols: string[] };
   shape?: {

@@ -396,7 +396,7 @@ class PlayerTests(unittest.TestCase):
         thread.start()
         try:
             base = 'http://127.0.0.1:' + str(server.server_port)
-            for filename in ('text-layout.js', 'counter.js', 'image-layout.js', 'shape.js', 'stocks.js', 'playback.js', 'frame.js', 'widgets.js'):
+            for filename in ('text-layout.js', 'counter.js', 'image-layout.js', 'shape.js', 'stocks.js', 'data-feeds.js', 'data-cards.js', 'playback.js', 'frame.js', 'widgets.js'):
                 with module.urllib.request.urlopen(base + '/' + filename) as response:
                     self.assertEqual(response.headers.get('Content-Type'), 'text/javascript')
                     self.assertTrue(response.read())

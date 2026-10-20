@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.11.1] - 2026-10-19
+
+- Render split header data cards with the shared lightweight SVG renderer, live feed comparisons, bounded category rows, freshness states, and classic fallback compatibility.
+
 ## [0.11.0] - 2026-10-18
 
 - Release bounded offline video playback and player resource cleanup from local revisions 0.10.15–0.10.16.

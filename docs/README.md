@@ -13,6 +13,7 @@
 - [Simple server and screen setup](quick-start.md): shortest manual and automated installation paths.
 - [Managed WireGuard and first-boot hotspot](managed-wireguard.md): optional VPN hosting, approval, private routing, and hardware acceptance checks.
 - [User guide](user-guide.md): slide/media editing, playlists, schedules, widgets, and screens.
+- [Split header widget cards](widget-cards.md): metric, radial, sparkline, mini-table, and breakdown styles with live feed bindings.
 - [Cached video](video-support.md): upload profiles, local playback, storage limits, and Onn acceptance.
 - [Server operations](operations.md): configuration, backup/restore, upgrades, rollback, and troubleshooting.
 - [Container images](container-images.md): milestone GHCR publishing, prebuilt Compose stack, and ARM64 Pi requirements.
