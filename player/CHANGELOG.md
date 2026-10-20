@@ -4,6 +4,11 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.15.0] - 2026-10-20
+
+- Preserve configured blue/navy headers, title and spark colors, and outer borders while circle rings alone show red/yellow/green goal status.
+- Use player 0.15.0 for this appearance on TVs and Pi players. No saved-field or manifest migration is needed. Physical-device acceptance for this refinement remains unverified.
+
 ## [0.14.1] - 2026-10-20
 
 - Apply gauge goal colors only to the circle, preserving header and border styling

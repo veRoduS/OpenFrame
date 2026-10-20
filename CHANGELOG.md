@@ -2,6 +2,11 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.29.0] - 2026-10-20
+
+- Preserve configured blue/navy headers, title and spark colors, and outer borders while circle rings alone show red/yellow/green goal status.
+- Use player 0.15.0 for this appearance on TVs and Pi players. No saved-field or manifest migration is needed. Physical-device acceptance for this refinement remains unverified.
+
 ## [0.28.1] - 2026-10-20
 
 - Keep goal-colored card headers and borders in their configured style
