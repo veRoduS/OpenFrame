@@ -40,6 +40,7 @@ const dataCardSchema = z
     rowDeltaField: z.string().max(40).default(''),
     maxRows: z.number().int().min(1).max(40).default(4),
     rowOffset: z.number().int().min(0).max(39).default(0),
+    showRowRange: z.boolean().default(true),
     scaleMax: z.number().positive().max(1e12).default(100),
     showStats: z.boolean().default(false),
     valueAlign: z.enum(['auto', 'left', 'center', 'right']).default('auto'),

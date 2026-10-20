@@ -128,6 +128,11 @@ try {
     await page.locator('.slide-canvas.editable').textContent(),
     /Rows 21–40 of 40/,
   );
+  await page.getByLabel('Show row range', { exact: true }).uncheck();
+  assert.doesNotMatch(
+    await page.locator('.slide-canvas.editable').textContent(),
+    /Rows 21–40 of 40/,
+  );
   await page.getByRole('button', { name: 'Save slide', exact: true }).click();
   await page.getByText('All changes saved', { exact: true }).waitFor();
   const slide = (await api('/api/library')).slides.find(
@@ -138,6 +143,7 @@ try {
   assert.equal(config.card.rows, 'table');
   assert.equal(config.card.rowOffset, 20);
   assert.equal(config.card.maxRows, 20);
+  assert.equal(config.card.showRowRange, false);
   await page
     .getByRole('button', { name: 'Back to slides', exact: true })
     .click();
@@ -152,6 +158,10 @@ try {
   assert.equal(
     await page.getByLabel('Visible rows', { exact: true }).inputValue(),
     '20',
+  );
+  assert.equal(
+    await page.getByLabel('Show row range', { exact: true }).isChecked(),
+    false,
   );
   await page.setViewportSize({ width: 320, height: 900 });
   await page.getByRole('button', { name: 'Properties', exact: true }).click();
@@ -192,6 +202,10 @@ try {
       .last()
       .textContent(),
     'Metric 40',
+  );
+  assert.doesNotMatch(
+    await playback.locator(active).textContent(),
+    /Rows 21–40 of 40/,
   );
   await playback.screenshot({ path: path.join(output, 'player.png') });
   await playback.evaluate(() => {
@@ -281,7 +295,7 @@ try {
     await playback.locator(`${active} [data-card-part="row"]`).count(),
     0,
   );
-  assert.match(
+  assert.doesNotMatch(
     await playback.locator(active).textContent(),
     /Adjust First row/,
   );

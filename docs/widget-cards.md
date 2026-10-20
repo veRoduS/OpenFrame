@@ -39,7 +39,7 @@ Circle cards default to **Use gauge target as green goal**, following the fixed 
 
 Circle cards display only the value in their center; the former **Score** caption is removed.
 
-For a Categories card, choose **Row layout → Mini table** or **Channel breakdown**. **First row** selects the starting row (1–40), and **Visible rows** selects up to 40 rows. Larger tables need a taller box; use two cards with First row 1 and 21 and 20 visible rows each to split a 40-row field. A footer indicates the displayed range when rows are omitted. If the selected range is beyond a smaller incoming snapshot, the card shows **No rows in this range**. Changing feeds resets First row to 1.
+For a Categories card, choose **Row layout → Mini table** or **Channel breakdown**. **First row** selects the starting row (1–40), and **Visible rows** selects up to 40 rows. Larger tables need a taller box; use two cards with First row 1 and 21 and 20 visible rows each to split a 40-row field. A footer indicates the displayed range when rows are omitted. Under **Table rows**, uncheck **Show row range** to hide that label. It starts enabled; update times and custom footer labels remain independent. If the selected range is beyond a smaller incoming snapshot, the card shows **No rows in this range**. Changing feeds resets First row to 1.
 
 A mini table can select a second categories field as **Row delta field**. Deltas match the primary rows by exact category label, so reordering comparison data does not move changes to the wrong row. Missing matches omit the badge. Changing feeds clears comparison bindings. Existing cards retain their configured visible-row counts; four remains the default outside the Table preset.
 
@@ -62,3 +62,5 @@ Goal colors and caption-free circles require server **0.27.1** and shared player
 The manifest schema and feed ingestion payloads are unchanged. Older players that already support data widgets display their existing classic layout from the same primary value. Updated players still display older publications. Older servers do not accept the new card settings when saving an edited slide; switch affected widgets to Classic and remove their optional `card` configuration before importing into an older server.
 
 Browser checks cover editor/player rendering, live updates, and compact layouts. They do not establish performance on a physical Onn stick or Pi; include the cards in your normal device playback check before relying on a dense dashboard.
+
+Hiding the row-range footer requires server **0.27.3** and player **0.13.2**. Older players ignore `showRowRange: false` and continue showing the range. Omit `showRowRange` when saving on an older server.

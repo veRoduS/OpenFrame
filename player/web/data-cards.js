@@ -433,7 +433,7 @@ export function renderDataCard(
     const minutes = Math.max(0, Math.floor((now - updatedTime) / 60000));
     updated = `${minutes >= (config.staleAfterMinutes || 60) ? 'Stale · ' : ''}Updated ${minutes < 1 ? 'just now' : `${minutes} min ago`}`;
   }
-  if (valid && config.mode === 'bar') {
+  if (valid && config.mode === 'bar' && card.showRowRange !== false) {
     const count = Math.min(
       categoryLimit,
       Math.max(0, points.length - categoryOffset),

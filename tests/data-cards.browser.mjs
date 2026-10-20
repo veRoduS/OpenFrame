@@ -57,6 +57,7 @@ const card = (overrides = {}) => ({
   rowDeltaField: '',
   maxRows: 4,
   rowOffset: 0,
+  showRowRange: true,
   scaleMax: 100,
   showStats: false,
   valueAlign: 'auto',

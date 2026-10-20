@@ -24,6 +24,7 @@ export function dataCardSettings(config: WidgetConfig): DataCardConfig {
     rowDeltaField: '',
     maxRows: 4,
     rowOffset: 0,
+    showRowRange: true,
     scaleMax: 100,
     showStats: false,
     valueAlign: 'auto',
@@ -604,6 +605,16 @@ export function DataCardOptions({
                     patch({ maxRows: Number(event.target.value) })
                   }
                 />
+              </label>
+              <label className="data-feed-checkbox">
+                <input
+                  type="checkbox"
+                  checked={card.showRowRange}
+                  onChange={(event) =>
+                    patch({ showRowRange: event.target.checked })
+                  }
+                />
+                Show row range
               </label>
               <p className="data-card-help">
                 Use a larger table for more rows, or split the same field across

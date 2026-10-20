@@ -15,6 +15,7 @@ export type DataCardConfig = {
   rowDeltaField: string;
   maxRows: number;
   rowOffset: number;
+  showRowRange: boolean;
   scaleMax: number;
   showStats: boolean;
   valueAlign: 'auto' | 'left' | 'center' | 'right';

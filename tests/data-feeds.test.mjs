@@ -509,6 +509,7 @@ void test('card settings are optional, strict, and bounded without changing clas
     rowDeltaField: '',
     maxRows: 4,
     rowOffset: 0,
+    showRowRange: true,
     scaleMax: 100,
     showStats: false,
     valueAlign: 'auto',
@@ -538,6 +539,7 @@ void test('card settings are optional, strict, and bounded without changing clas
     { rowOffset: 40 },
     { rowOffset: 1.5 },
     { rowOffset: '1' },
+    { showRowRange: 'false' },
     { maxRows: 1.5 },
     { maxRows: '4' },
     { scaleMax: 0 },
@@ -635,6 +637,7 @@ void test('card options persist, update, and publish with schema four and unchan
     rowDeltaField: 'departments',
     maxRows: 8,
     rowOffset: 0,
+    showRowRange: true,
     scaleMax: 250,
     showStats: true,
     valueAlign: 'center',
@@ -970,6 +973,7 @@ void test('SMCC table pushes infer categories in a separate stable source and re
     rows: 'table',
     maxRows: 40,
     rowOffset: 0,
+    showRowRange: true,
   };
   const saved = await admin('/api/slides', 'POST', {
     ...slide(tables.data.feedId),
