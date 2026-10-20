@@ -2,6 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.27.0] - 2026-10-20
+
+- Release numeric tables and configurable widget card layouts with player 0.13.0.
+- Add a Table widget preset, 40-row views, and saved row ranges for SMCC-style label/value feeds. Tables retain the existing bounded categories ingestion format.
+- Add independent header/value/detail text sizes, left/center/right values, and horizontal/vertical body padding. Multi-layer selection supports edge/center alignment and equal gaps, respects locks, and supports Undo.
+- Update players to 0.13.0 for all table range and presentation controls. Older players retain their earlier appearance and row limits; layer arrangement uses existing coordinates. Manifest, snapshot, ingestion, sync, and update protocols are unchanged. See the compatibility and downgrade notes in `docs/widget-cards.md`.
+
 ## [0.26.2] - 2026-10-20
 
 - Add split-card value alignment, independent header/value/detail text sizes, and horizontal/vertical body padding, with bounded fitting and saved settings. Requires player 0.12.2 for the new presentation controls.

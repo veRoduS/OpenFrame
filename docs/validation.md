@@ -1,5 +1,9 @@
 # Validation record
 
+## Approved milestone preparation — server 0.27.0 / player 0.13.0
+
+The owner authorized the source push and signed APK build on October 20, 2026. This milestone preserves both local patch commits for tables and card layout controls. Their checks passed 235 Node tests with no skips, 97 Python tests, 33 Android JVM tests, and five relevant Chromium suites. The release changes component versions and release notes; hosted CI, native container checks, image publication, and signed APK publication are separate workflow results. Updating a running server or installing on a physical TV is not performed by the source push.
+
 ## Local card layout controls — server 0.26.2 / player 0.12.2
 
 Checked on October 20, 2026: 235 Node tests pass with no skips, including real Python-agent integration; all 97 Python tests and 33 Android native JVM tests pass. The card-layout Chromium suite verifies saved/reopened typography, value alignment and body padding, published rendering, canvas/checkbox selection, locked selections, equal-gap distribution, alignment, undo/redo, 320px controls, and finite rendering at 50%/200% text sizes and 0/48px padding. Line supporting text stays clear of the plot. Screenshots of the extreme settings and mobile arrangement controls were visually inspected. Existing split-card, table, classic data-feed, and editor-lock browser regressions pass, as do lint, TypeScript, production build, version/repository checks, and compatibility review.
