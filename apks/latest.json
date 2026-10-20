@@ -1,12 +1,12 @@
 {
   "packageName": "org.openframe.player",
-  "versionName": "0.14.0",
-  "versionCode": 14000,
+  "versionName": "0.15.0",
+  "versionCode": 15000,
   "minSdk": 28,
-  "size": 109359,
-  "sha256": "b4b1a30c479da2fac7e001f1c077fa1e77cc4f205002dd7569ef22ad7088dc4a",
-  "apkUrl": "/downloads/android/openframe-player-0.14.0.apk",
-  "sourceCommit": "a8bb227af31577b3d56e45aac0db1391f774fdc8",
+  "size": 109315,
+  "sha256": "22970ac0ccf0fa80b30de36487910888e720a244dd543470692b91bb3b462381",
+  "apkUrl": "/downloads/android/openframe-player-0.15.0.apk",
+  "sourceCommit": "58bbbd87262bf3300cdb9d45fa3281b1881f5e6a",
   "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
   "compatibility": {
     "protocols": {
@@ -54,11 +54,11 @@
       }
     },
     "reviewedWith": {
-      "server": "0.28.0",
-      "player": "0.14.0"
+      "server": "0.29.0",
+      "player": "0.15.0"
     },
     "impact": "compatible",
-    "summary": "Release server 0.28.0 and player 0.14.0 with reviewed card thresholds, optional row ranges, centered gauge text, and modifier-click arrangement. Node 240, Python 97, Android JVM 33, typecheck/lint/build pass; affected browser suites passed before version-only milestone bump. No feed/manifest migration; older players ignore new appearance settings.",
-    "reviewedAt": "2026-10-20T19:33:48.478Z"
+    "summary": "Release server 0.29.0/player 0.15.0 preserving configured card headers and borders while gauge rings show goal status. No contract or manifest changes. Node 240, Python 97, Android JVM 33, lint/typecheck/build pass; live threshold browser checks passed before version-only milestone bump.",
+    "reviewedAt": "2026-10-20T19:59:12.229Z"
   }
 }

@@ -1,0 +1,64 @@
+{
+  "packageName": "org.openframe.player",
+  "versionName": "0.15.0",
+  "versionCode": 15000,
+  "minSdk": 28,
+  "size": 109315,
+  "sha256": "22970ac0ccf0fa80b30de36487910888e720a244dd543470692b91bb3b462381",
+  "apkUrl": "/downloads/android/openframe-player-0.15.0.apk",
+  "sourceCommit": "58bbbd87262bf3300cdb9d45fa3281b1881f5e6a",
+  "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
+  "compatibility": {
+    "protocols": {
+      "playerSync": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "playlistManifest": {
+        "server": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "android": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pi": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "androidUpdate": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": []
+      }
+    },
+    "reviewedWith": {
+      "server": "0.29.0",
+      "player": "0.15.0"
+    },
+    "impact": "compatible",
+    "summary": "Release server 0.29.0/player 0.15.0 preserving configured card headers and borders while gauge rings show goal status. No contract or manifest changes. Node 240, Python 97, Android JVM 33, lint/typecheck/build pass; live threshold browser checks passed before version-only milestone bump.",
+    "reviewedAt": "2026-10-20T19:59:12.229Z"
+  }
+}
