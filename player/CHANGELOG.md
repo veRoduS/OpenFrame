@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.11.3] - 2026-10-20
+
+- Place raised percent and magnitude units directly beside values without estimated-width gaps.
+
 ## [0.11.2] - 2026-10-20
 
 - Normalize split card decimal digits to the main value size and baseline in the shared editor/player renderer.

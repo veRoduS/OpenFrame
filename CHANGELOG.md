@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.25.3] - 2026-10-20
+
+- Tighten raised unit spacing beside split card values using natural font positioning.
+
 ## [0.25.2] - 2026-10-20
 
 - Display split card decimals at the same size and baseline as the main value, retaining raised currency prefixes and units.

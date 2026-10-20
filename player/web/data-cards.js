@@ -126,14 +126,14 @@ export function renderDataCard(
     ? clamp(config.decimals, 0, 4)
     : 0;
   const prefix = clean(card.prefix, 8),
-    unit = clean(config.unit, 20);
+    unit = clean(config.unit, 20).trim();
   const number = (value) =>
     value.toLocaleString('en-US', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     });
   const formatted = (value) =>
-    `${prefix}${number(value)}${unit ? ` ${unit}` : ''}`;
+    `${prefix}${number(value)}${unit ? `${/^(?:%|[kmbt])$/i.test(unit) ? '' : ' '}${unit}` : ''}`;
   const deltaFormat = (value) =>
     `${value >= 0 ? '+' : ''}${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}${clean(card.deltaUnit ?? '%', 12)}`;
   const available = snapshot?.status !== 'unavailable';
@@ -281,32 +281,36 @@ export function renderDataCard(
         (sum, p) => sum + textWidth(p.text, fontSize * (p.small ? 0.46 : 1)),
         0,
       ) +
-      (parts.length - 1) * 1.5;
+      (parts.length - 1);
     const factor = Math.min(1, maxWidth / Math.max(1, naturalWidth));
     const actualWidth = naturalWidth * factor;
-    let offset =
-      x -
-      (anchor === 'middle'
-        ? actualWidth / 2
-        : anchor === 'end'
-          ? actualWidth
-          : 0);
     const group = node(parent, 'g', {
       'data-card-part': part,
       'aria-label': formatted(value),
     });
-    for (const p of parts) {
+    // Let SVG place adjacent spans using the actual font advances. Estimated
+    // widths remain useful for fitting, but leave visible gaps between runs.
+    const text = node(group, 'text', {
+      x,
+      y: baseline,
+      fill: NAVY,
+      'font-family': 'Arial, Helvetica, sans-serif',
+      'font-weight': 900,
+      'font-size': fontSize * factor,
+      'text-anchor': anchor,
+    });
+    for (const [index, p] of parts.entries()) {
       const size = fontSize * factor * (p.small ? 0.46 : 1);
-      label(
-        group,
-        offset,
-        baseline - (p.small ? fontSize * factor * 0.39 : 0),
+      node(
+        text,
+        'tspan',
+        {
+          'font-size': size,
+          'baseline-shift': p.small ? fontSize * factor * 0.39 : 0,
+          dx: index ? factor : 0,
+        },
         p.text,
-        size,
-        maxWidth,
-        { 'font-weight': 900 },
       );
-      offset += textWidth(p.text, size) + 1.5 * factor;
     }
     return actualWidth;
   };

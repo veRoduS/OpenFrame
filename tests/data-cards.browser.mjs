@@ -437,6 +437,23 @@ try {
     await firstRow.locator('[data-card-part="row-delta"]').textContent(),
     /6\.4/,
   );
+  const unitGaps = await playback.locator(visible).evaluate((frame) =>
+    [...frame.querySelectorAll('[data-card-part="value"]')].flatMap((value) => {
+      const runs = [...value.querySelectorAll('tspan')];
+      const number = runs.find((run) =>
+        /^-?[\d,]+(?:\.\d+)?$/.test(run.textContent),
+      );
+      const unit = runs.at(-1);
+      if (unit === number) return [];
+      const digits = number.getBBox();
+      return [unit.getBBox().x - digits.x - digits.width];
+    }),
+  );
+  assert.equal(unitGaps.length, 5);
+  assert.ok(
+    unitGaps.every((gap) => gap >= -0.5 && gap <= 2),
+    JSON.stringify(unitGaps),
+  );
   await playback.screenshot({ path: path.join(output, 'reference.png') });
   // Each inline SVG must resolve its own clip and gradient references.
   const resources = await playback.locator(visible).evaluate((frame) => {
