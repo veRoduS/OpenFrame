@@ -1,12 +1,12 @@
 {
   "packageName": "org.openframe.player",
-  "versionName": "0.11.0",
-  "versionCode": 11000,
+  "versionName": "0.12.0",
+  "versionCode": 12000,
   "minSdk": 28,
-  "size": 99417,
-  "sha256": "442b1ac8bfedb1f4a37d2d5ab41bea230f7e79541a214db0d108184052c8f839",
-  "apkUrl": "/downloads/android/openframe-player-0.11.0.apk",
-  "sourceCommit": "aefa9264da9a6c89528e11b36e6e01f5eb311942",
+  "size": 106507,
+  "sha256": "d5eb664b677ba1af1bae6dc74a55dc793782bfc8b26a0c5b6f0453031361fa8b",
+  "apkUrl": "/downloads/android/openframe-player-0.12.0.apk",
+  "sourceCommit": "002da2a16d15e28e8be196ccf4428268cf96cf91",
   "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
   "compatibility": {
     "protocols": {
@@ -54,11 +54,11 @@
       }
     },
     "reviewedWith": {
-      "server": "0.25.0",
-      "player": "0.11.0"
+      "server": "0.26.0",
+      "player": "0.12.0"
     },
-    "impact": "breaking",
-    "summary": "Server 0.25.0 and player 0.11.0 release schema 5 video: upgrade players before publishing video (minimum source player 0.10.15). Existing image/widget publications retain schemas 2-4, and new players accept schemas 1-5 against older servers. Reviewed authenticated media delivery, bounded verified disk caches, local ranges, decoder/font lifecycle, upload rollback and API response limits. Existing code passed 228 Node, 97 Python, 33 native Java tests, API35 compilation and ten Chromium suites; clean install, typecheck, lint, build, zero-advisory full/production audits and isolated amd64 Docker persistence/backup/restore passed. Physical Onn/Pi acceptance, signed APK installation and hosted CI/native ARM64 validation remain outstanding.",
-    "reviewedAt": "2026-10-18T14:33:44.212Z"
+    "impact": "compatible",
+    "summary": "Approved server 0.26.0/player 0.12.0 milestone includes optional split cards and current-series statistics. Manifest schemas 1-5, snapshots, sync, and update contracts are unchanged. Older data-capable players retain classic values; older card players ignore statistics. New players accept older publications; downgrade saves require removing unsupported card/showStats settings. Full 231 Node, 97 Python, 33 Android JVM tests, three Chromium regressions, clean dependency install/audits, and isolated AMD64 container persistence/restore checks pass. Physical Onn/Pi acceptance remains outstanding.",
+    "reviewedAt": "2026-10-20T02:44:31.507Z"
   }
 }

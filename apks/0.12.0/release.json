@@ -1,0 +1,64 @@
+{
+  "packageName": "org.openframe.player",
+  "versionName": "0.12.0",
+  "versionCode": 12000,
+  "minSdk": 28,
+  "size": 106507,
+  "sha256": "d5eb664b677ba1af1bae6dc74a55dc793782bfc8b26a0c5b6f0453031361fa8b",
+  "apkUrl": "/downloads/android/openframe-player-0.12.0.apk",
+  "sourceCommit": "002da2a16d15e28e8be196ccf4428268cf96cf91",
+  "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
+  "compatibility": {
+    "protocols": {
+      "playerSync": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "playlistManifest": {
+        "server": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "android": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pi": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "androidUpdate": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": []
+      }
+    },
+    "reviewedWith": {
+      "server": "0.26.0",
+      "player": "0.12.0"
+    },
+    "impact": "compatible",
+    "summary": "Approved server 0.26.0/player 0.12.0 milestone includes optional split cards and current-series statistics. Manifest schemas 1-5, snapshots, sync, and update contracts are unchanged. Older data-capable players retain classic values; older card players ignore statistics. New players accept older publications; downgrade saves require removing unsupported card/showStats settings. Full 231 Node, 97 Python, 33 Android JVM tests, three Chromium regressions, clean dependency install/audits, and isolated AMD64 container persistence/restore checks pass. Physical Onn/Pi acceptance remains outstanding.",
+    "reviewedAt": "2026-10-20T02:44:31.507Z"
+  }
+}
