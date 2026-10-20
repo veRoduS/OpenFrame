@@ -5090,6 +5090,123 @@
           "player/wireguard.py": "492248451dac7b9b300bf258ec5247f47793452ff4f3e47877879903ba5e2542"
         }
       }
+    },
+    {
+      "reviewedAt": "2026-10-20T19:33:48.478Z",
+      "impact": "compatible",
+      "summary": "Release server 0.28.0 and player 0.14.0 with reviewed card thresholds, optional row ranges, centered gauge text, and modifier-click arrangement. Node 240, Python 97, Android JVM 33, typecheck/lint/build pass; affected browser suites passed before version-only milestone bump. No feed/manifest migration; older players ignore new appearance settings.",
+      "versions": {
+        "server": "0.28.0",
+        "player": "0.14.0"
+      },
+      "protocols": {
+        "playerSync": {
+          "server": [
+            1
+          ],
+          "android": [
+            1
+          ],
+          "pi": [
+            1
+          ]
+        },
+        "playlistManifest": {
+          "server": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "android": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "pi": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        "androidUpdate": {
+          "server": [
+            1
+          ],
+          "android": [
+            1
+          ],
+          "pi": []
+        }
+      },
+      "fingerprints": {
+        "server": {
+          "server/accounts.mjs": "4e5b7bcdd15d2dde50506df019c37755166d95a54d3e551bfc9dc0b0e41c1c9a",
+          "server/android-release-config.mjs": "450d550a5a85e70d571114b9095e5da6623eee9f9ee4a67e52656489b236250c",
+          "server/android-releases.mjs": "d4b4a78942f05f7bb67920c90fd15fa46986099977829468ad7e116af90f38b1",
+          "server/app.mjs": "473e980ace4aa4ea7fb624cf50158f52d54ed3bc14df5dcd441235d871d0eedb",
+          "server/data-feed-applications.mjs": "c19a4d3dc3c9316e0579f987df4052af6227c78b4d9471ea40a371f7bf46b1bc",
+          "server/data-feeds.mjs": "b153340d0f4f4eefa5a62b4fadd15fd0bdec2ee41f826aae1f5c27ad956154b6",
+          "server/index.mjs": "eaab1e065e0fe6f3d8a152677efab5391f76e14fb5202bb269e266affd9ae161",
+          "server/library-organization.mjs": "137c56ef3f78aed3a88b40d1ebd400acd36ee2968f9c391da47c1be88f7a1651",
+          "server/managed-vpn.mjs": "cd88e411ad17023123b0143795635afbfcfa4a4218a4065b1d0124b904904605",
+          "server/password-policy.mjs": "75df22cc9782cab8caab2629527b3526bd0d4e0c50c1e5aaa9aa1722949e09e8",
+          "server/playlist-forks.mjs": "7e472db66533cf9f76f80071dc8ac896fe5a174daea057d50b161fcc734209a9",
+          "server/publication-state.mjs": "9942a9f3259178ac585b209e1b7f5c9c6ca71272b9e99069763886092a0722a5",
+          "server/recovery.mjs": "1ed2ea26b05986e017201de492997b1a677332191438e6c3385024c4347042b8",
+          "server/schema.mjs": "6e69933836c7119cd93122102c523ffd539079739b10eb03f58d6c466e04197a",
+          "server/screen-setup.mjs": "c3b1d261cd5f63eb0ff1a2ebac571cf174f4ce2f097b44b6319ef5893c575a6d",
+          "server/starter-text.mjs": "4773f374eee08365bc1b81465b6d52a893b5d6217e4db7576d754e4cf4a98ef6",
+          "server/stocks.mjs": "c600e9a60af65025ebc4c9cb4f469550ffca92742d81b70ffdd835d739c29049",
+          "server/video.mjs": "7b3d396b873a4781904a88e6056a7ac8e405bec7185844219c6a927b0ceaaad3",
+          "server/weather.mjs": "ffe58f3d08f5a60cb78ead56bfea273d8c1d9cb5ed875c2ca91e2af0cd04d7a5",
+          "server/wireguard-core.mjs": "a5393aad5db8e240b1d29165438bed1606916c76c3d49c18a99c8fdc99876f7b",
+          "server/wireguard-host.mjs": "ea316639f0f963a5f62d3695691c1bd808422b3ea036f77b5779c5d53ce9c39b",
+          "server/zip.mjs": "91a286e0b2c96e2bf8ad7847e629adda32fa435e12ed2258e83f85354f13cc68"
+        },
+        "renderer": {
+          "player/web/clock.js": "c95971d8a0c14f0cc55886c3e20460a6a3b3d1b9294773b97403c291e3227686",
+          "player/web/counter.js": "03ab58c6e84748915ca2d97d72eecb437abcd1e90fe7fb94ce59be9aa78ccba9",
+          "player/web/data-cards.js": "83a48e4c769e9ffc2a61819b2a7445ae31bf19d338830f689decadf47487a2c9",
+          "player/web/data-feeds.js": "a2e1926da0729ce266d70910aa897aa08461b9c4ca71c8ce6842ab8b05a48f51",
+          "player/web/frame.js": "5fe8596a278893edab1ca600c4d462b9c84d275b2700635fae6cd1cb7dd8ac1a",
+          "player/web/image-layout.js": "eaa3e96d3bd8f71ae202b1be85743923ebf2e64291af24b9da2c7463c4978b3b",
+          "player/web/index.html": "d4534b47049a2bedeae24485cec3b07fe9bb1f0c71c071dc9192d470b44e6c79",
+          "player/web/playback.js": "93dab846ad229422bfb71cd37420daf875f50c37bc31ded0373f0984b48938b8",
+          "player/web/player.css": "a14efe0aae470e1ef087012fb3738449c0c8a3506512903c8962b87d95810206",
+          "player/web/player.js": "062e4b62d962a6094e9905a0bf4e014c288b1789184c2c27a4caf5bfa0561d22",
+          "player/web/shape.js": "7319987e8ba98f14c35a7bd6b03518232034e534d540773a35d4fff79dbf725b",
+          "player/web/stocks.js": "c21173878087ff7db3ae04d2f754cc863129e3db5f24275188a1230d51c2065f",
+          "player/web/text-layout.js": "c36730209c8c88fb588addd3a50bc62c1eb42dc12b2e5380f19cd48ad679798a",
+          "player/web/weather-icons.js": "b0e63e85f21e68b9c9119cbfd0c4e0feb0250742ed304a78674e855e1e6fa738",
+          "player/web/weather.js": "84abccd0261858466ec8595a96fcbd8520a16d6493de20f031c26073dfcf214c",
+          "player/web/widgets.js": "c65f279a6feaa5808260e3bd0416d2b67716177300d5a45e0924018b3a16277d",
+          "player/web/wifi-off.svg": "ff6d0788cd66beb280a9fef6aa364f1d6ceb6fbc93aee661424e90f7ad74a9b9"
+        },
+        "android": {
+          "player/android/app/build.gradle": "570813a6dc3114403fc1917b3f23f9e56089eeb193966748376c6715c492a491",
+          "player/android/app/src/main/AndroidManifest.xml": "dacb0547c4425638ef8b3cc4fd60653cd7b1dbfa54807736d3cb851e9a2dc3e0",
+          "player/android/app/src/main/java/org/openframe/player/MediaResponse.java": "13265999c6a7fd9f56b2901c6acd060cf7a03cc6b8fb09e140c030f8adb5ccbb",
+          "player/android/app/src/main/java/org/openframe/player/PlayerActivity.java": "35d80dec28949bd6fbabb166f4d731a16818ec9d847366aebab4b1e5332f0ce8",
+          "player/android/app/src/main/java/org/openframe/player/PlayerAgent.java": "3b77b1b7d0964a710ada63afa6b5ec720000e20a502c055db323e800d63678ce",
+          "player/android/app/src/main/java/org/openframe/player/UpdateInstaller.java": "6469d7c6543ecef6889173c24fac511bdce9932325c59d8178528b4698c86190",
+          "player/android/app/src/main/java/org/openframe/player/UpdateProvider.java": "ada1c0f7c3f51056201d50765d84bde8236c733d8aeff8829880bda7922431f7",
+          "player/android/app/src/main/java/org/openframe/player/UpdateSource.java": "4aeeb3c1ecc053f480cd17838a155ccdd6b72c0fbc09ad78a607e6d785196f7a",
+          "player/android/release-signing.json": "101e08ad9615794e7ac44dbdf0e622cf4d2a5dddd1c41a5392dae7f96461424d"
+        },
+        "pi": {
+          "player/agent.py": "680906d6043d1dc6a46a26a355796cab41df266b33cde3403bc41ec982b3bc1b",
+          "player/bootstrap.py": "d05de067c5c37910839ba41b80a844f3c52c6bed1ef14ef56e0348b56be20188",
+          "player/managed_network.py": "c836dc68cb9ea9ac9ba4c9c6230efcb1f77e68d5be2673636fb921577502f889",
+          "player/recovery.py": "81cd3bc8814cf12cae8d45debd99ff641f7a85cb0a43204cc7d4d9cd5f577c97",
+          "player/wifi.py": "624ccbb4b5081331d8afd18a1bea8606f02c7b053a5cec8589c07fe6e518aade",
+          "player/wireguard.py": "492248451dac7b9b300bf258ec5247f47793452ff4f3e47877879903ba5e2542"
+        }
+      }
     }
   ]
 }

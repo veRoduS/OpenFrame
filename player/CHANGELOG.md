@@ -4,6 +4,12 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.14.0] - 2026-10-20
+
+- Display optional red/yellow/green card thresholds, live gauge goals, and per-row table colors.
+- Honor the table Show row range setting and center complete circle values without the Score caption.
+- Existing cards retain their defaults. No feed or manifest schema migration is required; physical Onn/Pi acceptance for these refinements remains unverified.
+
 ## [0.13.3] - 2026-10-20
 
 - Center complete circle values using measured glyph bounds
