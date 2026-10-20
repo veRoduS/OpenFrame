@@ -136,6 +136,8 @@ Choose **Card style → Split header** for blue header tiles, superscript values
 
 Use **Widgets → Table** for SMCC-style numeric tables. Choose the table feed and Categories field, then set **First row** and **Visible rows** to show up to 40 rows or divide one field across cards. The new table controls need server **0.26.1** and player **0.12.1**. [SMCC table ingestion](data-feeds-api.md#smcc-and-other-numeric-tables) uses the existing application key and row format.
 
+For split-header cards, **Text and spacing** controls value alignment, separate header/value/detail text sizes, and horizontal/vertical body padding. Choose **Arrange layers** in Layers to select cards, then use Properties to align their edges or centers and space them evenly. Select one row or column at a time; alignment needs two layers and spacing needs three. Locked layers must be unlocked first. Each action supports Undo. The new card presentation settings need server **0.26.2** and player **0.12.2**; see [widget cards](widget-cards.md) for details.
+
 Publish the playlist layout once. Further data updates appear through normal player sync (usually about 15 seconds), without republishing or restarting the slide. An optional age label marks stale data after your chosen threshold. Offline Pi/Android players retain the latest cached snapshot, including after restart. They clear revoked data after a successful online sync. Upgrade players to **0.10.13 or later** before assigning slides with data widgets; ordinary older slides remain compatible.
 
 ## Generated starter text

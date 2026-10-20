@@ -2,6 +2,11 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.26.2] - 2026-10-20
+
+- Add split-card value alignment, independent header/value/detail text sizes, and horizontal/vertical body padding, with bounded fitting and saved settings. Requires player 0.12.2 for the new presentation controls.
+- Add multi-layer canvas/checkbox selection, edge/center alignment, equal horizontal/vertical gaps, and undo/redo. Locked selections remain protected; layer geometry works on existing players.
+
 ## [0.26.1] - 2026-10-20
 
 - Add a Table widget preset for SMCC numeric category feeds, 40-row views, and saved row-range controls with integration guidance.

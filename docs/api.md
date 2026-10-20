@@ -180,6 +180,8 @@ Card settings also accept `showStats: boolean` (default false), available from s
 
 Server 0.26.1 extends category cards to `maxRows: 1..40` and adds zero-based `rowOffset: 0..39` (default 0). The editor's **Table** preset saves the existing `mode: bar` with `card.style: split` and `card.rows: table`; the user-facing **First row** is `rowOffset + 1`. Player 0.12.1 is required for row offsets and displays beyond eight rows. Older players ignore the offset and retain their earlier row limit. Table ingestion still uses `categories` fields, as documented in the [SMCC/table integration guide](data-feeds-api.md#smcc-and-other-numeric-tables).
 
+Server 0.26.2 adds optional card presentation settings: `valueAlign: auto|left|center|right` (default `auto`), integer `titleScale`, `valueScale`, and `detailScale` percentages (50–200, default 100), and integer `paddingX`/`paddingY` design pixels (0–48, default 16). Player 0.12.2 applies these settings; older players ignore them. Gauges remain centered; table alignment applies to the numeric column. Text fits the available space. Alignment/distribution tools save ordinary layer coordinates, with no additional publication fields or ingestion changes. Remove these six card fields for saves to older servers.
+
 ### Publication state, preview versions, and starter layers
 
 Library and playlist responses include `publicationState: "draft" | "published" | "changes"`, `publishedAt`, `publishedRevision`, and `publishedSlideIds`. State compares effective playback order, timing, schedules, name, and transition with the publication; folders, tags, access metadata, entry IDs, and automatic slide-content refreshes do not create playlist draft changes.

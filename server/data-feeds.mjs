@@ -42,6 +42,12 @@ const dataCardSchema = z
     rowOffset: z.number().int().min(0).max(39).default(0),
     scaleMax: z.number().positive().max(1e12).default(100),
     showStats: z.boolean().default(false),
+    valueAlign: z.enum(['auto', 'left', 'center', 'right']).default('auto'),
+    titleScale: z.number().int().min(50).max(200).default(100),
+    valueScale: z.number().int().min(50).max(200).default(100),
+    detailScale: z.number().int().min(50).max(200).default(100),
+    paddingX: z.number().int().min(0).max(48).default(16),
+    paddingY: z.number().int().min(0).max(48).default(16),
   })
   .strict();
 export const dataWidgetSchema = z

@@ -228,6 +228,8 @@ export function SlideCanvas({
   slide,
   assets,
   selected,
+  selectionMode = false,
+  selectedIds = [],
   onSelect,
   onMove,
   onDragStart,
@@ -240,6 +242,8 @@ export function SlideCanvas({
   slide: Slide;
   assets: Asset[];
   selected?: string | null;
+  selectionMode?: boolean;
+  selectedIds?: string[];
   interactive?: boolean;
   liveData?: boolean;
   onSelect?: (id: string | null) => void;
@@ -274,6 +278,7 @@ export function SlideCanvas({
   function begin(e: PointerEvent<HTMLElement>, layer: Layer) {
     if (!interactive || e.button !== 0) return;
     e.stopPropagation();
+    if (selectionMode) return;
     onSelect?.(layer.id);
     if (layer.lockMode === 'full') return;
     const rect = root.current!.getBoundingClientRect();
@@ -400,9 +405,16 @@ export function SlideCanvas({
         <LayerElement
           key={layer.id}
           aria-label={interactive ? `Select ${layer.type} layer` : undefined}
+          aria-pressed={
+            interactive
+              ? selectionMode
+                ? selectedIds.includes(layer.id)
+                : selected === layer.id
+              : undefined
+          }
           onClick={interactive ? () => onSelect?.(layer.id) : undefined}
           onPointerDown={interactive ? (e) => begin(e, layer) : undefined}
-          className={`slide-layer ${selected === layer.id ? 'selected' : ''} ${cropMode && selected === layer.id ? 'cropping' : ''}`}
+          className={`slide-layer ${(selectionMode ? selectedIds.includes(layer.id) : selected === layer.id) ? 'selected' : ''} ${!selectionMode && cropMode && selected === layer.id ? 'cropping' : ''}`}
           style={{
             left: `${layer.x}%`,
             top: `${layer.y}%`,
@@ -459,6 +471,7 @@ export function SlideCanvas({
         </LayerElement>
       ))}
       {interactive &&
+        !selectionMode &&
         !cropMode &&
         slide.layers
           .filter(

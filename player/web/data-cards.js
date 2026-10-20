@@ -46,6 +46,22 @@ export function renderDataCard(
   now = Date.now(),
 ) {
   const card = config.card || {};
+  const setting = (key, fallback, low, high) =>
+    Number.isFinite(card[key]) ? clamp(card[key], low, high) : fallback;
+  const titleScale = setting('titleScale', 100, 50, 200) / 100;
+  const valueScale = setting('valueScale', 100, 50, 200) / 100;
+  const detailScale = setting('detailScale', 100, 50, 200) / 100;
+  const paddingX = setting('paddingX', 16, 0, 48);
+  const paddingY = setting('paddingY', 16, 0, 48);
+  const valueAlign = ['left', 'center', 'right'].includes(card.valueAlign)
+    ? card.valueAlign
+    : 'auto';
+  const valueAnchor =
+    valueAlign === 'center'
+      ? 'middle'
+      : valueAlign === 'right'
+        ? 'end'
+        : 'start';
   const categoryLimit = Number.isInteger(card.maxRows)
     ? clamp(card.maxRows, 1, 40)
     : 4;
@@ -61,7 +77,54 @@ export function renderDataCard(
     measuredHeight = element.clientHeight || 232;
   // A short, wide tile gets a wider design canvas instead of shrinking the body
   // beneath the header. Both dimensions preserve the layer's exact aspect ratio.
-  const minimumHeight = Math.max(220, 100 + rowCount * 18);
+  const headerHeight = Math.max(
+    42,
+    24 * titleScale + 18,
+    24 * detailScale + 12,
+  );
+  const hasFooter = card.footer || card.footerRight;
+  const footerBase = hasFooter
+    ? config.showUpdated
+      ? 44
+      : 30
+    : config.showUpdated
+      ? 28
+      : 0;
+  const rowSubtitle =
+    config.mode === 'bar' && card.subtitle ? 24 * detailScale : 0;
+  const baseHeight =
+    Math.max(220, 100 + rowCount * 18) +
+    Math.max(0, headerHeight - 42) +
+    Math.max(0, 2 * (paddingY - 16)) +
+    footerBase * Math.max(0, detailScale - 1);
+  const customSpacing = titleScale > 1 || detailScale > 1 || paddingY > 16;
+  const stackedLine =
+    (valueAlign === 'center' || valueAlign === 'right') && card.subtitle;
+  const lineBodyHeight =
+    config.mode === 'line' && (valueScale > 1 || detailScale > 1 || stackedLine)
+      ? (44 * valueScale * 1.05 +
+          14 * detailScale +
+          (stackedLine ? 10 * detailScale + 10 : 0) +
+          4) /
+        0.7
+      : 0;
+  const minimumHeight = Math.max(
+    baseHeight,
+    lineBodyHeight
+      ? headerHeight +
+          footerBase * Math.max(1, detailScale) +
+          paddingY * 2 +
+          lineBodyHeight
+      : 0,
+    customSpacing && rowCount
+      ? headerHeight +
+          footerBase * Math.max(1, detailScale) +
+          paddingY * 2 +
+          rowSubtitle +
+          rowCount * 18 +
+          Math.max(0, rowCount - 1) * 4
+      : 0,
+  );
   const scale = Math.min(measuredWidth / 320, measuredHeight / minimumHeight);
   const width = measuredWidth / scale,
     height = measuredHeight / scale;
@@ -93,8 +156,13 @@ export function renderDataCard(
     size = 12,
     maxWidth = width - 32,
     attrs = {},
-  ) =>
-    node(
+  ) => {
+    // Detail size applies to supporting copy, badges, rows and metadata.
+    // Header and row values have independent size controls.
+    if (attrs['data-card-part'] === 'title') size *= titleScale;
+    else if (attrs['data-card-part'] === 'row-value') size *= valueScale;
+    else size *= detailScale;
+    return node(
       parent,
       'text',
       {
@@ -108,17 +176,25 @@ export function renderDataCard(
       },
       ellipsis(text, maxWidth, size, Number(attrs['letter-spacing']) || 0),
     );
+  };
   const wrap = (parent, x, y, text, maxWidth, size = 12, lines = 2) => {
     let rest = clean(text, 100).trim();
     for (let i = 0; i < lines && rest; i++) {
-      if (i === lines - 1 || textWidth(rest, size) <= maxWidth) {
-        label(parent, x, y + i * (size + 5), rest, size, maxWidth);
+      if (i === lines - 1 || textWidth(rest, size * detailScale) <= maxWidth) {
+        label(
+          parent,
+          x,
+          y + i * (size * detailScale + 5),
+          rest,
+          size,
+          maxWidth,
+        );
         break;
       }
       let count = 1;
       while (
         count < rest.length &&
-        textWidth(rest.slice(0, count + 1), size) <= maxWidth
+        textWidth(rest.slice(0, count + 1), size * detailScale) <= maxWidth
       )
         count++;
       const space = rest.lastIndexOf(' ', count);
@@ -126,7 +202,7 @@ export function renderDataCard(
       label(
         parent,
         x,
-        y + i * (size + 5),
+        y + i * (size * detailScale + 5),
         rest.slice(0, count),
         size,
         maxWidth,
@@ -195,7 +271,7 @@ export function renderDataCard(
     height,
     fill: secondary ? 'rgba(169,221,247,0.25)' : '#FFFFFF',
   });
-  const headerHeight = 42;
+  const headerMiddle = headerHeight / 2;
   node(surface, 'rect', {
     width,
     height: headerHeight,
@@ -210,10 +286,17 @@ export function renderDataCard(
     maxWidth,
     part = 'delta',
     fontSize = 12,
-    pillHeight = 24,
+    pillHeight = 24 * detailScale,
   ) => {
-    const display = ellipsis(text, Math.max(0, maxWidth - 18), fontSize);
-    const pillWidth = Math.min(maxWidth, textWidth(display, fontSize) + 18);
+    const display = ellipsis(
+      text,
+      Math.max(0, maxWidth - 18),
+      fontSize * detailScale,
+    );
+    const pillWidth = Math.min(
+      maxWidth,
+      textWidth(display, fontSize * detailScale) + 18,
+    );
     const group = node(parent, 'g', { 'data-card-part': part });
     node(group, 'rect', {
       x: right - pillWidth,
@@ -226,7 +309,7 @@ export function renderDataCard(
     label(
       group,
       right - pillWidth / 2,
-      cy + fontSize * 0.35,
+      cy + fontSize * detailScale * 0.35,
       display,
       fontSize,
       pillWidth - 12,
@@ -237,10 +320,16 @@ export function renderDataCard(
   let focalWidth = 0;
   if (card.badge === 'delta' && delta)
     focalWidth =
-      pill(surface, width - 16, 21, delta, Math.min(125, width * 0.4)) + 10;
+      pill(
+        surface,
+        width - 16,
+        headerMiddle,
+        delta,
+        Math.min(125, width * 0.4),
+      ) + 10;
   else if (card.badge === 'spark') {
     const spark = node(surface, 'g', {
-      transform: `translate(${width - 26} 21)`,
+      transform: `translate(${width - 26} ${headerMiddle})`,
       'data-card-part': 'spark',
       'aria-hidden': 'true',
     });
@@ -252,11 +341,19 @@ export function renderDataCard(
       });
     focalWidth = 28;
   }
-  label(surface, 16, 26, title.toUpperCase(), 12, width - 32 - focalWidth, {
-    fill: card.header === 'navy' ? SKY : '#FFFFFF',
-    'letter-spacing': '0.6',
-    'data-card-part': 'title',
-  });
+  label(
+    surface,
+    16,
+    headerMiddle + 5 * titleScale,
+    title.toUpperCase(),
+    12,
+    width - 32 - focalWidth,
+    {
+      fill: card.header === 'navy' ? SKY : '#FFFFFF',
+      'letter-spacing': '0.6',
+      'data-card-part': 'title',
+    },
+  );
 
   let updated = '';
   const updatedTime = Date.parse(snapshot?.updatedAt);
@@ -279,11 +376,29 @@ export function renderDataCard(
   const footer = clean(card.footer, 80),
     footerRight = clean(card.footerRight, 40);
   const footerHeight =
-    footer || footerRight ? (updated ? 44 : 30) : updated ? 28 : 0;
-  const bodyTop = headerHeight + 16,
-    bodyBottom = height - footerHeight - 16;
+    (footer || footerRight ? (updated ? 44 : 30) : updated ? 28 : 0) *
+    Math.max(1, detailScale);
+  const bodyTop = headerHeight + paddingY,
+    bodyBottom = height - footerHeight - paddingY;
   const bodyHeight = bodyBottom - bodyTop,
-    bodyWidth = width - 32;
+    bodyWidth = width - 2 * paddingX;
+  const valueX =
+    valueAlign === 'center'
+      ? width / 2
+      : valueAlign === 'right'
+        ? width - paddingX
+        : paddingX;
+  const bodyClip = node(defs, 'clipPath', { id: `${id}-body` });
+  node(bodyClip, 'rect', {
+    x: 1,
+    y: bodyTop,
+    width: width - 2,
+    height: bodyHeight,
+  });
+  const body = node(surface, 'g', {
+    'clip-path': `url(#${id}-body)`,
+    'data-card-part': 'body',
+  });
 
   const lockup = (
     parent,
@@ -342,40 +457,70 @@ export function renderDataCard(
   if (!valid) {
     const message = available ? 'Waiting for data' : 'Data unavailable';
     label(
-      surface,
+      body,
       width / 2,
       (bodyTop + bodyBottom) / 2 + 5,
       message,
-      16,
+      paddingX,
       bodyWidth,
       { 'text-anchor': 'middle', 'data-card-part': 'status' },
     );
     description += `. ${message}`;
   } else if (config.mode === 'metric') {
     const bodyDelta = card.badge !== 'delta' && delta;
+    const stacked = valueAlign === 'center' || valueAlign === 'right';
     const deltaWidth = bodyDelta
-      ? Math.min(125, bodyWidth * 0.44, textWidth(delta, 12) + 18)
+      ? Math.min(125, bodyWidth * 0.44, textWidth(delta, 12 * detailScale) + 18)
       : 0;
-    const baseline = bodyTop + bodyHeight / 2 + (card.subtitle ? 5 : 20);
+    const size = Math.min(
+      56 * valueScale,
+      bodyHeight * (card.subtitle || (bodyDelta && stacked) ? 0.52 : 0.8),
+    );
+    const baseline =
+      bodyTop + bodyHeight / 2 + (card.subtitle ? 5 : size * 0.357);
     lockup(
-      surface,
-      16,
+      body,
+      valueX,
       baseline,
       rawValue,
-      bodyWidth - (bodyDelta ? deltaWidth + 12 : 0),
-      56,
+      bodyWidth - (bodyDelta && !stacked ? deltaWidth + 12 : 0),
+      size,
+      'value',
+      valueAnchor,
     );
-    if (bodyDelta) pill(surface, width - 16, baseline - 20, delta, deltaWidth);
-    if (card.subtitle)
-      wrap(
-        surface,
-        16,
-        baseline + 28,
-        card.subtitle,
-        bodyWidth,
+    if (bodyDelta)
+      pill(
+        body,
+        width - paddingX,
+        stacked ? bodyBottom - 12 * detailScale : baseline - size * 0.357,
+        delta,
+        deltaWidth,
+        'delta',
         12,
-        Math.max(1, Math.min(2, Math.floor((bodyBottom - baseline - 18) / 17))),
+        24 * detailScale,
       );
+    if (card.subtitle) {
+      const subtitleWidth =
+        bodyWidth - (bodyDelta && stacked ? deltaWidth + 12 : 0);
+      const subtitle = node(body, 'g', {
+        transform: `translate(${valueAlign === 'center' ? width / 2 - subtitleWidth / 2 : valueAlign === 'right' ? width - paddingX - subtitleWidth : paddingX} 0)`,
+      });
+      wrap(
+        subtitle,
+        0,
+        Math.min(bodyBottom - 4, baseline + 28 * detailScale),
+        card.subtitle,
+        subtitleWidth,
+        12,
+        Math.max(
+          1,
+          Math.min(
+            2,
+            Math.floor((bodyBottom - baseline - 18) / (12 * detailScale + 5)),
+          ),
+        ),
+      );
+    }
     description += `. ${formatted(rawValue)}`;
   } else if (config.mode === 'progress') {
     const radius = Math.min(100, bodyWidth / 2 - 6, bodyHeight / 2 - 6);
@@ -385,8 +530,8 @@ export function renderDataCard(
       Number.isFinite(card.scaleMax) && card.scaleMax > 0 ? card.scaleMax : 100;
     const ratio = clamp(rawValue / scaleMax, 0, 1);
     const circle = { cx, cy, r: radius, fill: 'none', 'stroke-width': 12 };
-    node(surface, 'circle', { ...circle, stroke: '#E8EEF5' });
-    node(surface, 'circle', {
+    node(body, 'circle', { ...circle, stroke: '#E8EEF5' });
+    node(body, 'circle', {
       ...circle,
       stroke: BLUE,
       pathLength: 100,
@@ -397,19 +542,28 @@ export function renderDataCard(
       'data-ratio': ratio,
     });
     lockup(
-      surface,
+      body,
       cx,
       cy + 1,
       rawValue,
       radius * 1.65,
-      Math.min(38, radius * 0.57),
+      Math.min(38 * valueScale, radius * 0.57 * valueScale, radius * 0.85),
       'value',
       'middle',
     );
-    label(surface, cx, cy + 18, 'SCORE', 9, radius * 1.6, {
-      'text-anchor': 'middle',
-      'letter-spacing': '1',
-    });
+    const scoreSize = Math.min(9 * detailScale, radius * 0.2);
+    label(
+      body,
+      cx,
+      cy + Math.min(18 * detailScale, radius * 0.55),
+      'SCORE',
+      scoreSize / detailScale,
+      radius * 1.6,
+      {
+        'text-anchor': 'middle',
+        'letter-spacing': '1',
+      },
+    );
     const target = config.targetField
       ? snapshot.data[config.targetField]
       : config.target;
@@ -417,56 +571,87 @@ export function renderDataCard(
       Number.isFinite(target) && target > 0
         ? `Goal: ${formatted(target)}`
         : 'Goal unavailable';
-    const goalTop = bodyBottom - 22;
+    const goalHeight = 22 * detailScale;
+    const goalTop = bodyBottom - goalHeight;
     const distance = goalTop - cy;
     const outerRadius = radius + 6;
     const goalSpace =
       distance >= outerRadius
         ? bodyWidth
-        : width - 16 - cx - Math.sqrt(outerRadius ** 2 - distance ** 2) - 8;
-    const goalWidth = Math.min(goalSpace, textWidth(goal, 10) + 16);
-    const goalX = width - 16 - goalWidth;
-    const goalSize = Math.min(
-      10,
-      Math.max(8, (10 * (goalWidth - 16)) / textWidth(goal, 10)),
+        : width -
+          paddingX -
+          cx -
+          Math.sqrt(outerRadius ** 2 - distance ** 2) -
+          8;
+    const goalWidth = Math.max(
+      16,
+      Math.min(goalSpace, textWidth(goal, 10 * detailScale) + 16),
     );
-    node(surface, 'rect', {
+    const goalX = width - paddingX - goalWidth;
+    const goalSize = Math.min(
+      10 * detailScale,
+      Math.max(8 * detailScale, (goalWidth - 16) / textWidth(goal, 1)),
+    );
+    node(body, 'rect', {
       x: goalX,
       y: goalTop,
       width: goalWidth,
-      height: 22,
+      height: goalHeight,
       rx: 7,
       fill: 'rgba(169,221,247,0.35)',
       'data-card-part': 'goal-badge',
     });
-    label(surface, goalX + 8, goalTop + 14.5, goal, goalSize, goalWidth - 16, {
-      'data-card-part': 'goal',
-    });
+    label(
+      body,
+      goalX + 8,
+      goalTop + goalHeight / 2 + goalSize * 0.35,
+      goal,
+      goalSize / detailScale,
+      goalWidth - 16,
+      {
+        'data-card-part': 'goal',
+      },
+    );
     description += `. ${formatted(rawValue)}. ${goal}. Scale maximum ${scaleMax}`;
   } else if (config.mode === 'line') {
     const latest = points.at(-1);
     const compact = bodyHeight < 125;
-    const valueSize = compact ? 36 : 44;
+    const stacked = valueAlign !== 'auto' && valueAlign !== 'left';
+    const subtitleSpace = card.subtitle && stacked ? 10 * detailScale + 10 : 0;
+    const valueSize = Math.min(
+      (compact ? 36 : 44) * valueScale,
+      Math.max(
+        12,
+        (bodyHeight -
+          14 * detailScale -
+          Math.max(24, bodyHeight * 0.3) -
+          subtitleSpace -
+          4) /
+          1.05,
+      ),
+    );
     const valueWidth = lockup(
-      surface,
-      16,
+      body,
+      valueX,
       bodyTop + valueSize * 0.92,
       latest.value,
-      card.subtitle ? bodyWidth * 0.55 : bodyWidth,
+      card.subtitle && !stacked ? bodyWidth * 0.55 : bodyWidth,
       valueSize,
+      'value',
+      valueAnchor,
     );
     if (card.subtitle)
       label(
-        surface,
-        width - 16,
-        bodyTop + valueSize * 0.92,
+        body,
+        width - paddingX,
+        bodyTop + valueSize * 0.92 + (stacked ? 10 * detailScale + 5 : 0),
         clean(card.subtitle, 100),
         10,
-        bodyWidth - valueWidth - 12,
-        { 'text-anchor': 'end' },
+        stacked ? bodyWidth : bodyWidth - valueWidth - 12,
+        { 'text-anchor': 'end', 'data-card-part': 'subtitle' },
       );
-    const top = bodyTop + Math.min(48, bodyHeight - 36),
-      bottom = bodyBottom - 14;
+    const top = bodyTop + Math.max(48, valueSize * 1.05 + subtitleSpace + 4),
+      bottom = bodyBottom - 14 * detailScale;
     const minimum = Math.min(...points.map((p) => p.value)),
       maximum = Math.max(...points.map((p) => p.value));
     let low = minimum,
@@ -485,13 +670,13 @@ export function renderDataCard(
     const x = (p) =>
       firstTime === lastTime
         ? width / 2
-        : 16 +
+        : paddingX +
           clamp(
             (Date.parse(p.time) - firstTime) / (lastTime - firstTime),
             0,
             1,
           ) *
-            (width - 32);
+            bodyWidth;
     const y = (value) =>
       bottom - ((value - low) / (high - low)) * (bottom - top);
     const coordinates = points.map((p) => [x(p), y(p.value)]);
@@ -512,28 +697,28 @@ export function renderDataCard(
       'stop-color': SKY,
       'stop-opacity': 0.12,
     });
-    node(surface, 'path', {
+    node(body, 'path', {
       d: `M ${coordinates[0][0]} ${bottom} L ${coordinates.map((p) => p.join(' ')).join(' L ')} L ${coordinates.at(-1)[0]} ${bottom} Z`,
       fill: `url(#${id}-fill)`,
     });
-    node(surface, 'line', {
-      x1: 16,
-      x2: width - 16,
+    node(body, 'line', {
+      x1: paddingX,
+      x2: width - paddingX,
       y1: bottom,
       y2: bottom,
       stroke: '#E8EEF5',
       'stroke-width': 1,
     });
     if (low < 0 && high > 0)
-      node(surface, 'line', {
-        x1: 16,
-        x2: width - 16,
+      node(body, 'line', {
+        x1: paddingX,
+        x2: width - paddingX,
         y1: y(0),
         y2: y(0),
         stroke: '#E8EEF5',
         'stroke-dasharray': '3 3',
       });
-    node(surface, 'polyline', {
+    node(body, 'polyline', {
       points: coordinates.map((p) => p.join(',')).join(' '),
       fill: 'none',
       stroke: BLUE,
@@ -545,7 +730,7 @@ export function renderDataCard(
     // Markers are useful on a small weekly series, but unnecessary node work on long histories.
     if (coordinates.length <= 12)
       for (const [cx, cy] of coordinates.slice(0, -1))
-        node(surface, 'circle', {
+        node(body, 'circle', {
           cx,
           cy,
           r: 2.6,
@@ -554,7 +739,7 @@ export function renderDataCard(
           'stroke-width': 1.8,
         });
     const [cx, cy] = coordinates.at(-1);
-    node(surface, 'circle', {
+    node(body, 'circle', {
       cx,
       cy,
       r: 4.3,
@@ -578,9 +763,10 @@ export function renderDataCard(
       ];
       for (const [index, [name, value]] of statistics.entries()) {
         const anchor = index === 0 ? 'start' : index === 1 ? 'middle' : 'end';
-        const x = index === 0 ? 16 : index === 1 ? width / 2 : width - 16;
+        const x =
+          index === 0 ? paddingX : index === 1 ? width / 2 : width - paddingX;
         label(
-          surface,
+          body,
           x,
           bodyBottom,
           `${name} ${formatted(value)}`,
@@ -594,10 +780,18 @@ export function renderDataCard(
       }
       description += `. Minimum ${formatted(minimum)}. Average ${formatted(average)}. Maximum ${formatted(maximum)}`;
     } else {
-      label(surface, 16, bodyBottom, date(points[0]), 10, bodyWidth / 2);
-      label(surface, width - 16, bodyBottom, date(latest), 10, bodyWidth / 2, {
-        'text-anchor': 'end',
-      });
+      label(body, paddingX, bodyBottom, date(points[0]), 10, bodyWidth / 2);
+      label(
+        body,
+        width - paddingX,
+        bodyBottom,
+        date(latest),
+        10,
+        bodyWidth / 2,
+        {
+          'text-anchor': 'end',
+        },
+      );
     }
     description += `. ${points.length} values. Latest ${formatted(latest.value)}`;
   } else if (config.mode === 'bar') {
@@ -616,9 +810,16 @@ export function renderDataCard(
         )
         .map((p) => [p.label, p.value]),
     );
-    const subtitleHeight = card.subtitle ? 24 : 0;
+    const subtitleHeight = card.subtitle ? 24 * detailScale : 0;
     if (card.subtitle)
-      label(surface, 16, bodyTop + 7, clean(card.subtitle, 100), 11, bodyWidth);
+      label(
+        body,
+        paddingX,
+        bodyTop + 12 * detailScale,
+        clean(card.subtitle, 100),
+        11,
+        bodyWidth,
+      );
     const gap = Math.min(
       8,
       bodyHeight / (Math.max(1, rows.length) * (rows.length > 8 ? 10 : 5)),
@@ -628,7 +829,7 @@ export function renderDataCard(
       Math.max(1, rows.length);
     if (!rows.length)
       label(
-        surface,
+        body,
         width / 2,
         bodyTop + bodyHeight / 2,
         'No rows in this range',
@@ -642,14 +843,14 @@ export function renderDataCard(
       high = Math.max(scaleMax, ...rows.map((p) => p.value));
     rows.forEach((row, index) => {
       const y = bodyTop + subtitleHeight + index * (rowHeight + gap);
-      const group = node(surface, 'g', {
+      const group = node(body, 'g', {
         'data-card-part': 'row',
         'data-label': row.label,
       });
       node(group, 'rect', {
-        x: 14,
+        x: Math.max(1, paddingX - 2),
         y,
-        width: width - 28,
+        width: width - 2 * Math.max(1, paddingX - 2),
         height: rowHeight,
         rx: Math.min(12, rowHeight / 2),
         fill: '#FFFFFF',
@@ -657,9 +858,13 @@ export function renderDataCard(
       const size = Math.min(
         13,
         rowHeight * (bars ? 0.24 : rows.length > 8 ? 0.6 : 0.38),
+        (rowHeight * (bars ? 0.32 : 0.7)) / Math.max(detailScale, valueScale),
       );
       const baseline =
-        y + (bars ? rowHeight * 0.47 : rowHeight / 2 + size * 0.35);
+        y +
+        (bars
+          ? rowHeight * 0.47
+          : rowHeight / 2 + size * Math.max(detailScale, valueScale) * 0.35);
       const rowDelta = deltas.has(row.label)
         ? deltaFormat(deltas.get(row.label))
         : '';
@@ -667,7 +872,7 @@ export function renderDataCard(
       if (rowDelta)
         pill(
           group,
-          width - 24,
+          width - paddingX - 8,
           y + rowHeight / 2,
           rowDelta,
           deltaWidth,
@@ -675,32 +880,44 @@ export function renderDataCard(
           Math.min(11, size),
           Math.max(1, Math.min(24, rowHeight - 2)),
         );
-      const valueRight = width - 24 - (rowDelta ? deltaWidth + 8 : 0);
+      const valueRight = width - paddingX - 8 - (rowDelta ? deltaWidth + 8 : 0);
       const valueWidth = Math.min(
         bodyWidth * 0.43,
-        Math.max(48, textWidth(formatted(row.value), size)),
+        Math.max(48, textWidth(formatted(row.value), size * valueScale)),
       );
       label(
         group,
-        valueRight,
+        valueAlign === 'center'
+          ? valueRight - valueWidth / 2
+          : valueAlign === 'left'
+            ? valueRight - valueWidth
+            : valueRight,
         baseline,
         formatted(row.value),
         size,
         valueWidth,
-        { 'text-anchor': 'end', 'data-card-part': 'row-value' },
+        {
+          'text-anchor':
+            valueAlign === 'center'
+              ? 'middle'
+              : valueAlign === 'left'
+                ? 'start'
+                : 'end',
+          'data-card-part': 'row-value',
+        },
       );
       label(
         group,
-        26,
+        paddingX + 10,
         baseline,
         clean(row.label, 60),
         size,
-        Math.max(12, valueRight - valueWidth - 36),
+        Math.max(12, valueRight - valueWidth - paddingX - 20),
         { 'data-card-part': 'row-label' },
       );
       if (bars) {
-        const trackX = 26,
-          trackWidth = width - 52,
+        const trackX = paddingX + 10,
+          trackWidth = bodyWidth - 20,
           trackY = y + rowHeight * 0.69;
         const trackHeight = Math.max(3, Math.min(6, rowHeight * 0.12));
         const zero = trackX + (-low / (high - low)) * trackWidth;
@@ -745,23 +962,34 @@ export function renderDataCard(
     });
     if (footer || footerRight) {
       const rightWidth = footerRight
-        ? Math.min(bodyWidth * (footer ? 0.4 : 1), textWidth(footerRight, 11))
+        ? Math.min(
+            bodyWidth * (footer ? 0.4 : 1),
+            textWidth(footerRight, 11 * detailScale),
+          )
         : 0;
       label(
         group,
         16,
-        top + 19,
+        top + 19 * detailScale,
         footer,
         11,
         bodyWidth - rightWidth - (rightWidth ? 10 : 0),
       );
       if (footerRight)
-        label(group, width - 16, top + 19, footerRight, 11, rightWidth, {
-          'text-anchor': 'end',
-        });
+        label(
+          group,
+          width - 16,
+          top + 19 * detailScale,
+          footerRight,
+          11,
+          rightWidth,
+          {
+            'text-anchor': 'end',
+          },
+        );
     }
     if (updated)
-      label(group, 16, height - 9, updated, 10, bodyWidth, {
+      label(group, 16, height - 9 * detailScale, updated, 10, bodyWidth, {
         'data-card-part': 'updated',
       });
     description += `${footer ? `. ${footer}` : ''}${footerRight ? `. ${footerRight}` : ''}${updated ? `. ${updated}` : ''}`;

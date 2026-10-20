@@ -59,6 +59,12 @@ const card = (overrides = {}) => ({
   rowOffset: 0,
   scaleMax: 100,
   showStats: false,
+  valueAlign: 'auto',
+  titleScale: 100,
+  valueScale: 100,
+  detailScale: 100,
+  paddingX: 16,
+  paddingY: 16,
   ...overrides,
 });
 const config = (feedId, mode, field, title, extra = {}, appearance = {}) => ({

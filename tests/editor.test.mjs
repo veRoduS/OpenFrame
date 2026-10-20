@@ -1,11 +1,95 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resizeLayer } from '../app/geometry.mjs';
+import { resizeLayer, arrangeLayers } from '../app/geometry.mjs';
 import { visibleMedia, parseTags } from '../app/media-utils.mjs';
 import { fitFontSize, layoutText } from '../player/web/text-layout.js';
 import { layerSchema } from '../server/schema.mjs';
 
 const frame = { x: 20, y: 20, width: 40, height: 30 };
+const arrangement = [
+  { id: 'a', x: 5, y: 5, width: 10, height: 10 },
+  { id: 'b', x: 22, y: 30, width: 20, height: 20 },
+  { id: 'c', x: 70, y: 70, width: 15, height: 15 },
+  { id: 'other', x: 1, y: 1, width: 5, height: 5 },
+];
+const arrangedIds = ['a', 'b', 'c'];
+void test('alignment uses selected outer bounds, preserves dimensions and unselected layers', () => {
+  for (const action of ['left', 'center', 'right', 'top', 'middle', 'bottom']) {
+    const result = arrangeLayers(arrangement, arrangedIds, action);
+    const horizontal = ['left', 'center', 'right'].includes(action);
+    const axis = horizontal ? 'x' : 'y',
+      size = horizontal ? 'width' : 'height';
+    const expected = ['left', 'top'].includes(action)
+      ? 5
+      : ['right', 'bottom'].includes(action)
+        ? 85
+        : 45;
+    for (const layer of result.slice(0, 3)) {
+      assert.equal(
+        layer[axis] +
+          (['left', 'top'].includes(action)
+            ? 0
+            : ['right', 'bottom'].includes(action)
+              ? layer[size]
+              : layer[size] / 2),
+        expected,
+      );
+      assert.ok(
+        layer.x >= 0 &&
+          layer.y >= 0 &&
+          layer.x + layer.width <= 100 &&
+          layer.y + layer.height <= 100,
+      );
+      const original = arrangement.find((item) => item.id === layer.id);
+      assert.equal(layer.width, original.width);
+      assert.equal(layer.height, original.height);
+    }
+    assert.equal(result[3], arrangement[3]);
+  }
+  assert.equal(arrangement[1].x, 22, 'input is never mutated');
+});
+void test('distribution equalizes gaps for unequal sizes, retaining both outer edges', () => {
+  for (const action of ['horizontal', 'vertical']) {
+    const result = arrangeLayers(arrangement, ['c', 'a', 'b'], action);
+    const axis = action === 'horizontal' ? 'x' : 'y',
+      size = action === 'horizontal' ? 'width' : 'height';
+    assert.equal(result[0][axis], 5);
+    assert.equal(result[2][axis] + result[2][size], 85);
+    assert.equal(
+      result[1][axis] - result[0][axis] - result[0][size],
+      result[2][axis] - result[1][axis] - result[1][size],
+    );
+    assert.equal(
+      arrangeLayers(result, arrangedIds, action),
+      result,
+      'repeating is a no-op',
+    );
+  }
+});
+void test('arrangement rejects locked, undersized, unknown and crowded operations atomically', () => {
+  for (const lockMode of ['movement', 'full']) {
+    const layers = arrangement.map((layer, i) =>
+      i === 1 ? { ...layer, lockMode } : layer,
+    );
+    for (const action of ['left', 'horizontal', 'top', 'vertical'])
+      assert.equal(arrangeLayers(layers, arrangedIds, action), layers);
+    assert.notEqual(
+      arrangeLayers(layers, ['a', 'c'], 'left'),
+      layers,
+      'unselected locks do not interfere',
+    );
+  }
+  assert.equal(arrangeLayers(arrangement, ['a'], 'left'), arrangement);
+  assert.equal(
+    arrangeLayers(arrangement, ['a', 'b'], 'horizontal'),
+    arrangement,
+  );
+  assert.equal(arrangeLayers(arrangement, arrangedIds, 'unknown'), arrangement);
+  const crowded = arrangement
+    .slice(0, 3)
+    .map((layer, i) => ({ ...layer, x: i * 5, width: 30 }));
+  assert.equal(arrangeLayers(crowded, arrangedIds, 'horizontal'), crowded);
+});
 void test('corner resizing keeps the opposite corner fixed and preserves proportions', () => {
   for (const corner of ['nw', 'ne', 'sw', 'se']) {
     const result = resizeLayer(

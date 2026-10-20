@@ -26,6 +26,12 @@ export function dataCardSettings(config: WidgetConfig): DataCardConfig {
     rowOffset: 0,
     scaleMax: 100,
     showStats: false,
+    valueAlign: 'auto',
+    titleScale: 100,
+    valueScale: 100,
+    detailScale: 100,
+    paddingX: 16,
+    paddingY: 16,
     ...config.card,
   };
 }
@@ -237,6 +243,59 @@ export function DataCardOptions({
     feed?.fields.filter((field) => field.type === 'categories') || [];
   return (
     <div className="data-card-options">
+      <details className="data-card-layout-options" open>
+        <summary>Text and spacing</summary>
+        <div>
+          {config.mode !== 'progress' && (
+            <label>
+              Value alignment
+              <select
+                aria-label="Value alignment"
+                value={card.valueAlign}
+                onChange={(event) =>
+                  patch({
+                    valueAlign: event.target
+                      .value as DataCardConfig['valueAlign'],
+                  })
+                }
+              >
+                <option value="auto">Default</option>
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+          )}
+          {(
+            [
+              ['titleScale', 'Header text size (%)'],
+              ['valueScale', 'Value text size (%)'],
+              ['detailScale', 'Detail text size (%)'],
+              ['paddingX', 'Horizontal body padding'],
+              ['paddingY', 'Vertical body padding'],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key}>
+              {label}
+              <input
+                type="number"
+                min={key.startsWith('padding') ? 0 : 50}
+                max={key.startsWith('padding') ? 48 : 200}
+                step={1}
+                value={card[key]}
+                onChange={(event) =>
+                  patch({ [key]: Number(event.target.value) })
+                }
+              />
+            </label>
+          ))}
+          <p className="data-card-help">
+            100% keeps the original text size. Text fits the available space.
+            Body padding uses design pixels and scales with the card; gauges
+            stay centered.
+          </p>
+        </div>
+      </details>
       <label>
         Header color
         <select

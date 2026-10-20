@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.12.1'
+VERSION = '0.12.2'
 JSON_LIMIT = 4 * 1024 * 1024
 MEDIA_LIMIT = 25 * 1024 * 1024
 CACHE_LIMIT = 256 * 1024 * 1024

@@ -15,6 +15,12 @@ Cards use the fixed blue, navy, yellow, white, and Sky Blue palette. Choose **Tr
 
 ## Values and comparisons
 
+Open **Text and spacing** to choose **Value alignment → Center**, Left, or Right for metric and line cards. Table alignment applies within the numeric column; row labels stay on the left. **Default** retains the original alignment, and radial gauges always stay centered. Centered metric cards put their optional comparison in the lower-right corner so it does not shift the main value off-center.
+
+Set **Header text size (%)**, **Value text size (%)**, and **Detail text size (%)** independently, from 50% to 200%. Detail size controls supporting text, row labels, badges, statistics, and footer copy. Values still fit the available space, so long numbers and dense rows may stop growing before the requested size. **Horizontal body padding** and **Vertical body padding** accept 0–48 design pixels (16 by default); these scale with the card. Header and footer bands remain flush with the card edges. Existing cards keep their original sizes and padding.
+
+To tidy a grid, choose **Arrange layers** in the Layers panel. Select cards using the layer checkboxes or by clicking cards on the canvas; **Select all cards** selects every data widget. In Properties, align two or more selected layers by their left/right/top/bottom edges or horizontal/vertical centers. Select three or more to **Space evenly horizontally** or **Space evenly vertically**. Spacing uses equal gaps, including when card sizes differ, and preserves the selection's outside edges. Select one row or column at a time for a grid. If the cards cannot fit without overlapping, spread the outside cards farther apart first. Locked selections must be unlocked before arranging. Each operation is one Undo step; **Done arranging** returns to normal editing and dragging. On a phone, use Layers to select and Properties to arrange.
+
 Use **Value prefix** for a currency symbol such as `$`, **Unit / suffix** for `%`, `B`, or `m`, and **Decimal places** for the displayed precision. A feed value of `78.45`, prefix `$`, and two decimal places produces a financial lockup. Values are not automatically divided into millions or billions; send the intended display scale from your integration.
 
 Choose **Header badge → Delta pill** to place a comparison in the header. **Delta field** selects a number in the same feed; **Custom label** lets you enter text such as `+4.2% YoY` or `−6m faster`. The comparison is supplied by you or your integration, not calculated from previous snapshots. Metric cards with **Spark** or **None** display an optional comparison beside the main value instead.
@@ -36,6 +42,8 @@ Save the slide and publish its playlist to send card settings to assigned screen
 The editor supports these cards from server **0.25.1**. Install shared player **0.11.1** or newer for their appearance on Pi and Android TV. Updating the server alone does not update the Android APK or Pi player files. Include the complete `player/web/` directory and Pi agent when updating manually.
 
 The Table preset, 40-row views, and First row control require server **0.26.1** and player **0.12.1**. Update affected players before publishing row ranges: older card players show at most the first eight rows and ignore First row. For downgrade saves, omit `rowOffset` and reduce `maxRows` to eight or fewer before editing with an older server. Tables still use the existing categories/bar contract and manifest schema 4, with no feed migration.
+
+Text sizing, value alignment, and body padding require server **0.26.2** and player **0.12.2**. Older card players ignore these presentation fields and retain their original appearance. Arrangement updates the existing layer coordinates and works on older players. For downgrade saves, remove `valueAlign`, `titleScale`, `valueScale`, `detailScale`, `paddingX`, and `paddingY` before importing into an older server.
 
 The manifest schema and feed ingestion payloads are unchanged. Older players that already support data widgets display their existing classic layout from the same primary value. Updated players still display older publications. Older servers do not accept the new card settings when saving an edited slide; switch affected widgets to Classic and remove their optional `card` configuration before importing into an older server.
 

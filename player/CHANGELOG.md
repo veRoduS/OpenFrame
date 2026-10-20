@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.12.2] - 2026-10-20
+
+- Render adjustable split-card header/value/detail text sizes, left/center/right values, and horizontal/vertical body padding. Keep gauges centered and fit large type without overlapping line headings and charts. Existing cards retain their defaults; ingestion, manifests, sync, and update contracts are unchanged.
+
 ## [0.12.1] - 2026-10-20
 
 - Render up to 40 table rows with bounded adaptive layouts, selectable row ranges, and visible truncation status.

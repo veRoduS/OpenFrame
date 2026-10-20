@@ -17,6 +17,12 @@ export type DataCardConfig = {
   rowOffset: number;
   scaleMax: number;
   showStats: boolean;
+  valueAlign: 'auto' | 'left' | 'center' | 'right';
+  titleScale: number;
+  valueScale: number;
+  detailScale: number;
+  paddingX: number;
+  paddingY: number;
 };
 
 export type Layer = {

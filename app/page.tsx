@@ -142,6 +142,7 @@ import { MediaLibrary } from './media-library';
 import { FontSettings } from './font-settings';
 import { ScreenSetup } from './screen-setup';
 import { resizeLayer } from './geometry.mjs';
+import { LayerArrange } from './layer-arrange';
 import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 import { localDateTime } from '../player/web/counter.js';
 import { playlistItemStatus } from './playlist-status.mjs';
@@ -2584,6 +2585,13 @@ function Editor({
   const [selected, setSelected] = useState<string | null>(
     initial.layers[0]?.id || null,
   );
+  const [arrangeMode, setArrangeMode] = useState(false);
+  const [arrangeIds, setArrangeIds] = useState<string[]>([]);
+  function toggleArrange(id: string) {
+    setArrangeIds((ids) =>
+      ids.includes(id) ? ids.filter((entry) => entry !== id) : [...ids, id],
+    );
+  }
   const editedStarterLayers = useRef(new Set<string>());
   const [past, setPast] = useState<Slide[]>([]);
   const [future, setFuture] = useState<Slide[]>([]);
@@ -2702,6 +2710,7 @@ function Editor({
     shapeKind?: 'circle' | 'rectangle',
     dataMode?: (typeof dataModes)[number]['mode'],
   ) {
+    setArrangeMode(false);
     const layer = newLayer(type, assetId);
     if (type === 'data') {
       layer.data!.mode = dataMode === 'table' ? 'bar' : dataMode || 'metric';
@@ -3066,65 +3075,127 @@ function Editor({
                 </div>
               </section>
             </div>
+            <div className="arrange-selection">
+              <button
+                type="button"
+                aria-pressed={arrangeMode}
+                onClick={() => {
+                  setArrangeMode(!arrangeMode);
+                  setCropMode(false);
+                  setArrangeIds(selected ? [selected] : []);
+                }}
+              >
+                {arrangeMode ? 'Done arranging' : 'Arrange layers'}
+              </button>
+              {arrangeMode && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setArrangeIds(
+                        slide.layers
+                          .filter((layer) => layer.type === 'data')
+                          .map((layer) => layer.id),
+                      )
+                    }
+                  >
+                    Select all cards
+                  </button>
+                  <button type="button" onClick={() => setArrangeIds([])}>
+                    Clear selection
+                  </button>
+                  <span aria-live="polite">
+                    {
+                      slide.layers.filter((layer) =>
+                        arrangeIds.includes(layer.id),
+                      ).length
+                    }{' '}
+                    selected
+                  </span>
+                </>
+              )}
+            </div>
             <div className="layer-list">
               {[...slide.layers].reverse().map((layer, i) => (
-                <button
-                  key={layer.id}
-                  className={selected === layer.id ? 'chosen' : ''}
-                  onClick={() => {
-                    if (layer.id !== selected) setCropMode(false);
-                    setSelected(layer.id);
-                    showProperties();
-                  }}
-                >
-                  {layer.type === 'data' ? (
-                    <Database size={16} />
-                  ) : layer.type === 'stocks' ? (
-                    <TrendingUp size={16} />
-                  ) : layer.type === 'shape' ? (
-                    layer.shape?.kind === 'circle' ? (
-                      <Circle size={16} />
-                    ) : (
-                      <Square size={16} />
-                    )
-                  ) : layer.type === 'image' || layer.type === 'video' ? (
-                    <Images size={16} />
-                  ) : layer.type === 'counter' ? (
-                    <Timer size={16} />
-                  ) : layer.type === 'weather' ? (
-                    <CloudSun size={16} />
-                  ) : layer.type === 'clock' ? (
-                    <Clock size={16} />
-                  ) : (
-                    <Type size={16} />
+                <div className="arrange-layer-row" key={layer.id}>
+                  {arrangeMode && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select layer ${slide.layers.length - i} for arrangement`}
+                      checked={arrangeIds.includes(layer.id)}
+                      onChange={() => toggleArrange(layer.id)}
+                    />
                   )}
-                  <span>
-                    {layer.type === 'data'
-                      ? layer.data?.title || 'Data widget'
-                      : layer.type === 'stocks'
-                        ? layer.stocks?.name || 'Stocks'
-                        : layer.type === 'shape'
-                          ? layer.shape?.kind === 'circle'
-                            ? 'Circle'
-                            : 'Rectangle'
-                          : layer.type === 'text'
-                            ? layer.text || 'Text'
-                            : layer.type === 'counter'
-                              ? 'Counter'
-                              : layer.type === 'weather'
-                                ? layer.weather?.name || 'Weather'
-                                : layer.type === 'clock'
-                                  ? 'Clock'
-                                  : layer.removedMedia
-                                    ? 'Removed media'
-                                    : assets.find((a) => a.id === layer.assetId)
-                                        ?.name ||
-                                      (layer.type === 'video'
-                                        ? 'Video'
-                                        : 'Image')}
-                  </span>
-                  <small>{slide.layers.length - i}</small>
-                </button>
+                  <button
+                    className={
+                      (
+                        arrangeMode
+                          ? arrangeIds.includes(layer.id)
+                          : selected === layer.id
+                      )
+                        ? 'chosen'
+                        : ''
+                    }
+                    onClick={() => {
+                      if (arrangeMode) {
+                        toggleArrange(layer.id);
+                        return;
+                      }
+                      if (layer.id !== selected) setCropMode(false);
+                      setSelected(layer.id);
+                      showProperties();
+                    }}
+                  >
+                    {layer.type === 'data' ? (
+                      <Database size={16} />
+                    ) : layer.type === 'stocks' ? (
+                      <TrendingUp size={16} />
+                    ) : layer.type === 'shape' ? (
+                      layer.shape?.kind === 'circle' ? (
+                        <Circle size={16} />
+                      ) : (
+                        <Square size={16} />
+                      )
+                    ) : layer.type === 'image' || layer.type === 'video' ? (
+                      <Images size={16} />
+                    ) : layer.type === 'counter' ? (
+                      <Timer size={16} />
+                    ) : layer.type === 'weather' ? (
+                      <CloudSun size={16} />
+                    ) : layer.type === 'clock' ? (
+                      <Clock size={16} />
+                    ) : (
+                      <Type size={16} />
+                    )}
+                    <span>
+                      {layer.type === 'data'
+                        ? layer.data?.title || 'Data widget'
+                        : layer.type === 'stocks'
+                          ? layer.stocks?.name || 'Stocks'
+                          : layer.type === 'shape'
+                            ? layer.shape?.kind === 'circle'
+                              ? 'Circle'
+                              : 'Rectangle'
+                            : layer.type === 'text'
+                              ? layer.text || 'Text'
+                              : layer.type === 'counter'
+                                ? 'Counter'
+                                : layer.type === 'weather'
+                                  ? layer.weather?.name || 'Weather'
+                                  : layer.type === 'clock'
+                                    ? 'Clock'
+                                    : layer.removedMedia
+                                      ? 'Removed media'
+                                      : assets.find(
+                                          (a) => a.id === layer.assetId,
+                                        )?.name ||
+                                        (layer.type === 'video'
+                                          ? 'Video'
+                                          : 'Image')}
+                    </span>
+                    <small>{slide.layers.length - i}</small>
+                  </button>
+                </div>
               ))}
             </div>
             <div className="canvas-settings">
@@ -3170,6 +3241,8 @@ function Editor({
                 slide={slide}
                 assets={assets}
                 selected={selected}
+                selectionMode={arrangeMode}
+                selectedIds={arrangeIds}
                 interactive
                 cropMode={
                   cropMode &&
@@ -3185,6 +3258,11 @@ function Editor({
                   }))
                 }
                 onSelect={(id) => {
+                  if (arrangeMode) {
+                    if (id) toggleArrange(id);
+                    else setArrangeIds([]);
+                    return;
+                  }
                   if (id !== selected) setCropMode(false);
                   setSelected(id);
                 }}
@@ -3211,7 +3289,13 @@ function Editor({
               />
             </div>
             <div className="canvas-bottom">
-              <span>{selected ? 'Layer selected' : 'Canvas selected'}</span>
+              <span>
+                {arrangeMode
+                  ? `${slide.layers.filter((layer) => arrangeIds.includes(layer.id)).length} layers selected`
+                  : selected
+                    ? 'Layer selected'
+                    : 'Canvas selected'}
+              </span>
               <span>{dirty ? 'Draft' : 'Saved'}</span>
             </div>
             {error && (
@@ -3228,7 +3312,7 @@ function Editor({
           >
             <header className="property-panel-header">
               <h2>Properties</h2>
-              {current && (
+              {!arrangeMode && current && (
                 <div className="property-heading">
                   <strong>
                     {current.type === 'data'
@@ -3268,7 +3352,7 @@ function Editor({
                 </div>
               )}
             </header>
-            {current && (
+            {!arrangeMode && current && (
               <label className="property-lock">
                 Layer lock
                 <select
@@ -3290,7 +3374,13 @@ function Editor({
                 </select>
               </label>
             )}
-            {current ? (
+            {arrangeMode ? (
+              <LayerArrange
+                layers={slide.layers}
+                ids={arrangeIds}
+                onChange={(layers) => change({ ...slide, layers })}
+              />
+            ) : current ? (
               <fieldset
                 className="layer-properties"
                 disabled={current.lockMode === 'full'}

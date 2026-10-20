@@ -120,17 +120,20 @@
   font-size: 12px;
   line-height: 1.5;
 }
-.data-card-footer-options {
+.data-card-footer-options,
+.data-card-layout-options {
   border-top: 1px solid var(--color-border, #dde3df);
   border-bottom: 1px solid var(--color-border, #dde3df);
   padding: 12px 0;
 }
-.data-card-footer-options summary {
+.data-card-footer-options summary,
+.data-card-layout-options summary {
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
 }
-.data-card-footer-options > div {
+.data-card-footer-options > div,
+.data-card-layout-options > div {
   display: grid;
   gap: 12px;
   padding-top: 12px;

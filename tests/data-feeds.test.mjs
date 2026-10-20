@@ -511,6 +511,12 @@ void test('card settings are optional, strict, and bounded without changing clas
     rowOffset: 0,
     scaleMax: 100,
     showStats: false,
+    valueAlign: 'auto',
+    titleScale: 100,
+    valueScale: 100,
+    detailScale: 100,
+    paddingX: 16,
+    paddingY: 16,
   });
   for (const card of [
     null,
@@ -520,6 +526,7 @@ void test('card settings are optional, strict, and bounded without changing clas
     { badge: 'icon' },
     { rows: 'grid' },
     { showStats: 'true' },
+    { valueAlign: 'sideways' },
     { unexpected: true },
     { maxRows: 0 },
     { maxRows: 41 },
@@ -540,6 +547,38 @@ void test('card settings are optional, strict, and bounded without changing clas
       dataWidgetSchema.safeParse({ ...legacy, card }).success,
       false,
     );
+  }
+  for (const key of [
+    'titleScale',
+    'valueScale',
+    'detailScale',
+    'paddingX',
+    'paddingY',
+  ]) {
+    const padding = key.startsWith('padding');
+    const min = padding ? 0 : 50;
+    const max = padding ? 48 : 200;
+    for (const value of [min, max])
+      assert.equal(
+        dataWidgetSchema.safeParse({ ...legacy, card: { [key]: value } })
+          .success,
+        true,
+      );
+    for (const value of [
+      min - 1,
+      max + 1,
+      min + 0.5,
+      '100',
+      null,
+      Infinity,
+      NaN,
+    ])
+      assert.equal(
+        dataWidgetSchema.safeParse({ ...legacy, card: { [key]: value } })
+          .success,
+        false,
+        `${key} rejects ${value}`,
+      );
   }
   for (const [key, limit] of [
     ['deltaText', 32],
@@ -594,6 +633,12 @@ void test('card options persist, update, and publish with schema four and unchan
     rowOffset: 0,
     scaleMax: 250,
     showStats: true,
+    valueAlign: 'center',
+    titleScale: 125,
+    valueScale: 150,
+    detailScale: 90,
+    paddingX: 24,
+    paddingY: 8,
   };
   const layers = [
     widget(feed.id),

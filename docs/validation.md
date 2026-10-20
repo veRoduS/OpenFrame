@@ -1,5 +1,11 @@
 # Validation record
 
+## Local card layout controls — server 0.26.2 / player 0.12.2
+
+Checked on October 20, 2026: 235 Node tests pass with no skips, including real Python-agent integration; all 97 Python tests and 33 Android native JVM tests pass. The card-layout Chromium suite verifies saved/reopened typography, value alignment and body padding, published rendering, canvas/checkbox selection, locked selections, equal-gap distribution, alignment, undo/redo, 320px controls, and finite rendering at 50%/200% text sizes and 0/48px padding. Line supporting text stays clear of the plot. Screenshots of the extreme settings and mobile arrangement controls were visually inspected. Existing split-card, table, classic data-feed, and editor-lock browser regressions pass, as do lint, TypeScript, production build, version/repository checks, and compatibility review.
+
+Older players ignore the six new presentation fields; install player 0.12.2 to see them. Arrangement changes ordinary layer coordinates. Defaults retain the existing layouts, and ingestion/manifest/sync/update contracts are unchanged. No dependencies or player timers were added. These are local checks; no source push, signed APK, deployment, or physical Onn/Pi validation is established here.
+
 ## Local SMCC numeric tables — server 0.26.1 / player 0.12.1
 
 Checked on October 20, 2026: 232 Node tests pass with no skips, including real Python-agent integration and application-key table ingestion; all 97 Python tests and 33 Android native JVM tests pass. The table Chromium suite sends SMCC-style categories arrays through a real disposable server, verifies separate metric/table feeds and stable types, saves/reopens the Table preset and row ranges, checks 320px controls and bounded 40-row rendering, and verifies live updates and shrinking snapshots without replacing the active frame. Table screenshots were visually inspected. Existing card and classic feed browser checks, lint, TypeScript, production build, repository checks, and version checks pass.
