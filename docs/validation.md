@@ -1,5 +1,11 @@
 # Validation record
 
+## Local SMCC numeric tables — server 0.26.1 / player 0.12.1
+
+Checked on October 20, 2026: 232 Node tests pass with no skips, including real Python-agent integration and application-key table ingestion; all 97 Python tests and 33 Android native JVM tests pass. The table Chromium suite sends SMCC-style categories arrays through a real disposable server, verifies separate metric/table feeds and stable types, saves/reopens the Table preset and row ranges, checks 320px controls and bounded 40-row rendering, and verifies live updates and shrinking snapshots without replacing the active frame. Table screenshots were visually inspected. Existing card and classic feed browser checks, lint, TypeScript, production build, repository checks, and version checks pass.
+
+Ingestion remains the existing numeric categories format: one label/value pair per row, at most 40 rows. The new Table option is an editor preset over that format. Row offsets and displays larger than eight rows require player 0.12.1; older players ignore offsets and keep their previous row limit. No real SMCC credentials, live SMCC installation, production data, signed APK, source push, or physical-device validation is involved in these local checks.
+
 ## Approved milestone preparation — server 0.26.0 / player 0.12.0
 
 Checked on October 20, 2026: all 231 Node tests pass with real Python-agent integration and no skips; all 97 Python tests and 33 Android native JVM tests pass. Split-card, classic data-feed, and player-startup Chromium suites pass. A clean frozen-lockfile dependency installation, full and production advisory audits (zero known vulnerabilities), lint, TypeScript, production build, Pi shell syntax, workflow YAML parsing, version consistency, repository checks, and compatibility review pass.

@@ -115,6 +115,9 @@ jobs:
       - name: Split header widget cards
         timeout-minutes: 4
         run: node tests/data-cards.browser.mjs
+      - name: Application table ingestion and rendering
+        timeout-minutes: 4
+        run: node tests/data-tables.browser.mjs
       - name: Transition rendering and cleanup
         timeout-minutes: 4
         run: node tests/transitions.browser.mjs

@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.26.1] - 2026-10-20
+
+- Add a Table widget preset for SMCC numeric category feeds, 40-row views, and saved row-range controls with integration guidance.
+
 ## [0.26.0] - 2026-10-20
 
 - Release split header widget cards with live comparisons, optional line min/avg/max statistics, centered radial gauges, and refined value typography.

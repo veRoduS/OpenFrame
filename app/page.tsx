@@ -3,6 +3,7 @@ import { IconButton } from './components/ui/icon-button';
 import { SlideMetadata, SlideTagsDialog } from './slide-metadata';
 import { useMediaUploads, type MediaUploadBatch } from './media-uploads';
 import { DataFeeds, DataWidgetOptions, dataModes } from './data-feeds';
+import { dataCardSettings } from './data-card-options';
 import { Checkbox } from './components/ui/checkbox';
 import {
   LibraryOrganizationToolbar,
@@ -2699,17 +2700,27 @@ function Editor({
     type: Layer['type'],
     assetId?: string,
     shapeKind?: 'circle' | 'rectangle',
-    dataMode?: NonNullable<Layer['data']>['mode'],
+    dataMode?: (typeof dataModes)[number]['mode'],
   ) {
     const layer = newLayer(type, assetId);
     if (type === 'data') {
-      layer.data!.mode = dataMode || 'metric';
+      layer.data!.mode = dataMode === 'table' ? 'bar' : dataMode || 'metric';
       layer.data!.title =
-        dataModes.find((m) => m.mode === layer.data!.mode)?.label || 'Data';
+        dataModes.find((m) => m.mode === (dataMode || 'metric'))?.label ||
+        'Data';
+      if (dataMode === 'table') {
+        layer.data!.card = {
+          ...dataCardSettings(layer.data!),
+          style: 'split',
+          rows: 'table',
+          maxRows: 8,
+        };
+        layer.height = 70;
+      }
       const expected =
-        dataMode === 'line'
+        layer.data!.mode === 'line'
           ? 'series'
-          : dataMode === 'bar'
+          : layer.data!.mode === 'bar'
             ? 'categories'
             : 'number';
       const feed = feeds.find((f) => f.fields.some((v) => v.type === expected));
@@ -3221,8 +3232,12 @@ function Editor({
                 <div className="property-heading">
                   <strong>
                     {current.type === 'data'
-                      ? dataModes.find((m) => m.mode === current.data?.mode)
-                          ?.label || 'Data widget'
+                      ? current.data?.mode === 'bar' &&
+                        current.data.card?.style === 'split' &&
+                        current.data.card.rows === 'table'
+                        ? 'Table'
+                        : dataModes.find((m) => m.mode === current.data?.mode)
+                            ?.label || 'Data widget'
                       : current.type === 'stocks'
                         ? 'Stock tracker'
                         : current.type === 'shape'

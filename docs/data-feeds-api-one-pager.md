@@ -45,6 +45,8 @@ Successful JSON responses contain `applicationId`, `sourceKey`, `feedId`, `field
 | Time series | `[{"time":"2026-10-07T18:00:00Z","value":42}]` | `[]` |
 | Categories | `[{"label":"Sales","value":42}]` | `[]` |
 
+**Numeric tables:** send each table as a Categories array, for example `POST /api/data-feeds/ingest/production-tables` with `{"freight":[{"label":"Unloaded","value":12},{"label":"Remaining","value":3}]}`. A separate source keeps tables independent of same-named Number fields. Choose **Widgets → Table** in the editor. The new Table preset and row-range controls require server 0.26.1 / player 0.12.1; ingestion uses the existing application-key contract. Tables support one label and one numeric value per row. Omitted tables retain their rows; `[]` explicitly clears an existing table.
+
 Existing field types cannot change. New chart fields require a nonempty array. Each chart value replaces that field's whole array; points are not appended automatically. Strings and booleans are unsupported. Numbers must be finite and within ±1 trillion. Time series allow 240 points with unique, increasing ISO timestamps; categories allow 40 entries with unique, trimmed labels of 1–60 characters.
 
 **Limits:** source names match `[A-Za-z0-9][A-Za-z0-9_-]{0,79}` and are case-sensitive; metric names match `[A-Za-z][A-Za-z0-9_]{0,39}`. Send 1–20 metrics per request, with at most 20 fields per feed and 32 KiB per body. Use another source for more fields. The server allows 200 total feeds; each application shares a 60-call/minute budget across its keys and sources.

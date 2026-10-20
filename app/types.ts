@@ -14,6 +14,7 @@ export type DataCardConfig = {
   rows: 'table' | 'bars';
   rowDeltaField: string;
   maxRows: number;
+  rowOffset: number;
   scaleMax: number;
   showStats: boolean;
 };

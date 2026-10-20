@@ -38,7 +38,8 @@ const dataCardSchema = z
     footerRight: z.string().max(40).default(''),
     rows: z.enum(['table', 'bars']).default('table'),
     rowDeltaField: z.string().max(40).default(''),
-    maxRows: z.number().int().min(1).max(8).default(4),
+    maxRows: z.number().int().min(1).max(40).default(4),
+    rowOffset: z.number().int().min(0).max(39).default(0),
     scaleMax: z.number().positive().max(1e12).default(100),
     showStats: z.boolean().default(false),
   })

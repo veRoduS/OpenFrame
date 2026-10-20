@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.12.1] - 2026-10-20
+
+- Render up to 40 table rows with bounded adaptive layouts, selectable row ranges, and visible truncation status.
+
 ## [0.12.0] - 2026-10-20
 
 - Release the shared split header card renderer with live statistics, centered gauges, compact goals, and normalized value typography.

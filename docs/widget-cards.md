@@ -2,6 +2,8 @@
 
 In the slide editor, add or select a data widget and choose **Card style → Split header**. Select a data feed and value field as usual. Existing widgets keep **Classic** until you change their style; switching back retains the card settings.
 
+**Widgets → Table** adds a ready-made split-header table using a Categories field. Choose the application's table feed, such as **SMCC · production-tables**, then its table field. The preset starts with eight visible rows and a taller box. Set the unit and decimal places for the numbers supplied by your integration.
+
 | Data widget | Split header appearance | Value field |
 | --- | --- | --- |
 | Metric | Large value with full-size decimals and raised prefix and unit | Number |
@@ -19,7 +21,9 @@ Choose **Header badge → Delta pill** to place a comparison in the header. **De
 
 For a progress card, **Gauge maximum** controls the ring scale, while **Fixed target** or **Target field** controls the goal badge. For example, value `94.2`, unit `%`, maximum `100`, and target `92` show a 94.2% ring and a 92% goal. Reaching the goal does not change the scale of the ring.
 
-For a bar-chart card, choose **Row layout → Mini table** or **Channel breakdown**. **Visible rows** limits the display to the first 1–8 categories; four is the default. A mini table can select a second categories field as **Row delta field**. Deltas match the primary rows by exact category label, so reordering the comparison data does not move changes to the wrong row. Missing matches omit the badge. Changing the data feed clears comparison bindings to the previous feed.
+For a Categories card, choose **Row layout → Mini table** or **Channel breakdown**. **First row** selects the starting row (1–40), and **Visible rows** selects up to 40 rows. Larger tables need a taller box; use two cards with First row 1 and 21 and 20 visible rows each to split a 40-row field. A footer indicates the displayed range when rows are omitted. If the selected range is beyond a smaller incoming snapshot, the card shows **No rows in this range**. Changing feeds resets First row to 1.
+
+A mini table can select a second categories field as **Row delta field**. Deltas match the primary rows by exact category label, so reordering comparison data does not move changes to the wrong row. Missing matches omit the badge. Changing feeds clears comparison bindings. Existing cards retain their configured visible-row counts; four remains the default outside the Table preset.
 
 Line cards have a **Show min / avg / max** option, off by default. When enabled, the bottom row displays the minimum, arithmetic average, and maximum of the values in the current series snapshot, using the card's prefix, unit, and precision. This replaces the date labels without reducing the plot area. Statistics update with the feed and do not require additional requests or stored history.
 
@@ -30,6 +34,8 @@ Line cards have a **Show min / avg / max** option, off by default. When enabled,
 Save the slide and publish its playlist to send card settings to assigned screens. Feed value updates continue through the existing snapshot sync and do not require republishing or restarting the active slide. Cards add no charting dependency, network request, animation, or timer of their own.
 
 The editor supports these cards from server **0.25.1**. Install shared player **0.11.1** or newer for their appearance on Pi and Android TV. Updating the server alone does not update the Android APK or Pi player files. Include the complete `player/web/` directory and Pi agent when updating manually.
+
+The Table preset, 40-row views, and First row control require server **0.26.1** and player **0.12.1**. Update affected players before publishing row ranges: older card players show at most the first eight rows and ignore First row. For downgrade saves, omit `rowOffset` and reduce `maxRows` to eight or fewer before editing with an older server. Tables still use the existing categories/bar contract and manifest schema 4, with no feed migration.
 
 The manifest schema and feed ingestion payloads are unchanged. Older players that already support data widgets display their existing classic layout from the same primary value. Updated players still display older publications. Older servers do not accept the new card settings when saving an edited slide; switch affected widgets to Classic and remove their optional `card` configuration before importing into an older server.
 

@@ -46,11 +46,23 @@ export function renderDataCard(
   now = Date.now(),
 ) {
   const card = config.card || {};
+  const categoryLimit = Number.isInteger(card.maxRows)
+    ? clamp(card.maxRows, 1, 40)
+    : 4;
+  const categoryOffset = Number.isInteger(card.rowOffset)
+    ? clamp(card.rowOffset, 0, 39)
+    : 0;
+  const rawRows = snapshot?.data?.[config.field];
+  const rowCount =
+    config.mode === 'bar' && Array.isArray(rawRows)
+      ? Math.min(categoryLimit, Math.max(0, rawRows.length - categoryOffset))
+      : 0;
   const measuredWidth = element.clientWidth || 320,
     measuredHeight = element.clientHeight || 232;
   // A short, wide tile gets a wider design canvas instead of shrinking the body
   // beneath the header. Both dimensions preserve the layer's exact aspect ratio.
-  const scale = Math.min(measuredWidth / 320, measuredHeight / 220);
+  const minimumHeight = Math.max(220, 100 + rowCount * 18);
+  const scale = Math.min(measuredWidth / 320, measuredHeight / minimumHeight);
   const width = measuredWidth / scale,
     height = measuredHeight / scale;
   const id = `data-card-${++cardSequence}`;
@@ -251,6 +263,18 @@ export function renderDataCard(
   if (config.showUpdated && Number.isFinite(updatedTime)) {
     const minutes = Math.max(0, Math.floor((now - updatedTime) / 60000));
     updated = `${minutes >= (config.staleAfterMinutes || 60) ? 'Stale · ' : ''}Updated ${minutes < 1 ? 'just now' : `${minutes} min ago`}`;
+  }
+  if (valid && config.mode === 'bar') {
+    const count = Math.min(
+      categoryLimit,
+      Math.max(0, points.length - categoryOffset),
+    );
+    if (count < points.length) {
+      const range = count
+        ? `Rows ${categoryOffset + 1}–${categoryOffset + count} of ${points.length}`
+        : `0 of ${points.length} rows · Adjust First row`;
+      updated = [updated, range].filter(Boolean).join(' · ');
+    }
   }
   const footer = clean(card.footer, 80),
     footerRight = clean(card.footerRight, 40);
@@ -578,10 +602,7 @@ export function renderDataCard(
     description += `. ${points.length} values. Latest ${formatted(latest.value)}`;
   } else if (config.mode === 'bar') {
     const bars = card.rows === 'bars';
-    const maxRows = Number.isInteger(card.maxRows)
-      ? clamp(card.maxRows, 1, 8)
-      : 4;
-    const rows = points.slice(0, maxRows);
+    const rows = points.slice(categoryOffset, categoryOffset + categoryLimit);
     const deltaValues =
       !bars &&
       card.rowDeltaField &&
@@ -598,9 +619,23 @@ export function renderDataCard(
     const subtitleHeight = card.subtitle ? 24 : 0;
     if (card.subtitle)
       label(surface, 16, bodyTop + 7, clean(card.subtitle, 100), 11, bodyWidth);
-    const gap = Math.min(8, bodyHeight / (rows.length * 5));
+    const gap = Math.min(
+      8,
+      bodyHeight / (Math.max(1, rows.length) * (rows.length > 8 ? 10 : 5)),
+    );
     const rowHeight =
-      (bodyHeight - subtitleHeight - gap * (rows.length - 1)) / rows.length;
+      (bodyHeight - subtitleHeight - gap * Math.max(0, rows.length - 1)) /
+      Math.max(1, rows.length);
+    if (!rows.length)
+      label(
+        surface,
+        width / 2,
+        bodyTop + bodyHeight / 2,
+        'No rows in this range',
+        14,
+        bodyWidth,
+        { 'text-anchor': 'middle', 'data-card-part': 'status' },
+      );
     const scaleMax =
       Number.isFinite(card.scaleMax) && card.scaleMax > 0 ? card.scaleMax : 100;
     const low = Math.min(0, ...rows.map((p) => p.value)),
@@ -616,10 +651,13 @@ export function renderDataCard(
         y,
         width: width - 28,
         height: rowHeight,
-        rx: 12,
+        rx: Math.min(12, rowHeight / 2),
         fill: '#FFFFFF',
       });
-      const size = Math.min(13, rowHeight * (bars ? 0.24 : 0.38));
+      const size = Math.min(
+        13,
+        rowHeight * (bars ? 0.24 : rows.length > 8 ? 0.6 : 0.38),
+      );
       const baseline =
         y + (bars ? rowHeight * 0.47 : rowHeight / 2 + size * 0.35);
       const rowDelta = deltas.has(row.label)
@@ -635,7 +673,7 @@ export function renderDataCard(
           deltaWidth,
           'row-delta',
           Math.min(11, size),
-          Math.min(24, rowHeight - 2),
+          Math.max(1, Math.min(24, rowHeight - 2)),
         );
       const valueRight = width - 24 - (rowDelta ? deltaWidth + 8 : 0);
       const valueWidth = Math.min(
@@ -688,7 +726,9 @@ export function renderDataCard(
       description += `. ${row.label}: ${formatted(row.value)}${rowDelta ? `, ${rowDelta}` : ''}`;
     });
     if (points.length > rows.length)
-      description += `. Showing ${rows.length} of ${points.length} categories`;
+      description += rows.length
+        ? `. Showing rows ${categoryOffset + 1}–${categoryOffset + rows.length} of ${points.length}`
+        : `. No rows in this range. ${points.length} total rows`;
   }
   if (card.subtitle && config.mode !== 'progress')
     description += `. ${clean(card.subtitle, 100)}`;

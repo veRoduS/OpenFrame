@@ -8,7 +8,7 @@ type CardProps = {
   onChange: (card: DataCardConfig) => void;
 };
 
-function cardSettings(config: WidgetConfig): DataCardConfig {
+export function dataCardSettings(config: WidgetConfig): DataCardConfig {
   return {
     style: 'split',
     header: config.mode === 'line' ? 'navy' : 'blue',
@@ -23,6 +23,7 @@ function cardSettings(config: WidgetConfig): DataCardConfig {
     rows: 'table',
     rowDeltaField: '',
     maxRows: 4,
+    rowOffset: 0,
     scaleMax: 100,
     showStats: false,
     ...config.card,
@@ -210,7 +211,7 @@ export function DataCardStylePicker({ config, onChange }: CardProps) {
               value={value}
               checked={style === value}
               onChange={() =>
-                onChange({ ...cardSettings(config), style: value })
+                onChange({ ...dataCardSettings(config), style: value })
               }
             />
             <StylePreview mode={config.mode} split={value === 'split'} />
@@ -227,7 +228,7 @@ export function DataCardOptions({
   feed,
   onChange,
 }: CardProps & { feed?: DataFeed }) {
-  const card = cardSettings(config);
+  const card = dataCardSettings(config);
   const patch = (value: Partial<DataCardConfig>) =>
     onChange({ ...card, ...value });
   const numberFields =
@@ -367,11 +368,24 @@ export function DataCardOptions({
             </select>
           </label>
           <label>
+            First row
+            <input
+              type="number"
+              min={1}
+              max={40}
+              step={1}
+              value={card.rowOffset + 1}
+              onChange={(event) =>
+                patch({ rowOffset: Number(event.target.value) - 1 })
+              }
+            />
+          </label>
+          <label>
             Visible rows
             <input
               type="number"
               min={1}
-              max={8}
+              max={40}
               step={1}
               value={card.maxRows}
               onChange={(event) =>
@@ -379,6 +393,10 @@ export function DataCardOptions({
               }
             />
           </label>
+          <p className="data-card-help">
+            Use a larger table for more rows, or split the same field across
+            cards using First row.
+          </p>
           {card.rows === 'table' && (
             <>
               <label>

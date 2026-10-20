@@ -508,6 +508,7 @@ void test('card settings are optional, strict, and bounded without changing clas
     rows: 'table',
     rowDeltaField: '',
     maxRows: 4,
+    rowOffset: 0,
     scaleMax: 100,
     showStats: false,
   });
@@ -521,7 +522,11 @@ void test('card settings are optional, strict, and bounded without changing clas
     { showStats: 'true' },
     { unexpected: true },
     { maxRows: 0 },
-    { maxRows: 9 },
+    { maxRows: 41 },
+    { rowOffset: -1 },
+    { rowOffset: 40 },
+    { rowOffset: 1.5 },
+    { rowOffset: '1' },
     { maxRows: 1.5 },
     { maxRows: '4' },
     { scaleMax: 0 },
@@ -565,7 +570,7 @@ void test('card settings are optional, strict, and bounded without changing clas
   }
   for (const card of [
     { style: 'plain', maxRows: 1, scaleMax: 0.01 },
-    { style: 'split', maxRows: 8, scaleMax: 1e12 },
+    { style: 'split', maxRows: 40, rowOffset: 39, scaleMax: 1e12 },
   ])
     assert.equal(dataWidgetSchema.safeParse({ ...legacy, card }).success, true);
 });
@@ -586,6 +591,7 @@ void test('card options persist, update, and publish with schema four and unchan
     rows: 'table',
     rowDeltaField: 'departments',
     maxRows: 8,
+    rowOffset: 0,
     scaleMax: 250,
     showStats: true,
   };
@@ -877,6 +883,103 @@ async function applicationFixture(t, options = {}) {
     );
   return { ...fixtureData, application, applicationKey, ingest, external };
 }
+
+void test('SMCC table pushes infer categories in a separate stable source and retain omitted tables atomically', async (t) => {
+  const { admin, ingest } = await applicationFixture(t, { name: 'SMCC' });
+  const metrics = await ingest({ freight: 42 });
+  const rows = Array.from({ length: 40 }, (_, index) => ({
+    label: `Store metric ${String(index + 1).padStart(2, '0')}`,
+    value: index - 10.5,
+  }));
+  const tables = await ingest(
+    { freight: rows, training: [{ label: 'Completion', value: 97.2 }] },
+    'production-tables',
+  );
+  assert.equal(tables.status, 201);
+  assert.notEqual(tables.data.feedId, metrics.data.feedId);
+  assert.deepEqual(tables.data.fields, [
+    { key: 'freight', type: 'categories' },
+    { key: 'training', type: 'categories' },
+  ]);
+  assert.deepEqual(
+    (await admin(`/api/data-feeds/${tables.data.feedId}/data`)).data.data
+      .freight,
+    rows,
+  );
+  assert.deepEqual(
+    (await admin(`/api/data-feeds/${metrics.data.feedId}/data`)).data.data,
+    { freight: 42 },
+  );
+
+  const layer = widget(tables.data.feedId, 'bar', 'freight');
+  layer.data.card = {
+    style: 'split',
+    rows: 'table',
+    maxRows: 40,
+    rowOffset: 0,
+  };
+  const saved = await admin('/api/slides', 'POST', {
+    ...slide(tables.data.feedId),
+    layers: [layer],
+  });
+  assert.equal(saved.status, 201);
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'SMCC tables',
+      items: [{ slideId: saved.data.id, duration: 60 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const preview = (await admin(`/api/preview/${playlist.id}`)).data;
+  assert.equal(preview.schemaVersion, 4);
+  assert.deepEqual(preview.dataFeeds[tables.data.feedId].data.freight, rows);
+
+  const before = (await admin(`/api/data-feeds/${tables.data.feedId}/data`))
+    .data;
+  for (const bad of [
+    [...rows, { label: 'Overflow', value: 1 }],
+    [
+      { label: 'Duplicate', value: 1 },
+      { label: 'Duplicate', value: 2 },
+    ],
+    [{ label: 'x'.repeat(61), value: 1 }],
+    [{ label: 'Too large', value: 1e12 + 1 }],
+    [{ label: 'Text cell', value: 'unavailable' }],
+  ]) {
+    assert.equal(
+      (await ingest({ freight: bad }, 'production-tables')).status,
+      400,
+    );
+    assert.deepEqual(
+      (await admin(`/api/data-feeds/${tables.data.feedId}/data`)).data,
+      before,
+    );
+  }
+  const changed = await ingest(
+    { training: [{ label: 'Completion', value: 98 }] },
+    'production-tables',
+  );
+  assert.equal(changed.status, 200);
+  assert.equal(changed.data.feedId, tables.data.feedId);
+  assert.deepEqual(
+    (await admin(`/api/data-feeds/${tables.data.feedId}/data`)).data.data
+      .freight,
+    rows,
+  );
+  assert.equal(
+    (await ingest({ freight: [] }, 'production-tables')).status,
+    200,
+  );
+  assert.deepEqual(
+    (await admin(`/api/data-feeds/${tables.data.feedId}/data`)).data.data
+      .freight,
+    [],
+  );
+  assert.equal((await ingest({ empty: [] }, 'new-tables')).status, 400);
+});
 
 void test('application ingestion creates stable scoped feeds, infers fields, merges updates, and survives server reopen', async (t) => {
   const { admin, application, applicationKey, ingest, db } =

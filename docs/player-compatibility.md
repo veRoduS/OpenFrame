@@ -71,6 +71,8 @@ Server **0.25.1** adds optional `layer.data.card` settings. Shared player **0.11
 
 Optional line-card `showStats` settings require server **0.25.5** and player **0.11.5** for min/avg/max rendering. Earlier card-capable players ignore the option and continue displaying their line chart. Servers before 0.25.5 reject the additional field on slide saves; omit `showStats` before importing settings into those servers. Manifest schemas and feed snapshots remain unchanged.
 
+Server **0.26.1** and player **0.12.1** support table/category views up to 40 rows and zero-based `card.rowOffset`. The Table editor preset uses the existing categories/bar format, so manifest schemas and ingestion payloads are unchanged. Upgrade affected players before publishing row ranges or views larger than eight rows: older card players ignore offsets and display at most the first eight rows. New players retain older card settings with offset zero and their saved row counts. To edit on an older server after a downgrade, omit `rowOffset` and reduce `maxRows` to eight or fewer. SMCC-style numeric tables already ingest through application keys on existing supported servers.
+
 ## Cached video compatibility
 
 Server **0.24.1** emits schema **5** for publications containing video layers. Upgrade Android/Pi players to **0.10.15+** before publishing video. Older players reject schema 5 and retain their last usable cached publication. Playlists without video keep schemas 2/3/4 as appropriate; updated players continue accepting schemas 1–4 from older servers. Removed video placeholders also require schema 5. Delete all video layers and republish to return to an earlier schema.

@@ -18,6 +18,7 @@ import {
   Hash,
   ChartLine,
   ChartColumn,
+  Table2,
 } from 'lucide-react';
 import { api, type DataFeed, type Layer, type Library } from './types';
 import { orderedTree, indentedName } from './hierarchy';
@@ -35,6 +36,8 @@ export const dataModes = [
   { mode: 'progress', label: 'Progress bar', icon: Gauge },
   { mode: 'line', label: 'Line graph', icon: ChartLine },
   { mode: 'bar', label: 'Bar chart', icon: ChartColumn },
+  // Table is an editor preset over the existing categories/bar wire format.
+  { mode: 'table', label: 'Table', icon: Table2 },
 ] as const;
 type Token = {
   id: string;
@@ -830,7 +833,12 @@ export function DataWidgetOptions({
               targetField: '',
               ...(config.card
                 ? {
-                    card: { ...config.card, deltaField: '', rowDeltaField: '' },
+                    card: {
+                      ...config.card,
+                      deltaField: '',
+                      rowDeltaField: '',
+                      rowOffset: 0,
+                    },
                   }
                 : {}),
             });

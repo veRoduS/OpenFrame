@@ -1953,6 +1953,7 @@
       "post": {
         "operationId": "ingestApplicationMetrics",
         "summary": "Automatically create a scoped feed and append typed metrics; merge values atomically",
+        "description": "Numeric tables use nonempty arrays of label/value rows and are inferred as categories fields. A separate source such as production-tables keeps tables independent from same-named number fields. Existing category limits apply: 40 rows, unique labels up to 60 characters, and numeric values within plus or minus one trillion. Included tables replace their arrays; omitted fields retain their data.",
         "security": [
           {
             "ApplicationWriteToken": []

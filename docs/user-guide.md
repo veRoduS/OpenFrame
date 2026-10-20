@@ -134,6 +134,8 @@ In the slide editor's **Widgets** group, insert a Metric, Progress bar, Line gra
 
 Choose **Card style → Split header** for blue header tiles, superscript values, radial gauges, sparklines, or white-pill mini tables and channel breakdowns. Optional delta fields, goals, and footer labels use the same feed. Existing widgets stay Classic. The card appearance requires player **0.11.1+**; see [widget card setup](widget-cards.md) for examples and upgrade details.
 
+Use **Widgets → Table** for SMCC-style numeric tables. Choose the table feed and Categories field, then set **First row** and **Visible rows** to show up to 40 rows or divide one field across cards. The new table controls need server **0.26.1** and player **0.12.1**. [SMCC table ingestion](data-feeds-api.md#smcc-and-other-numeric-tables) uses the existing application key and row format.
+
 Publish the playlist layout once. Further data updates appear through normal player sync (usually about 15 seconds), without republishing or restarting the slide. An optional age label marks stale data after your chosen threshold. Offline Pi/Android players retain the latest cached snapshot, including after restart. They clear revoked data after a successful online sync. Upgrade players to **0.10.13 or later** before assigning slides with data widgets; ordinary older slides remain compatible.
 
 ## Generated starter text

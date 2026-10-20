@@ -48,6 +48,24 @@ Automatically created feeds use the application's configured managing group and 
 
 Additional ingestion failures include **409 `FIELD_LIMIT`**, **409 `FEED_LIMIT`**, and **429 `RATE_LIMITED`** with `Retry-After`. Invalid fields/types use **400 `INVALID_PAYLOAD`**; rejected keys use **401 `INVALID_TOKEN`**. A missing configured managing group uses **409 `INVALID_GROUP`** and prevents creation. The legacy per-feed PUT endpoint below retains complete-snapshot behavior and fixed field definitions.
 
+## SMCC and other numeric tables
+
+A numeric table is a **Categories** field: one array of `{label,value}` rows. Use the existing application endpoint and key; no `table` field type or wrapper is required. For example, keep ordinary metrics at `production` and send tables under a separate `production-tables` source:
+
+```http
+POST /api/data-feeds/ingest/production-tables
+Authorization: Bearer YOUR_APPLICATION_API_KEY
+Content-Type: application/json
+
+{"freight_counts":[{"label":"CAP2 unloaded","value":12},{"label":"CAP2 remaining","value":3}],"training_percent":[{"label":"Compliance","value":97.2}]}
+```
+
+The first push creates each table field as `categories`. Later pushes replace each included table's complete row array. Omitted table fields retain their previous rows. Keep metric and table sources separate when their field keys overlap: field types remain immutable within one feed. An empty array clears an existing table; skip the field entirely to keep its previous rows. The first push for a new table must be nonempty.
+
+In the editor choose **Widgets → Table**, select the resulting feed and table field, and set its unit/precision. Each table has one label column and one numeric value column, with one display unit per card. SMCC's decision to skip mixed-unit tables is consistent with this presentation. Row order is preserved. Use **First row** and **Visible rows** to divide larger tables across cards. These controls need server **0.26.1** and player **0.12.1**; the ingestion format is already supported by earlier application-key servers.
+
+Limits remain **40 rows per field**, unique trimmed labels of **1–60 characters**, finite values within **±1 trillion**, and **32 KiB per request**. A request can include up to 20 table fields subject to that total byte limit. The table source shares the application's existing rate budget. Update timestamps describe the feed's receipt time, not an observation timestamp for each row. Text cells, multiple value columns, mixed units, and collector datasets require a separately agreed payload; they are not inferred from this numeric-row format.
+
 ## Feed-specific keys: existing quick start
 
 1. As an OpenFrame admin, open **Settings → Data feeds → New feed**. Give it a name and a managing group. Add field keys and types. For the example below use `completed` (number), `goal` (number), `hourly` (time series), and `departments` (categories).
