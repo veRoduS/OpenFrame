@@ -271,11 +271,9 @@ export function renderDataCard(
     part = 'value',
     anchor = 'start',
   ) => {
-    const [integer, fraction] = number(value).split('.');
     const parts = [
       { text: prefix, small: true },
-      { text: integer, small: false },
-      { text: fraction ? `.${fraction}` : '', small: true },
+      { text: number(value), small: false },
       { text: unit, small: true },
     ].filter((p) => p.text);
     const naturalWidth =

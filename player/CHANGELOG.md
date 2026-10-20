@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.11.2] - 2026-10-20
+
+- Normalize split card decimal digits to the main value size and baseline in the shared editor/player renderer.
+
 ## [0.11.1] - 2026-10-19
 
 - Render split header data cards with the shared lightweight SVG renderer, live feed comparisons, bounded category rows, freshness states, and classic fallback compatibility.

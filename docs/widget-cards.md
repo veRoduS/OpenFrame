@@ -4,7 +4,7 @@ In the slide editor, add or select a data widget and choose **Card style → Spl
 
 | Data widget | Split header appearance | Value field |
 | --- | --- | --- |
-| Metric | Large value with raised prefix, decimals, and unit | Number |
+| Metric | Large value with full-size decimals and raised prefix and unit | Number |
 | Progress bar | Circular gauge with a separate goal badge | Number |
 | Line graph | Latest value and filled sparkline | Series |
 | Bar chart | Mini table or channel breakdown with white pill rows | Categories |
