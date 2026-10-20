@@ -48,6 +48,10 @@ const dataCardSchema = z
     detailScale: z.number().int().min(50).max(200).default(100),
     paddingX: z.number().int().min(0).max(48).default(16),
     paddingY: z.number().int().min(0).max(48).default(16),
+    thresholdMode: z.enum(['off', 'higher', 'lower']).default('off'),
+    thresholdGoal: z.number().min(-1e12).max(1e12).default(95),
+    thresholdWarning: z.number().min(-1e12).max(1e12).default(90),
+    thresholdUseTarget: z.boolean().default(true),
   })
   .strict();
 export const dataWidgetSchema = z
@@ -73,7 +77,34 @@ export const dataWidgetSchema = z
     staleAfterMinutes: z.number().int().min(1).max(10080).default(60),
     card: dataCardSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const card = config.card;
+    if (!card || card.style !== 'split' || card.thresholdMode === 'off') return;
+    if (
+      config.mode === 'progress' &&
+      card.thresholdUseTarget &&
+      config.targetField
+    )
+      return;
+    const goal =
+      config.mode === 'progress' && card.thresholdUseTarget
+        ? config.target
+        : card.thresholdGoal;
+    const ordered =
+      card.thresholdMode === 'higher'
+        ? card.thresholdWarning <= goal
+        : card.thresholdWarning >= goal;
+    if (!ordered)
+      context.addIssue({
+        code: 'custom',
+        path: ['card', 'thresholdWarning'],
+        message:
+          card.thresholdMode === 'higher'
+            ? 'Yellow threshold must be at or below the green goal'
+            : 'Yellow threshold must be at or above the green goal',
+      });
+  });
 const number = z.number().min(-1e12).max(1e12);
 const values = {
   number: number.nullable(),

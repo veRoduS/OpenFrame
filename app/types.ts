@@ -23,6 +23,10 @@ export type DataCardConfig = {
   detailScale: number;
   paddingX: number;
   paddingY: number;
+  thresholdMode: 'off' | 'higher' | 'lower';
+  thresholdGoal: number;
+  thresholdWarning: number;
+  thresholdUseTarget: boolean;
 };
 
 export type Layer = {

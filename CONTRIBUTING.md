@@ -60,6 +60,8 @@ After building, `node tests/editor-locks.browser.mjs` verifies eight-character l
 
 After building, `node tests/card-layout.browser.mjs` checks saved card typography, value alignment, body padding, multi-layer selection, locked selections, equal gaps, alignment, undo/redo, phone controls, published rendering, and bounded presentation extremes. Use the same Playwright settings; fixtures are fictional and screenshots stay under ignored `work/card-layout/`.
 
+After building, `node tests/card-thresholds.browser.mjs` verifies optional goal-color controls, saved/reopened settings, live red/yellow/green changes, live gauge targets, row status, invalid/missing goals, mobile controls, and removal of the circle Score caption. The standard Node suite checks cutoff boundaries, lower/zero goals, disabled and malformed settings, and server validation. Screenshots stay under ignored `work/card-thresholds/`.
+
 After building, `node tests/weather.browser.mjs` checks ZIP lookup, current/six-hour weather, local icons, resize handles, units, persistence, responsive layouts, and player weather updates without replacing the active frame. It starts an isolated database/server and injects fake NWS and ZIP responses; it never modifies your normal library or contacts those services. Use the same Playwright environment settings as the other browser tests.
 
 After building, `node tests/transitions.browser.mjs` uses an isolated server/database to check playlist transition controls and persistence at desktop/phone widths, native whole-frame animations with decoded image/text/clock layers, midpoint pixels, portrait rotation, and effect cleanup. Use the same Playwright settings. Screenshots are ignored under `work/`; these browser checks do not establish physical Pi performance.

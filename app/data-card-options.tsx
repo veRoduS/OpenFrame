@@ -32,6 +32,10 @@ export function dataCardSettings(config: WidgetConfig): DataCardConfig {
     detailScale: 100,
     paddingX: 16,
     paddingY: 16,
+    thresholdMode: 'off',
+    thresholdGoal: 95,
+    thresholdWarning: 90,
+    thresholdUseTarget: true,
     ...config.card,
   };
 }
@@ -241,8 +245,109 @@ export function DataCardOptions({
     feed?.fields.filter((field) => field.type === 'number') || [];
   const categoryFields =
     feed?.fields.filter((field) => field.type === 'categories') || [];
+  const usesTarget = config.mode === 'progress' && card.thresholdUseTarget;
+  const goal = usesTarget ? config.target : card.thresholdGoal;
+  const dynamicGoal = usesTarget && !!config.targetField;
+  const invalidThresholds =
+    !dynamicGoal &&
+    card.thresholdMode !== 'off' &&
+    (card.thresholdMode === 'higher'
+      ? card.thresholdWarning > goal
+      : card.thresholdWarning < goal);
   return (
     <div className="data-card-options">
+      <details className="data-card-layout-options" open>
+        <summary>Goal colors</summary>
+        <div>
+          <label>
+            Color thresholds
+            <select
+              aria-label="Color thresholds"
+              value={card.thresholdMode}
+              onChange={(event) => {
+                const mode = event.target
+                  .value as DataCardConfig['thresholdMode'];
+                const step = Math.max(1, Math.abs(goal) * 0.1);
+                patch({
+                  thresholdMode: mode,
+                  ...(mode === 'lower' && card.thresholdWarning < goal
+                    ? { thresholdWarning: Math.min(1e12, goal + step) }
+                    : mode === 'higher' && card.thresholdWarning > goal
+                      ? { thresholdWarning: Math.max(-1e12, goal - step) }
+                      : {}),
+                });
+              }}
+            >
+              <option value="off">Off</option>
+              <option value="higher">Higher is better</option>
+              <option value="lower">Lower is better</option>
+            </select>
+          </label>
+          {card.thresholdMode !== 'off' && (
+            <>
+              {config.mode === 'progress' && (
+                <label className="data-feed-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={card.thresholdUseTarget}
+                    onChange={(event) =>
+                      patch({ thresholdUseTarget: event.target.checked })
+                    }
+                  />
+                  Use gauge target as green goal
+                </label>
+              )}
+              {!usesTarget && (
+                <label>
+                  Green goal
+                  <input
+                    type="number"
+                    min={-1e12}
+                    max={1e12}
+                    step="any"
+                    value={card.thresholdGoal}
+                    onChange={(event) =>
+                      patch({ thresholdGoal: Number(event.target.value) })
+                    }
+                  />
+                </label>
+              )}
+              <label>
+                Yellow threshold
+                <input
+                  type="number"
+                  min={-1e12}
+                  max={1e12}
+                  step="any"
+                  value={card.thresholdWarning}
+                  onChange={(event) =>
+                    patch({ thresholdWarning: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <p className="data-card-help">
+                {card.thresholdMode === 'higher'
+                  ? 'Green at or above the goal; yellow at or above the warning level; red below it.'
+                  : 'Green at or below the goal; yellow at or below the warning level; red above it.'}{' '}
+                Use the same units as the feed value.{' '}
+                {usesTarget
+                  ? 'Green follows the Target or Target field above.'
+                  : ''}{' '}
+                {config.mode === 'bar'
+                  ? 'Each row is evaluated separately.'
+                  : ''}
+              </p>
+              {invalidThresholds && (
+                <p className="data-card-help" role="alert">
+                  {card.thresholdMode === 'higher'
+                    ? 'Yellow threshold must be at or below the green goal.'
+                    : 'Yellow threshold must be at or above the green goal.'}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </details>
       <details className="data-card-layout-options" open>
         <summary>Text and spacing</summary>
         <div>

@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.13.1] - 2026-10-20
+
+- Render optional red/yellow/green goal colors with inclusive higher/lower cutoffs, live/custom goals, and neutral handling for missing/invalid goals. Keep numbers navy and color table rows separately. Remove Score and center circle values. No protocol, dependency, or timer changes.
+
 ## [0.13.0] - 2026-10-20
 
 - Release table row ranges and configurable card typography and padding, including up to 40 rows, centered values, and bounded layout fitting.

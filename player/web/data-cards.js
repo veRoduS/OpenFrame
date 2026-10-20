@@ -8,6 +8,54 @@ const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const clean = (value, limit) =>
   typeof value === 'string' ? value.slice(0, limit) : '';
 
+// Compare unrounded values. Missing/invalid goals must never look successful.
+export function evaluateCardThreshold(config, snapshot, value) {
+  const card = config.card || {};
+  const neutral = { state: 'none', color: null, message: '' };
+  if (
+    !['higher', 'lower'].includes(card.thresholdMode) ||
+    snapshot?.status === 'unavailable' ||
+    !Number.isFinite(value)
+  )
+    return neutral;
+  const goal =
+    config.mode === 'progress' && card.thresholdUseTarget !== false
+      ? config.targetField
+        ? snapshot?.data?.[config.targetField]
+        : config.target
+      : (card.thresholdGoal ?? 95);
+  const warning = card.thresholdWarning ?? 90;
+  if (!Number.isFinite(goal))
+    return { ...neutral, state: 'unknown', message: 'Goal unavailable' };
+  if (
+    !Number.isFinite(warning) ||
+    Math.abs(goal) > 1e12 ||
+    Math.abs(warning) > 1e12 ||
+    (card.thresholdMode === 'higher' ? warning > goal : warning < goal)
+  )
+    return { ...neutral, state: 'unknown', message: 'Check color thresholds' };
+  const higher = card.thresholdMode === 'higher';
+  const state = (higher ? value >= goal : value <= goal)
+    ? 'green'
+    : (higher ? value >= warning : value <= warning)
+      ? 'yellow'
+      : 'red';
+  return {
+    state,
+    goal,
+    warning,
+    color: { green: '#166534', yellow: YELLOW, red: '#B91C1C' }[state],
+    message:
+      state === 'green'
+        ? 'Goal met'
+        : state === 'yellow'
+          ? 'Near goal'
+          : higher
+            ? 'Below warning level'
+            : 'Above warning level',
+  };
+}
+
 // Conservative text measurement keeps untrusted labels inside their allotted space
 // without layout reads, external fonts, observers, or a second render pass.
 function textWidth(text, size) {
@@ -252,7 +300,25 @@ export function renderDataCard(
       bar: 'Bar chart',
     }[config.mode] ||
     'Data';
+  const threshold = evaluateCardThreshold(
+    config,
+    snapshot,
+    valid
+      ? config.mode === 'line'
+        ? points.at(-1).value
+        : config.mode === 'bar'
+          ? points[0].value
+          : rawValue
+      : null,
+  );
+  const thresholdColor = config.mode === 'bar' ? null : threshold.color;
+  svg.setAttribute(
+    'data-card-threshold',
+    config.mode === 'bar' ? 'rows' : threshold.state,
+  );
   let description = title;
+  if (config.mode !== 'bar' && threshold.message)
+    description += `. ${threshold.message}${threshold.goal !== undefined ? `. Green goal ${formatted(threshold.goal)}. Yellow threshold ${formatted(threshold.warning)}` : ''}`;
   let delta = '';
   if (valid && (card.badge === 'delta' || config.mode === 'metric')) {
     delta = card.deltaField
@@ -275,7 +341,7 @@ export function renderDataCard(
   node(surface, 'rect', {
     width,
     height: headerHeight,
-    fill: card.header === 'navy' ? NAVY : BLUE,
+    fill: thresholdColor || (card.header === 'navy' ? NAVY : BLUE),
     'data-card-part': 'header',
   });
   const pill = (
@@ -337,7 +403,7 @@ export function renderDataCard(
       node(spark, 'path', {
         d: 'M -1.2 -4.5 L -1.8 -9.5 Q 0 -10.5 1.8 -9.5 L 1.2 -4.5 Z',
         transform: `rotate(${angle})`,
-        fill: YELLOW,
+        fill: threshold.state === 'yellow' && thresholdColor ? NAVY : YELLOW,
       });
     focalWidth = 28;
   }
@@ -349,7 +415,13 @@ export function renderDataCard(
     12,
     width - 32 - focalWidth,
     {
-      fill: card.header === 'navy' ? SKY : '#FFFFFF',
+      fill: thresholdColor
+        ? threshold.state === 'yellow'
+          ? NAVY
+          : '#FFFFFF'
+        : card.header === 'navy'
+          ? SKY
+          : '#FFFFFF',
       'letter-spacing': '0.6',
       'data-card-part': 'title',
     },
@@ -375,6 +447,8 @@ export function renderDataCard(
   }
   const footer = clean(card.footer, 80),
     footerRight = clean(card.footerRight, 40);
+  if (threshold.state === 'unknown')
+    updated = [updated, threshold.message].filter(Boolean).join(' · ');
   const footerHeight =
     (footer || footerRight ? (updated ? 44 : 30) : updated ? 28 : 0) *
     Math.max(1, detailScale);
@@ -409,6 +483,7 @@ export function renderDataCard(
     fontSize = 48,
     part = 'value',
     anchor = 'start',
+    centerY = null,
   ) => {
     const parts = [
       { text: prefix, small: true },
@@ -431,7 +506,7 @@ export function renderDataCard(
     // widths remain useful for fitting, but leave visible gaps between runs.
     const text = node(group, 'text', {
       x,
-      y: baseline,
+      y: centerY === null ? baseline : centerY + fontSize * factor * 0.357,
       fill: NAVY,
       'font-family': 'Arial, Helvetica, sans-serif',
       'font-weight': 900,
@@ -461,7 +536,7 @@ export function renderDataCard(
       width / 2,
       (bodyTop + bodyBottom) / 2 + 5,
       message,
-      paddingX,
+      16,
       bodyWidth,
       { 'text-anchor': 'middle', 'data-card-part': 'status' },
     );
@@ -531,9 +606,20 @@ export function renderDataCard(
     const ratio = clamp(rawValue / scaleMax, 0, 1);
     const circle = { cx, cy, r: radius, fill: 'none', 'stroke-width': 12 };
     node(body, 'circle', { ...circle, stroke: '#E8EEF5' });
+    if (thresholdColor === YELLOW)
+      node(body, 'circle', {
+        ...circle,
+        stroke: NAVY,
+        'stroke-width': 14,
+        pathLength: 100,
+        'stroke-dasharray': `${ratio * 100} 100`,
+        'stroke-linecap': ratio ? 'round' : 'butt',
+        transform: `rotate(-90 ${cx} ${cy})`,
+        'aria-hidden': 'true',
+      });
     node(body, 'circle', {
       ...circle,
-      stroke: BLUE,
+      stroke: thresholdColor || BLUE,
       pathLength: 100,
       'stroke-dasharray': `${ratio * 100} 100`,
       'stroke-linecap': ratio ? 'round' : 'butt',
@@ -550,25 +636,17 @@ export function renderDataCard(
       Math.min(38 * valueScale, radius * 0.57 * valueScale, radius * 0.85),
       'value',
       'middle',
+      cy,
     );
-    const scoreSize = Math.min(9 * detailScale, radius * 0.2);
-    label(
-      body,
-      cx,
-      cy + Math.min(18 * detailScale, radius * 0.55),
-      'SCORE',
-      scoreSize / detailScale,
-      radius * 1.6,
-      {
-        'text-anchor': 'middle',
-        'letter-spacing': '1',
-      },
-    );
-    const target = config.targetField
-      ? snapshot.data[config.targetField]
-      : config.target;
+    const goalColors = ['higher', 'lower'].includes(card.thresholdMode);
+    const target =
+      goalColors && card.thresholdUseTarget === false
+        ? card.thresholdGoal
+        : config.targetField
+          ? snapshot.data[config.targetField]
+          : config.target;
     const goal =
-      Number.isFinite(target) && target > 0
+      Number.isFinite(target) && (goalColors || target > 0)
         ? `Goal: ${formatted(target)}`
         : 'Goal unavailable';
     const goalHeight = 22 * detailScale;
@@ -743,7 +821,7 @@ export function renderDataCard(
       cx,
       cy,
       r: 4.3,
-      fill: YELLOW,
+      fill: thresholdColor || YELLOW,
       stroke: BLUE,
       'stroke-width': 2.2,
     });
@@ -842,10 +920,13 @@ export function renderDataCard(
     const low = Math.min(0, ...rows.map((p) => p.value)),
       high = Math.max(scaleMax, ...rows.map((p) => p.value));
     rows.forEach((row, index) => {
+      const rowThreshold = evaluateCardThreshold(config, snapshot, row.value);
       const y = bodyTop + subtitleHeight + index * (rowHeight + gap);
       const group = node(body, 'g', {
         'data-card-part': 'row',
         'data-label': row.label,
+        'data-card-threshold': rowThreshold.state,
+        'aria-label': `${row.label}: ${formatted(row.value)}${rowThreshold.message ? `. ${rowThreshold.message}` : ''}`,
       });
       node(group, 'rect', {
         x: Math.max(1, paddingX - 2),
@@ -854,6 +935,8 @@ export function renderDataCard(
         height: rowHeight,
         rx: Math.min(12, rowHeight / 2),
         fill: '#FFFFFF',
+        stroke: rowThreshold.color || 'none',
+        'stroke-width': 2,
       });
       const size = Math.min(
         13,
@@ -936,11 +1019,11 @@ export function renderDataCard(
           width: Math.abs(valueX - zero),
           height: trackHeight,
           rx: trackHeight / 2,
-          fill: '#4DBDF5',
+          fill: rowThreshold.color || '#4DBDF5',
           'data-card-part': 'row-bar',
         });
       }
-      description += `. ${row.label}: ${formatted(row.value)}${rowDelta ? `, ${rowDelta}` : ''}`;
+      description += `. ${row.label}: ${formatted(row.value)}${rowDelta ? `, ${rowDelta}` : ''}${rowThreshold.message ? `. ${rowThreshold.message}` : ''}`;
     });
     if (points.length > rows.length)
       description += rows.length
@@ -1001,7 +1084,7 @@ export function renderDataCard(
     height: height - 2,
     rx: 15,
     fill: 'none',
-    stroke: secondary ? SKY : 'rgba(0,83,226,0.2)',
+    stroke: thresholdColor || (secondary ? SKY : 'rgba(0,83,226,0.2)'),
     'stroke-width': 2,
   });
   svg.setAttribute('aria-label', description);

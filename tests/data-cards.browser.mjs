@@ -65,6 +65,10 @@ const card = (overrides = {}) => ({
   detailScale: 100,
   paddingX: 16,
   paddingY: 16,
+  thresholdMode: 'off',
+  thresholdGoal: 95,
+  thresholdWarning: 90,
+  thresholdUseTarget: true,
   ...overrides,
 });
 const config = (feedId, mode, field, title, extra = {}, appearance = {}) => ({

@@ -1,5 +1,11 @@
 # Validation record
 
+## Local goal colors and circle captions — server 0.27.1 / player 0.13.1
+
+Checked on October 20, 2026: 240 Node tests pass without skips, including real Python-agent integration; all 97 Python tests and 33 Android JVM tests pass. Threshold tests cover inclusive cutoffs, raw-value comparisons, lower/zero/negative/fractional goals, fixed/live/custom gauge goals, invalid ordering, unavailable data, and disabled settings. The new Chromium suite verifies controls, saved/reopened configuration, 320px layout, published live red/yellow/green transitions without frame replacement, per-row table colors, missing/invalid goals, and removal of Score from circle centers. The split-card and card-layout Chromium regressions also pass. Threshold and mobile screenshots were visually inspected. Lint, TypeScript, production build, version/repository checks, and compatibility review pass.
+
+Colors start off for existing cards. Update players to 0.13.1 to display goal colors and caption-free circles; older players ignore the four optional threshold fields and keep Score. Ingestion, snapshot, manifest, sync, and updater protocols are unchanged, and no dependencies or timers are added. These checks do not establish physical Onn/Pi acceptance, a signed APK, source push, or deployment.
+
 ## Approved milestone preparation — server 0.27.0 / player 0.13.0
 
 The owner authorized the source push and signed APK build on October 20, 2026. This milestone preserves both local patch commits for tables and card layout controls. Their checks passed 235 Node tests with no skips, 97 Python tests, 33 Android JVM tests, and five relevant Chromium suites. The release changes component versions and release notes; hosted CI, native container checks, image publication, and signed APK publication are separate workflow results. Updating a running server or installing on a physical TV is not performed by the source push.

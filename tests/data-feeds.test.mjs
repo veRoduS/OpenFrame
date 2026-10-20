@@ -517,6 +517,10 @@ void test('card settings are optional, strict, and bounded without changing clas
     detailScale: 100,
     paddingX: 16,
     paddingY: 16,
+    thresholdMode: 'off',
+    thresholdGoal: 95,
+    thresholdWarning: 90,
+    thresholdUseTarget: true,
   });
   for (const card of [
     null,
@@ -639,6 +643,10 @@ void test('card options persist, update, and publish with schema four and unchan
     detailScale: 90,
     paddingX: 24,
     paddingY: 8,
+    thresholdMode: 'off',
+    thresholdGoal: 95,
+    thresholdWarning: 90,
+    thresholdUseTarget: true,
   };
   const layers = [
     widget(feed.id),

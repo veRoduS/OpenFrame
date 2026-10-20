@@ -118,6 +118,9 @@ jobs:
       - name: Card typography and multi-layer arrangement
         timeout-minutes: 4
         run: node tests/card-layout.browser.mjs
+      - name: Card goal thresholds and circle labels
+        timeout-minutes: 4
+        run: node tests/card-thresholds.browser.mjs
       - name: Application table ingestion and rendering
         timeout-minutes: 4
         run: node tests/data-tables.browser.mjs
