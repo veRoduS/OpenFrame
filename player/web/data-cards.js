@@ -4,6 +4,39 @@ const BLUE = '#0053E2',
   SKY = '#A9DDF7',
   YELLOW = '#FFC220';
 let cardSequence = 0;
+let valueMeasureContext;
+// One reusable canvas measures glyph ink without DOM layout reads or timers.
+function centeredValueOffset(parts, fontSize, factor) {
+  valueMeasureContext ||= document.createElement('canvas').getContext('2d');
+  if (!valueMeasureContext) return null;
+  let advance = 0;
+  let left = Infinity,
+    right = -Infinity,
+    top = Infinity,
+    bottom = -Infinity;
+  for (const [index, part] of parts.entries()) {
+    const size = fontSize * factor * (part.small ? 0.46 : 1);
+    const shift = part.small ? fontSize * factor * 0.39 : 0;
+    valueMeasureContext.font = `900 ${size}px Arial, Helvetica, sans-serif`;
+    const metrics = valueMeasureContext.measureText(part.text);
+    if (
+      ![
+        metrics.actualBoundingBoxLeft,
+        metrics.actualBoundingBoxRight,
+        metrics.actualBoundingBoxAscent,
+        metrics.actualBoundingBoxDescent,
+      ].every(Number.isFinite)
+    )
+      return null;
+    if (index) advance += factor;
+    left = Math.min(left, advance - metrics.actualBoundingBoxLeft);
+    right = Math.max(right, advance + metrics.actualBoundingBoxRight);
+    top = Math.min(top, -shift - metrics.actualBoundingBoxAscent);
+    bottom = Math.max(bottom, -shift + metrics.actualBoundingBoxDescent);
+    advance += metrics.width;
+  }
+  return { x: advance / 2 - (left + right) / 2, y: -(top + bottom) / 2 };
+}
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const clean = (value, limit) =>
   typeof value === 'string' ? value.slice(0, limit) : '';
@@ -504,9 +537,14 @@ export function renderDataCard(
     });
     // Let SVG place adjacent spans using the actual font advances. Estimated
     // widths remain useful for fitting, but leave visible gaps between runs.
+    const offset =
+      centerY === null ? null : centeredValueOffset(parts, fontSize, factor);
     const text = node(group, 'text', {
-      x,
-      y: centerY === null ? baseline : centerY + fontSize * factor * 0.357,
+      x: x + (offset?.x || 0),
+      y:
+        centerY === null
+          ? baseline
+          : centerY + (offset?.y ?? fontSize * factor * 0.357),
       fill: NAVY,
       'font-family': 'Arial, Helvetica, sans-serif',
       'font-weight': 900,

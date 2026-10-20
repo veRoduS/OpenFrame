@@ -2592,6 +2592,15 @@ function Editor({
       ids.includes(id) ? ids.filter((entry) => entry !== id) : [...ids, id],
     );
   }
+  function selectAdditively(id: string) {
+    setCropMode(false);
+    if (arrangeMode) {
+      toggleArrange(id);
+    } else {
+      setArrangeMode(true);
+      setArrangeIds(selected === id ? [] : selected ? [selected, id] : [id]);
+    }
+  }
   const editedStarterLayers = useRef(new Set<string>());
   const [past, setPast] = useState<Slide[]>([]);
   const [future, setFuture] = useState<Slide[]>([]);
@@ -3136,7 +3145,12 @@ function Editor({
                         ? 'chosen'
                         : ''
                     }
-                    onClick={() => {
+                    onClick={(event) => {
+                      if (event.ctrlKey || event.metaKey) {
+                        selectAdditively(layer.id);
+                        showProperties();
+                        return;
+                      }
                       if (arrangeMode) {
                         toggleArrange(layer.id);
                         return;
@@ -3257,7 +3271,11 @@ function Editor({
                     ),
                   }))
                 }
-                onSelect={(id) => {
+                onSelect={(id, additive) => {
+                  if (id && additive) {
+                    selectAdditively(id);
+                    return;
+                  }
                   if (arrangeMode) {
                     if (id) toggleArrange(id);
                     else setArrangeIds([]);

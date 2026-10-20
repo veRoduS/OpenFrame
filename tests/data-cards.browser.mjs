@@ -547,6 +547,67 @@ try {
   );
   await playback.screenshot({ path: path.join(output, 'reference.png') });
   // Each inline SVG must resolve its own clip and gradient references.
+  // Rasterize just the value to test visible ink, not SVG's font line box.
+  const centers = await playback.locator(visible).evaluate(async (frame) => {
+    const results = [];
+    for (const arc of frame.querySelectorAll('[data-card-part="gauge-arc"]')) {
+      const original = arc.closest('svg');
+      const isolated = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'svg',
+      );
+      const { width, height } = original.viewBox.baseVal;
+      isolated.setAttribute('width', width);
+      isolated.setAttribute('height', height);
+      isolated.append(
+        original.querySelector('[data-card-part="value"]').cloneNode(true),
+      );
+      const url = URL.createObjectURL(
+        new Blob([new XMLSerializer().serializeToString(isolated)], {
+          type: 'image/svg+xml',
+        }),
+      );
+      try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(width);
+        canvas.height = Math.ceil(height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let left = width,
+          right = 0,
+          top = height,
+          bottom = 0;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            if (pixels[(y * canvas.width + x) * 4 + 3] > 32) {
+              left = Math.min(left, x);
+              right = Math.max(right, x + 1);
+              top = Math.min(top, y);
+              bottom = Math.max(bottom, y + 1);
+            }
+          }
+        }
+        results.push({
+          dx: (left + right) / 2 - Number(arc.getAttribute('cx')),
+          dy: (top + bottom) / 2 - Number(arc.getAttribute('cy')),
+        });
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+    return results;
+  });
+  assert.ok(centers.length >= 2);
+  for (const center of centers) {
+    assert.ok(
+      Math.abs(center.dx) <= 1.5 && Math.abs(center.dy) <= 1.5,
+      `Gauge value is not centered: ${JSON.stringify(center)}`,
+    );
+  }
   const resources = await playback.locator(visible).evaluate((frame) => {
     const ids = [...frame.querySelectorAll('[id]')].map((node) => node.id);
     const missing = [...frame.querySelectorAll('*')].flatMap((node) =>

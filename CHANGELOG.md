@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.27.4] - 2026-10-20
+
+- Add Ctrl/Command-click multi-selection and precisely center circle values in previews
+
 ## [0.27.3] - 2026-10-20
 
 - Add a Show row range toggle to table cards

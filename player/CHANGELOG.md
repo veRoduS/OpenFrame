@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.13.3] - 2026-10-20
+
+- Center complete circle values using measured glyph bounds
+
 ## [0.13.2] - 2026-10-20
 
 - Respect the table Show row range option while retaining independent footer labels and update times

@@ -155,9 +155,20 @@ try {
     if (alignment === 'left')
       assert.equal(Number(await value.getAttribute('x')), 24);
   }
+  const canvasLayers = page.locator('.slide-canvas.editable .slide-layer');
+  await canvasLayers.nth(1).click({ modifiers: ['Control'] });
+  assert.equal(await page.locator('.slide-layer.selected').count(), 2);
+  await first.click({ modifiers: ['Control'] });
+  assert.equal(await page.locator('.slide-layer.selected').count(), 1);
+  await first.click({ modifiers: ['Control'] });
+  await canvasLayers.nth(1).click({ modifiers: ['Meta'] });
+  assert.equal(await page.locator('.slide-layer.selected').count(), 1);
   await page
-    .getByRole('button', { name: 'Arrange layers', exact: true })
-    .click();
+    .locator('.layer-list button')
+    .filter({ hasText: 'Card B' })
+    .click({ modifiers: ['Control'] });
+  assert.equal(await page.locator('.slide-layer.selected').count(), 2);
+
   await page
     .getByRole('button', { name: 'Select all cards', exact: true })
     .click();
