@@ -1,5 +1,11 @@
 # Validation record
 
+## Approved milestone preparation — server 0.26.0 / player 0.12.0
+
+Checked on October 20, 2026: all 231 Node tests pass with real Python-agent integration and no skips; all 97 Python tests and 33 Android native JVM tests pass. Split-card, classic data-feed, and player-startup Chromium suites pass. A clean frozen-lockfile dependency installation, full and production advisory audits (zero known vulnerabilities), lint, TypeScript, production build, Pi shell syntax, workflow YAML parsing, version consistency, repository checks, and compatibility review pass.
+
+An adapted local AMD64 container build uses a temporary CA mount for managed-environment networking. Isolated runtime checks pass for health/version, UI, initial login, real FFmpeg optimization, poster/media integrity, container replacement, and stopped-volume backup/restore. Hosted native ARM64 checks and signed APK publication are separate workflow results. Physical Onn/Pi display performance and installation acceptance remain unverified. No running server or TV is updated by these local checks.
+
 ## Local line statistics — server 0.25.5 / player 0.11.5
 
 Checked on October 20, 2026: all 231 Node tests pass without skips, including real Python-agent integration, and all 97 Python tests pass. The split-card Chromium suite verifies the new default-off statistics option, saved/reopened settings, correct rounded min/avg/max values, and live negative-series changes without frame replacement. It also covers existing card fitting, safe SVG, compact controls, and lifecycle behavior. The centered-gauge/reference gallery was visually inspected. Lint, TypeScript, production build, version consistency, repository checks, and compatibility checks pass. No physical-device performance, signed APK, or hosted workflow execution is established by these local checks.

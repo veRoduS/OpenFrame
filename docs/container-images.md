@@ -70,7 +70,7 @@ Players still use the server's stable LAN/VPN/HTTPS origin in their private conf
 
 ## Action behavior
 
-Normal branch pushes and pull requests run CI only. Publishing requires an approved Git tag of the form `vX.Y.0`, or an explicit manual run selecting an existing approved tag. Patch tags and tag/package version mismatches are rejected. The pipeline checks the exact tagged commit, runs Node/Python checks plus native AMD64 and ARM64 Docker smoke tests, then builds both architectures and publishes a versioned multi-platform image under both `X.Y.0` and `latest` tags. GitHub release tags remain versioned so each build is tied to an immutable milestone; `latest` is only the convenience image alias.
+Normal branch pushes and pull requests run CI only. Publishing requires an approved Git tag of the form `vX.Y.0`, or an explicit manual run selecting an existing approved tag. Patch tags and tag/package version mismatches are rejected. The pipeline checks the exact tagged commit, runs Node/Python checks plus native AMD64 and ARM64 Docker smoke tests, then builds both architectures and publishes a versioned multi-platform image under both `X.Y.0` and `latest` tags. GitHub release tags remain versioned so each build is tied to an immutable milestone. The image's `latest` alias advances only after publication succeeds; a separately requested `latest` Git tag is a source marker and does not itself publish an image.
 
 The frontend is built on the builder's native platform; production dependencies, including Sharp, install inside the target-platform stage. This avoids copying x64 native modules into ARM images. Buildx/QEMU supplies cross-platform builds; native ARM CI exercises SQLite startup and actual WebP encoding/decoding.
 
