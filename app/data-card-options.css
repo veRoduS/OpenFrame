@@ -120,21 +120,34 @@
   font-size: 12px;
   line-height: 1.5;
 }
-.data-card-footer-options,
-.data-card-layout-options {
-  border-top: 1px solid var(--color-border, #dde3df);
-  border-bottom: 1px solid var(--color-border, #dde3df);
-  padding: 12px 0;
+/* A shared section keeps classic and split-card controls consistent. */
+.widget-property-section {
+  min-width: 0;
+  border: 1px solid var(--color-border, #dde3df);
+  border-radius: 10px;
+  overflow: hidden;
 }
-.data-card-footer-options summary,
-.data-card-layout-options summary {
+.widget-property-section > summary {
   cursor: pointer;
-  font-size: 14px;
+  padding: 12px;
+  font-size: 13px;
   font-weight: 600;
+  background: var(--color-muted, #f3f5f4);
 }
-.data-card-footer-options > div,
-.data-card-layout-options > div {
+.widget-property-section > summary:focus-visible {
+  outline: 2px solid #0053e2;
+  outline-offset: -3px;
+}
+.widget-property-section > div {
   display: grid;
+  min-width: 0;
   gap: 12px;
-  padding-top: 12px;
+  padding: 12px;
+}
+.data-widget-options,
+.data-card-options {
+  gap: 10px;
+}
+.data-widget-options label.data-feed-checkbox {
+  display: flex;
 }

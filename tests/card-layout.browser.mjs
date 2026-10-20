@@ -108,6 +108,8 @@ try {
   const first = page.locator('.slide-canvas.editable .slide-layer').nth(0);
   const value = first.locator('[data-card-part="value"] > text');
   await value.waitFor();
+  await page.getByText('Text size and alignment', { exact: true }).click();
+  await page.getByText('Card padding', { exact: true }).click();
   const originalSize = Number(await value.getAttribute('font-size'));
   await page
     .getByLabel('Value alignment', { exact: true })
@@ -254,6 +256,12 @@ try {
   );
   await page.setViewportSize({ width: 320, height: 900 });
   await page.getByRole('button', { name: 'Properties', exact: true }).click();
+  const paddingSection = page.locator('.widget-property-section').filter({
+    has: page.locator('summary', { hasText: /^Card padding$/ }),
+  });
+  if (!(await paddingSection.evaluate((section) => section.open))) {
+    await paddingSection.locator('summary').click();
+  }
   await page
     .getByLabel('Horizontal body padding', { exact: true })
     .scrollIntoViewIfNeeded();

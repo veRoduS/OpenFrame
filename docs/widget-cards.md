@@ -13,9 +13,15 @@ In the slide editor, add or select a data widget and choose **Card style → Spl
 
 Cards use the fixed blue, navy, yellow, white, and Sky Blue palette. Choose **True Blue** or **Bentonville Blue** for the header. Body text stays navy. The classic accent, track, and orientation settings are retained but do not control this style. Resize the layer to fit your slide; a landscape card around 1.4 times as wide as it is tall is a useful starting point.
 
+## Property groups
+
+The sidebar groups settings by task. **Card style and title**, **Data source**, and **Value and number format** cover the basics. Open **Header and delta badge**, **Text size and alignment**, or **Card padding** for appearance changes. Gauge targets, maximum, and thresholds are together in **Goals and status colors**. Line statistics are under **Chart details**; table layout and row ranges are under **Table rows**. **Footer and freshness** combines footer labels, update time, and the stale-data limit.
+
+Each section can be collapsed independently with its heading (or Enter/Space when focused). Appearance and footer sections start collapsed to reduce scrolling. The reorganization changes only the editor; existing saved settings and player rendering are unchanged.
+
 ## Values and comparisons
 
-Open **Text and spacing** to choose **Value alignment → Center**, Left, or Right for metric and line cards. Table alignment applies within the numeric column; row labels stay on the left. **Default** retains the original alignment, and radial gauges always stay centered. Centered metric cards put their optional comparison in the lower-right corner so it does not shift the main value off-center.
+Open **Text size and alignment** to choose **Value alignment → Center**, Left, or Right for metric and line cards. Table alignment applies within the numeric column; row labels stay on the left. **Default** retains the original alignment, and radial gauges always stay centered. Centered metric cards put their optional comparison in the lower-right corner so it does not shift the main value off-center.
 
 Set **Header text size (%)**, **Value text size (%)**, and **Detail text size (%)** independently, from 50% to 200%. Detail size controls supporting text, row labels, badges, statistics, and footer copy. Values still fit the available space, so long numbers and dense rows may stop growing before the requested size. **Horizontal body padding** and **Vertical body padding** accept 0–48 design pixels (16 by default); these scale with the card. Header and footer bands remain flush with the card edges. Existing cards keep their original sizes and padding.
 
@@ -27,7 +33,7 @@ Choose **Header badge → Delta pill** to place a comparison in the header. **De
 
 For a progress card, **Gauge maximum** controls the ring scale, while **Fixed target** or **Target field** controls the goal badge. For example, value `94.2`, unit `%`, maximum `100`, and target `92` show a 94.2% ring and a 92% goal. Reaching the goal does not change the scale of the ring.
 
-**Goal colors → Color thresholds** optionally adds red/yellow/green status. It starts **Off**. Choose **Higher is better** for percentages or output: green is at or above **Green goal**, yellow is at or above **Yellow threshold** but below the goal, and red is below the warning level. Choose **Lower is better** for wait times or exception counts: green is at or below the goal, yellow extends up to the warning level, and red is above it. Zero, negative, and fractional custom goals are supported. The warning must be on the correct side of the goal; equal cutoffs skip the yellow band. Comparisons use the unrounded feed value in its original units.
+**Goals and status colors → Color thresholds** optionally adds red/yellow/green status. It starts **Off**. Choose **Higher is better** for percentages or output: green is at or above **Green goal**, yellow is at or above **Yellow threshold** but below the goal, and red is below the warning level. Choose **Lower is better** for wait times or exception counts: green is at or below the goal, yellow extends up to the warning level, and red is above it. Zero, negative, and fractional custom goals are supported. The warning must be on the correct side of the goal; equal cutoffs skip the yellow band. Comparisons use the unrounded feed value in its original units.
 
 Circle cards default to **Use gauge target as green goal**, following the fixed Target or live Target field. Uncheck it to enter a custom Green goal; the goal badge then shows that same custom goal while colors are enabled. Switching colors Off restores the ordinary gauge target. Metric and line cards use the custom goal; line status uses the latest point. Headers, borders, and circle arcs change color; main values stay navy. Yellow headers use navy text and icons, and yellow circle arcs have a navy outline. Tables evaluate each row separately, coloring its outline and optional bar rather than giving the whole table one status. Accessible descriptions include the status. Missing data never appears successful; missing or incorrectly ordered live goals retain neutral colors with a message to check the goal/thresholds. Stale snapshots keep their last-value status and normal freshness label.
 
@@ -39,7 +45,7 @@ A mini table can select a second categories field as **Row delta field**. Deltas
 
 Line cards have a **Show min / avg / max** option, off by default. When enabled, the bottom row displays the minimum, arithmetic average, and maximum of the values in the current series snapshot, using the card's prefix, unit, and precision. This replaces the date labels without reducing the plot area. Statistics update with the feed and do not require additional requests or stored history.
 
-**Supporting text** describes metric, line, and breakdown cards. Radial cards center the gauge and put a compact goal badge in the bottom-right corner, without supporting text underneath. Optional **Footer labels** add context at the bottom of the card. Labels are user-entered text; OpenFrame does not certify or verify the underlying metric. Keep the existing last-updated display enabled when data freshness matters. Unavailable data and stale snapshots retain their normal status handling.
+**Supporting text** describes metric, line, and breakdown cards. Radial cards center the gauge and put a compact goal badge in the bottom-right corner, without supporting text underneath. Optional labels in **Footer and freshness** add context at the bottom of the card. Labels are user-entered text; OpenFrame does not certify or verify the underlying metric. Keep the existing last-updated display enabled when data freshness matters. Unavailable data and stale snapshots retain their normal status handling.
 
 ## Publication and players
 

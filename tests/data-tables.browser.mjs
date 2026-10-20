@@ -111,6 +111,7 @@ try {
   await page.getByLabel('Decimal places', { exact: true }).fill('1');
   await page.getByLabel('First row', { exact: true }).fill('21');
   await page.getByLabel('Visible rows', { exact: true }).fill('20');
+  await page.getByText('Footer and freshness', { exact: true }).click();
   await page.getByLabel('Show update time', { exact: true }).uncheck();
   await page
     .locator('.slide-canvas.editable [data-card-part="row"]')

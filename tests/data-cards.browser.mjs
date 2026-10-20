@@ -185,6 +185,7 @@ try {
     .getByLabel('Value field', { exact: true })
     .selectOption('departments');
   await page.getByRole('radio', { name: 'Split header', exact: true }).check();
+  await page.getByText('Header and delta badge', { exact: true }).click();
   await page.getByLabel('Header color', { exact: true }).waitFor();
   await page
     .getByLabel('Title', { exact: true })
@@ -203,7 +204,7 @@ try {
     .getByLabel('Row delta field', { exact: true })
     .selectOption('departmentChanges');
   await page.getByLabel('Visible rows', { exact: true }).fill('4');
-  await page.locator('.data-card-footer-options summary').click();
+  await page.getByText('Footer and freshness', { exact: true }).click();
   await page
     .getByLabel('Footer text', { exact: true })
     .fill('Reference departments');

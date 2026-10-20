@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import type { DataCardConfig, DataFeed, Layer } from './types';
 import './data-card-options.css';
 
@@ -233,11 +233,36 @@ export function DataCardStylePicker({ config, onChange }: CardProps) {
   );
 }
 
+export function WidgetPropertySection({
+  title,
+  children,
+  open = true,
+}: {
+  title: string;
+  children: ReactNode;
+  open?: boolean;
+}) {
+  return (
+    <details className="widget-property-section" open={open}>
+      <summary>{title}</summary>
+      <div>{children}</div>
+    </details>
+  );
+}
+
 export function DataCardOptions({
   config,
   feed,
   onChange,
-}: CardProps & { feed?: DataFeed }) {
+  valueFields,
+  goalFields,
+  footerFields,
+}: CardProps & {
+  feed?: DataFeed;
+  valueFields: ReactNode;
+  goalFields: ReactNode;
+  footerFields: ReactNode;
+}) {
   const card = dataCardSettings(config);
   const patch = (value: Partial<DataCardConfig>) =>
     onChange({ ...card, ...value });
@@ -256,375 +281,398 @@ export function DataCardOptions({
       : card.thresholdWarning < goal);
   return (
     <div className="data-card-options">
-      <details className="data-card-layout-options" open>
-        <summary>Goal colors</summary>
-        <div>
+      <WidgetPropertySection title="Value and number format">
+        {valueFields}
+        <label>
+          Value prefix
+          <input
+            value={card.prefix}
+            maxLength={8}
+            placeholder="$"
+            onChange={(event) => patch({ prefix: event.target.value })}
+          />
+        </label>
+        {config.mode !== 'progress' && (
           <label>
-            Color thresholds
+            Supporting text
+            <input
+              value={card.subtitle}
+              maxLength={100}
+              placeholder="Describe this metric"
+              onChange={(event) => patch({ subtitle: event.target.value })}
+            />
+          </label>
+        )}
+      </WidgetPropertySection>
+      <WidgetPropertySection title="Header and delta badge" open={false}>
+        <label>
+          Header color
+          <select
+            aria-label="Header color"
+            value={card.header}
+            onChange={(event) =>
+              patch({ header: event.target.value as DataCardConfig['header'] })
+            }
+          >
+            <option value="blue">True Blue</option>
+            <option value="navy">Bentonville Blue</option>
+          </select>
+        </label>
+        <label>
+          Header badge
+          <select
+            aria-label="Header badge"
+            value={card.badge}
+            onChange={(event) =>
+              patch({ badge: event.target.value as DataCardConfig['badge'] })
+            }
+          >
+            <option value="spark">Spark</option>
+            <option value="delta">Delta pill</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        {(card.badge === 'delta' || config.mode === 'metric') && (
+          <div className="data-card-option-group">
+            <label>
+              Delta field
+              <select
+                aria-label="Delta field"
+                value={card.deltaField}
+                onChange={(event) => patch({ deltaField: event.target.value })}
+              >
+                <option value="">Custom label</option>
+                {numberFields.map((field) => (
+                  <option key={field.key}>{field.key}</option>
+                ))}
+              </select>
+            </label>
+            {!card.deltaField && (
+              <label>
+                Delta label
+                <input
+                  value={card.deltaText}
+                  maxLength={32}
+                  placeholder="+2.4% or −6m faster"
+                  onChange={(event) => patch({ deltaText: event.target.value })}
+                />
+              </label>
+            )}
+            {card.deltaField && (
+              <label>
+                Delta unit
+                <input
+                  value={card.deltaUnit}
+                  maxLength={12}
+                  placeholder="%"
+                  onChange={(event) => patch({ deltaUnit: event.target.value })}
+                />
+              </label>
+            )}
+          </div>
+        )}
+      </WidgetPropertySection>
+      <WidgetPropertySection title="Text size and alignment" open={false}>
+        {config.mode !== 'progress' && (
+          <label>
+            Value alignment
             <select
-              aria-label="Color thresholds"
-              value={card.thresholdMode}
-              onChange={(event) => {
-                const mode = event.target
-                  .value as DataCardConfig['thresholdMode'];
-                const step = Math.max(1, Math.abs(goal) * 0.1);
+              aria-label="Value alignment"
+              value={card.valueAlign}
+              onChange={(event) =>
                 patch({
-                  thresholdMode: mode,
-                  ...(mode === 'lower' && card.thresholdWarning < goal
-                    ? { thresholdWarning: Math.min(1e12, goal + step) }
-                    : mode === 'higher' && card.thresholdWarning > goal
-                      ? { thresholdWarning: Math.max(-1e12, goal - step) }
-                      : {}),
-                });
-              }}
+                  valueAlign: event.target
+                    .value as DataCardConfig['valueAlign'],
+                })
+              }
             >
-              <option value="off">Off</option>
-              <option value="higher">Higher is better</option>
-              <option value="lower">Lower is better</option>
+              <option value="auto">Default</option>
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
             </select>
           </label>
-          {card.thresholdMode !== 'off' && (
-            <>
-              {config.mode === 'progress' && (
-                <label className="data-feed-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={card.thresholdUseTarget}
-                    onChange={(event) =>
-                      patch({ thresholdUseTarget: event.target.checked })
-                    }
-                  />
-                  Use gauge target as green goal
-                </label>
-              )}
-              {!usesTarget && (
-                <label>
-                  Green goal
-                  <input
-                    type="number"
-                    min={-1e12}
-                    max={1e12}
-                    step="any"
-                    value={card.thresholdGoal}
-                    onChange={(event) =>
-                      patch({ thresholdGoal: Number(event.target.value) })
-                    }
-                  />
-                </label>
-              )}
+        )}
+        {(
+          [
+            ['titleScale', 'Header text size (%)'],
+            ['valueScale', 'Value text size (%)'],
+            ['detailScale', 'Detail text size (%)'],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            {label}
+            <input
+              type="number"
+              min={50}
+              max={200}
+              step={1}
+              value={card[key]}
+              onChange={(event) => patch({ [key]: Number(event.target.value) })}
+            />
+          </label>
+        ))}
+        <p className="data-card-help">
+          100% keeps the original text size. Text fits the available space.
+        </p>
+      </WidgetPropertySection>
+      <WidgetPropertySection title="Card padding" open={false}>
+        {(
+          [
+            ['paddingX', 'Horizontal body padding'],
+            ['paddingY', 'Vertical body padding'],
+          ] as const
+        ).map(([key, label]) => (
+          <label key={key}>
+            {label}
+            <input
+              type="number"
+              min={0}
+              max={48}
+              step={1}
+              value={card[key]}
+              onChange={(event) => patch({ [key]: Number(event.target.value) })}
+            />
+          </label>
+        ))}
+        <p className="data-card-help">
+          Body padding uses design pixels and scales with the card; gauges stay
+          centered.
+        </p>
+      </WidgetPropertySection>
+      <WidgetPropertySection title="Goals and status colors">
+        {goalFields}
+        {config.mode === 'progress' && (
+          <>
+            <label>
+              Gauge maximum
+              <input
+                type="number"
+                min={0.000001}
+                max={1e12}
+                value={card.scaleMax}
+                onChange={(event) =>
+                  patch({ scaleMax: Number(event.target.value) })
+                }
+              />
+            </label>
+            <p className="data-card-help">
+              Use 100 for a percentage. The goal is set separately.
+            </p>
+          </>
+        )}
+
+        <label>
+          Color thresholds
+          <select
+            aria-label="Color thresholds"
+            value={card.thresholdMode}
+            onChange={(event) => {
+              const mode = event.target
+                .value as DataCardConfig['thresholdMode'];
+              const step = Math.max(1, Math.abs(goal) * 0.1);
+              patch({
+                thresholdMode: mode,
+                ...(mode === 'lower' && card.thresholdWarning < goal
+                  ? { thresholdWarning: Math.min(1e12, goal + step) }
+                  : mode === 'higher' && card.thresholdWarning > goal
+                    ? { thresholdWarning: Math.max(-1e12, goal - step) }
+                    : {}),
+              });
+            }}
+          >
+            <option value="off">Off</option>
+            <option value="higher">Higher is better</option>
+            <option value="lower">Lower is better</option>
+          </select>
+        </label>
+        {card.thresholdMode !== 'off' && (
+          <>
+            {config.mode === 'progress' && (
+              <label className="data-feed-checkbox">
+                <input
+                  type="checkbox"
+                  checked={card.thresholdUseTarget}
+                  onChange={(event) =>
+                    patch({ thresholdUseTarget: event.target.checked })
+                  }
+                />
+                Use gauge target as green goal
+              </label>
+            )}
+            {!usesTarget && (
               <label>
-                Yellow threshold
+                Green goal
                 <input
                   type="number"
                   min={-1e12}
                   max={1e12}
                   step="any"
-                  value={card.thresholdWarning}
+                  value={card.thresholdGoal}
                   onChange={(event) =>
-                    patch({ thresholdWarning: Number(event.target.value) })
+                    patch({ thresholdGoal: Number(event.target.value) })
+                  }
+                />
+              </label>
+            )}
+            <label>
+              Yellow threshold
+              <input
+                type="number"
+                min={-1e12}
+                max={1e12}
+                step="any"
+                value={card.thresholdWarning}
+                onChange={(event) =>
+                  patch({ thresholdWarning: Number(event.target.value) })
+                }
+              />
+            </label>
+            <p className="data-card-help">
+              {card.thresholdMode === 'higher'
+                ? 'Green at or above the goal; yellow at or above the warning level; red below it.'
+                : 'Green at or below the goal; yellow at or below the warning level; red above it.'}{' '}
+              Use the same units as the feed value.{' '}
+              {usesTarget
+                ? 'Green follows the Target or Target field in this section.'
+                : ''}{' '}
+              {config.mode === 'bar' ? 'Each row is evaluated separately.' : ''}
+            </p>
+            {invalidThresholds && (
+              <p className="data-card-help" role="alert">
+                {card.thresholdMode === 'higher'
+                  ? 'Yellow threshold must be at or below the green goal.'
+                  : 'Yellow threshold must be at or above the green goal.'}
+              </p>
+            )}
+          </>
+        )}
+      </WidgetPropertySection>
+      {(config.mode === 'line' || config.mode === 'bar') && (
+        <WidgetPropertySection
+          title={config.mode === 'line' ? 'Chart details' : 'Table rows'}
+        >
+          {config.mode === 'line' && (
+            <label className="data-feed-checkbox">
+              <input
+                type="checkbox"
+                checked={card.showStats}
+                onChange={(event) => patch({ showStats: event.target.checked })}
+              />
+              Show min / avg / max
+            </label>
+          )}
+          {config.mode === 'bar' && (
+            <>
+              <label>
+                Row layout
+                <select
+                  aria-label="Row layout"
+                  value={card.rows}
+                  onChange={(event) =>
+                    patch({
+                      rows: event.target.value as DataCardConfig['rows'],
+                    })
+                  }
+                >
+                  <option value="table">Mini table</option>
+                  <option value="bars">Channel breakdown</option>
+                </select>
+              </label>
+              <label>
+                First row
+                <input
+                  type="number"
+                  min={1}
+                  max={40}
+                  step={1}
+                  value={card.rowOffset + 1}
+                  onChange={(event) =>
+                    patch({ rowOffset: Number(event.target.value) - 1 })
+                  }
+                />
+              </label>
+              <label>
+                Visible rows
+                <input
+                  type="number"
+                  min={1}
+                  max={40}
+                  step={1}
+                  value={card.maxRows}
+                  onChange={(event) =>
+                    patch({ maxRows: Number(event.target.value) })
                   }
                 />
               </label>
               <p className="data-card-help">
-                {card.thresholdMode === 'higher'
-                  ? 'Green at or above the goal; yellow at or above the warning level; red below it.'
-                  : 'Green at or below the goal; yellow at or below the warning level; red above it.'}{' '}
-                Use the same units as the feed value.{' '}
-                {usesTarget
-                  ? 'Green follows the Target or Target field above.'
-                  : ''}{' '}
-                {config.mode === 'bar'
-                  ? 'Each row is evaluated separately.'
-                  : ''}
+                Use a larger table for more rows, or split the same field across
+                cards using First row.
               </p>
-              {invalidThresholds && (
-                <p className="data-card-help" role="alert">
-                  {card.thresholdMode === 'higher'
-                    ? 'Yellow threshold must be at or below the green goal.'
-                    : 'Yellow threshold must be at or above the green goal.'}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      </details>
-      <details className="data-card-layout-options" open>
-        <summary>Text and spacing</summary>
-        <div>
-          {config.mode !== 'progress' && (
-            <label>
-              Value alignment
-              <select
-                aria-label="Value alignment"
-                value={card.valueAlign}
-                onChange={(event) =>
-                  patch({
-                    valueAlign: event.target
-                      .value as DataCardConfig['valueAlign'],
-                  })
-                }
-              >
-                <option value="auto">Default</option>
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </label>
-          )}
-          {(
-            [
-              ['titleScale', 'Header text size (%)'],
-              ['valueScale', 'Value text size (%)'],
-              ['detailScale', 'Detail text size (%)'],
-              ['paddingX', 'Horizontal body padding'],
-              ['paddingY', 'Vertical body padding'],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key}>
-              {label}
-              <input
-                type="number"
-                min={key.startsWith('padding') ? 0 : 50}
-                max={key.startsWith('padding') ? 48 : 200}
-                step={1}
-                value={card[key]}
-                onChange={(event) =>
-                  patch({ [key]: Number(event.target.value) })
-                }
-              />
-            </label>
-          ))}
-          <p className="data-card-help">
-            100% keeps the original text size. Text fits the available space.
-            Body padding uses design pixels and scales with the card; gauges
-            stay centered.
-          </p>
-        </div>
-      </details>
-      <label>
-        Header color
-        <select
-          aria-label="Header color"
-          value={card.header}
-          onChange={(event) =>
-            patch({ header: event.target.value as DataCardConfig['header'] })
-          }
-        >
-          <option value="blue">True Blue</option>
-          <option value="navy">Bentonville Blue</option>
-        </select>
-      </label>
-      <label>
-        Value prefix
-        <input
-          value={card.prefix}
-          maxLength={8}
-          placeholder="$"
-          onChange={(event) => patch({ prefix: event.target.value })}
-        />
-      </label>
-      {config.mode !== 'progress' && (
-        <label>
-          Supporting text
-          <input
-            value={card.subtitle}
-            maxLength={100}
-            placeholder="Describe this metric"
-            onChange={(event) => patch({ subtitle: event.target.value })}
-          />
-        </label>
-      )}
-      <label>
-        Header badge
-        <select
-          aria-label="Header badge"
-          value={card.badge}
-          onChange={(event) =>
-            patch({ badge: event.target.value as DataCardConfig['badge'] })
-          }
-        >
-          <option value="spark">Spark</option>
-          <option value="delta">Delta pill</option>
-          <option value="none">None</option>
-        </select>
-      </label>
-      {(card.badge === 'delta' || config.mode === 'metric') && (
-        <div className="data-card-option-group">
-          <label>
-            Delta field
-            <select
-              aria-label="Delta field"
-              value={card.deltaField}
-              onChange={(event) => patch({ deltaField: event.target.value })}
-            >
-              <option value="">Custom label</option>
-              {numberFields.map((field) => (
-                <option key={field.key}>{field.key}</option>
-              ))}
-            </select>
-          </label>
-          {!card.deltaField && (
-            <label>
-              Delta label
-              <input
-                value={card.deltaText}
-                maxLength={32}
-                placeholder="+2.4% or −6m faster"
-                onChange={(event) => patch({ deltaText: event.target.value })}
-              />
-            </label>
-          )}
-          {card.deltaField && (
-            <label>
-              Delta unit
-              <input
-                value={card.deltaUnit}
-                maxLength={12}
-                placeholder="%"
-                onChange={(event) => patch({ deltaUnit: event.target.value })}
-              />
-            </label>
-          )}
-        </div>
-      )}
-      {config.mode === 'progress' && (
-        <>
-          <label>
-            Gauge maximum
-            <input
-              type="number"
-              min={0.000001}
-              max={1e12}
-              value={card.scaleMax}
-              onChange={(event) =>
-                patch({ scaleMax: Number(event.target.value) })
-              }
-            />
-          </label>
-          <p className="data-card-help">
-            Use 100 for a percentage. The goal is set separately.
-          </p>
-        </>
-      )}
-      {config.mode === 'line' && (
-        <label className="data-feed-checkbox">
-          <input
-            type="checkbox"
-            checked={card.showStats}
-            onChange={(event) => patch({ showStats: event.target.checked })}
-          />
-          Show min / avg / max
-        </label>
-      )}
-      {config.mode === 'bar' && (
-        <>
-          <label>
-            Row layout
-            <select
-              aria-label="Row layout"
-              value={card.rows}
-              onChange={(event) =>
-                patch({ rows: event.target.value as DataCardConfig['rows'] })
-              }
-            >
-              <option value="table">Mini table</option>
-              <option value="bars">Channel breakdown</option>
-            </select>
-          </label>
-          <label>
-            First row
-            <input
-              type="number"
-              min={1}
-              max={40}
-              step={1}
-              value={card.rowOffset + 1}
-              onChange={(event) =>
-                patch({ rowOffset: Number(event.target.value) - 1 })
-              }
-            />
-          </label>
-          <label>
-            Visible rows
-            <input
-              type="number"
-              min={1}
-              max={40}
-              step={1}
-              value={card.maxRows}
-              onChange={(event) =>
-                patch({ maxRows: Number(event.target.value) })
-              }
-            />
-          </label>
-          <p className="data-card-help">
-            Use a larger table for more rows, or split the same field across
-            cards using First row.
-          </p>
-          {card.rows === 'table' && (
-            <>
-              <label>
-                Row delta field
-                <select
-                  aria-label="Row delta field"
-                  value={card.rowDeltaField}
-                  onChange={(event) =>
-                    patch({ rowDeltaField: event.target.value })
-                  }
-                >
-                  <option value="">No row deltas</option>
-                  {categoryFields.map((field) => (
-                    <option key={field.key}>{field.key}</option>
-                  ))}
-                </select>
-              </label>
-              {card.rowDeltaField && (
+              {card.rows === 'table' && (
                 <>
-                  {!(card.badge === 'delta' && card.deltaField) && (
-                    <label>
-                      Delta unit
-                      <input
-                        value={card.deltaUnit}
-                        maxLength={12}
-                        placeholder="%"
-                        onChange={(event) =>
-                          patch({ deltaUnit: event.target.value })
-                        }
-                      />
-                    </label>
+                  <label>
+                    Row delta field
+                    <select
+                      aria-label="Row delta field"
+                      value={card.rowDeltaField}
+                      onChange={(event) =>
+                        patch({ rowDeltaField: event.target.value })
+                      }
+                    >
+                      <option value="">No row deltas</option>
+                      {categoryFields.map((field) => (
+                        <option key={field.key}>{field.key}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {card.rowDeltaField && (
+                    <>
+                      {!(card.badge === 'delta' && card.deltaField) && (
+                        <label>
+                          Delta unit
+                          <input
+                            value={card.deltaUnit}
+                            maxLength={12}
+                            placeholder="%"
+                            onChange={(event) =>
+                              patch({ deltaUnit: event.target.value })
+                            }
+                          />
+                        </label>
+                      )}
+                      <p className="data-card-help">
+                        Row deltas match category names in the selected field.
+                      </p>
+                    </>
                   )}
-                  <p className="data-card-help">
-                    Row deltas match category names in the selected field.
-                  </p>
                 </>
               )}
             </>
           )}
-        </>
+        </WidgetPropertySection>
       )}
-      <details className="data-card-footer-options">
-        <summary>Footer labels</summary>
-        <div>
-          <label>
-            Footer text
-            <input
-              value={card.footer}
-              maxLength={80}
-              placeholder="Optional context"
-              onChange={(event) => patch({ footer: event.target.value })}
-            />
-          </label>
-          <label>
-            Footer right label
-            <input
-              value={card.footerRight}
-              maxLength={40}
-              placeholder="Optional label"
-              onChange={(event) => patch({ footerRight: event.target.value })}
-            />
-          </label>
-        </div>
-      </details>
+      <WidgetPropertySection title="Footer and freshness" open={false}>
+        <label>
+          Footer text
+          <input
+            value={card.footer}
+            maxLength={80}
+            placeholder="Optional context"
+            onChange={(event) => patch({ footer: event.target.value })}
+          />
+        </label>
+        <label>
+          Footer right label
+          <input
+            value={card.footerRight}
+            maxLength={40}
+            placeholder="Optional label"
+            onChange={(event) => patch({ footerRight: event.target.value })}
+          />
+        </label>
+        {footerFields}
+      </WidgetPropertySection>
     </div>
   );
 }

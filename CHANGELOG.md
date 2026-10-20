@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.27.2] - 2026-10-20
+
+- Group widget properties into collapsible data, formatting, appearance, goal, and footer sections
+
 ## [0.27.1] - 2026-10-20
 
 - Add optional red/yellow/green widget card goal thresholds, higher/lower comparisons, live gauge targets, and per-row table colors. Remove Score from circle centers and center the remaining value. Requires player 0.13.1 for the appearance changes; existing threshold settings start off.

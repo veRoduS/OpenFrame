@@ -1,6 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { DataFeedApplications } from './data-feed-applications';
-import { DataCardOptions, DataCardStylePicker } from './data-card-options';
+import {
+  DataCardOptions,
+  DataCardStylePicker,
+  WidgetPropertySection,
+} from './data-card-options';
 import { Button } from './components/ui/button';
 import {
   AlertDialog,
@@ -814,70 +818,8 @@ export function DataWidgetOptions({
   const fields = feed?.fields.filter((f) => f.type === expected) || [];
   const patch = (value: Partial<typeof config>) =>
     onChange({ ...config, ...value });
-  return (
-    <div className="data-widget-options">
-      <DataCardStylePicker
-        config={config}
-        onChange={(card) => patch({ card })}
-      />
-      <label>
-        Data feed
-        <select
-          aria-label="Data feed"
-          value={config.feedId || ''}
-          onChange={(e) => {
-            const f = feeds.find((v) => v.id === e.target.value);
-            patch({
-              feedId: f?.id || null,
-              field: f?.fields.find((v) => v.type === expected)?.key || '',
-              targetField: '',
-              ...(config.card
-                ? {
-                    card: {
-                      ...config.card,
-                      deltaField: '',
-                      rowDeltaField: '',
-                      rowOffset: 0,
-                    },
-                  }
-                : {}),
-            });
-          }}
-        >
-          <option value="">Choose a feed</option>
-          {feeds.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Value field
-        <select
-          aria-label="Value field"
-          value={config.field}
-          onChange={(e) => patch({ field: e.target.value })}
-        >
-          <option value="">Choose a {expected} field</option>
-          {fields.map((f) => (
-            <option key={f.key}>{f.key}</option>
-          ))}
-        </select>
-      </label>
-      {!feeds.length && (
-        <p className="muted">
-          Create a feed under Settings → Data feeds first.
-        </p>
-      )}
-      <label>
-        Title
-        <input
-          maxLength={80}
-          value={config.title}
-          onChange={(e) => patch({ title: e.target.value })}
-        />
-      </label>
+  const valueFields = (
+    <>
       <label>
         Unit / suffix
         <input
@@ -897,6 +839,10 @@ export function DataWidgetOptions({
           onChange={(e) => patch({ decimals: Number(e.target.value) })}
         />
       </label>
+    </>
+  );
+  const goalFields = (
+    <>
       {config.mode === 'progress' && (
         <>
           <label>
@@ -943,33 +889,10 @@ export function DataWidgetOptions({
           )}
         </>
       )}
-      {split && (
-        <DataCardOptions
-          config={config}
-          feed={feed}
-          onChange={(card) => patch({ card })}
-        />
-      )}
-      {config.mode !== 'metric' && !split && (
-        <>
-          <label>
-            Accent color
-            <input
-              type="color"
-              value={config.accent}
-              onChange={(e) => patch({ accent: e.target.value })}
-            />
-          </label>
-          <label>
-            Track / grid color
-            <input
-              type="color"
-              value={config.track}
-              onChange={(e) => patch({ track: e.target.value })}
-            />
-          </label>
-        </>
-      )}
+    </>
+  );
+  const footerFields = (
+    <>
       <label className="data-feed-checkbox">
         <input
           type="checkbox"
@@ -988,6 +911,121 @@ export function DataWidgetOptions({
           onChange={(e) => patch({ staleAfterMinutes: Number(e.target.value) })}
         />
       </label>
+    </>
+  );
+  return (
+    <div className="data-widget-options">
+      <WidgetPropertySection title="Card style and title">
+        <DataCardStylePicker
+          config={config}
+          onChange={(card) => patch({ card })}
+        />
+        <label>
+          Title
+          <input
+            maxLength={80}
+            value={config.title}
+            onChange={(e) => patch({ title: e.target.value })}
+          />
+        </label>
+      </WidgetPropertySection>
+      <WidgetPropertySection title="Data source">
+        <label>
+          Data feed
+          <select
+            aria-label="Data feed"
+            value={config.feedId || ''}
+            onChange={(e) => {
+              const f = feeds.find((v) => v.id === e.target.value);
+              patch({
+                feedId: f?.id || null,
+                field: f?.fields.find((v) => v.type === expected)?.key || '',
+                targetField: '',
+                ...(config.card
+                  ? {
+                      card: {
+                        ...config.card,
+                        deltaField: '',
+                        rowDeltaField: '',
+                        rowOffset: 0,
+                      },
+                    }
+                  : {}),
+              });
+            }}
+          >
+            <option value="">Choose a feed</option>
+            {feeds.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Value field
+          <select
+            aria-label="Value field"
+            value={config.field}
+            onChange={(e) => patch({ field: e.target.value })}
+          >
+            <option value="">Choose a {expected} field</option>
+            {fields.map((f) => (
+              <option key={f.key}>{f.key}</option>
+            ))}
+          </select>
+        </label>
+        {!feeds.length && (
+          <p className="muted">
+            Create a feed under Settings → Data feeds first.
+          </p>
+        )}
+      </WidgetPropertySection>
+      {!split && (
+        <WidgetPropertySection title="Value and number format">
+          {valueFields}
+        </WidgetPropertySection>
+      )}
+      {!split && config.mode === 'progress' && (
+        <WidgetPropertySection title="Goal and orientation">
+          {goalFields}
+        </WidgetPropertySection>
+      )}
+      {split && (
+        <DataCardOptions
+          config={config}
+          feed={feed}
+          valueFields={valueFields}
+          goalFields={goalFields}
+          footerFields={footerFields}
+          onChange={(card) => patch({ card })}
+        />
+      )}
+      {config.mode !== 'metric' && !split && (
+        <WidgetPropertySection title="Chart colors">
+          <label>
+            Accent color
+            <input
+              type="color"
+              value={config.accent}
+              onChange={(e) => patch({ accent: e.target.value })}
+            />
+          </label>
+          <label>
+            Track / grid color
+            <input
+              type="color"
+              value={config.track}
+              onChange={(e) => patch({ track: e.target.value })}
+            />
+          </label>
+        </WidgetPropertySection>
+      )}
+      {!split && (
+        <WidgetPropertySection title="Footer and freshness" open={false}>
+          {footerFields}
+        </WidgetPropertySection>
+      )}
     </div>
   );
 }
