@@ -40,6 +40,7 @@ const dataCardSchema = z
     rowDeltaField: z.string().max(40).default(''),
     maxRows: z.number().int().min(1).max(8).default(4),
     scaleMax: z.number().positive().max(1e12).default(100),
+    showStats: z.boolean().default(false),
   })
   .strict();
 export const dataWidgetSchema = z

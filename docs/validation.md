@@ -1,5 +1,9 @@
 # Validation record
 
+## Local line statistics — server 0.25.5 / player 0.11.5
+
+Checked on October 20, 2026: all 231 Node tests pass without skips, including real Python-agent integration, and all 97 Python tests pass. The split-card Chromium suite verifies the new default-off statistics option, saved/reopened settings, correct rounded min/avg/max values, and live negative-series changes without frame replacement. It also covers existing card fitting, safe SVG, compact controls, and lifecycle behavior. The centered-gauge/reference gallery was visually inspected. Lint, TypeScript, production build, version consistency, repository checks, and compatibility checks pass. No physical-device performance, signed APK, or hosted workflow execution is established by these local checks.
+
 ## Local split header cards — server 0.25.1 / player 0.11.1
 
 Checked on October 19, 2026: 231 Node tests pass with real Python-agent integration and no skips; all 97 Python tests and 33 Android native JVM tests pass. TypeScript, lint, the production web build, version consistency, repository/documentation checks, and diff hygiene pass. No dependencies were added.

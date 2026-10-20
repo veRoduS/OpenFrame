@@ -105,6 +105,9 @@
   gap: 16px;
   min-width: 0;
 }
+.data-card-options label.data-feed-checkbox {
+  display: flex;
+}
 .data-card-option-group {
   display: grid;
   gap: 12px;

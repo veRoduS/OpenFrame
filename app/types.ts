@@ -15,6 +15,7 @@ export type DataCardConfig = {
   rowDeltaField: string;
   maxRows: number;
   scaleMax: number;
+  showStats: boolean;
 };
 
 export type Layer = {

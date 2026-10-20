@@ -509,6 +509,7 @@ void test('card settings are optional, strict, and bounded without changing clas
     rowDeltaField: '',
     maxRows: 4,
     scaleMax: 100,
+    showStats: false,
   });
   for (const card of [
     null,
@@ -517,6 +518,7 @@ void test('card settings are optional, strict, and bounded without changing clas
     { header: 'red' },
     { badge: 'icon' },
     { rows: 'grid' },
+    { showStats: 'true' },
     { unexpected: true },
     { maxRows: 0 },
     { maxRows: 9 },
@@ -585,6 +587,7 @@ void test('card options persist, update, and publish with schema four and unchan
     rowDeltaField: 'departments',
     maxRows: 8,
     scaleMax: 250,
+    showStats: true,
   };
   const layers = [
     widget(feed.id),

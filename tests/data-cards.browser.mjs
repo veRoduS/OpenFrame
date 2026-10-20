@@ -57,6 +57,7 @@ const card = (overrides = {}) => ({
   rowDeltaField: '',
   maxRows: 4,
   scaleMax: 100,
+  showStats: false,
   ...overrides,
 });
 const config = (feedId, mode, field, title, extra = {}, appearance = {}) => ({
@@ -281,6 +282,60 @@ try {
   );
   await page.screenshot({ path: path.join(output, 'editor-mobile.png') });
 
+  const lineEditor = await context.newPage();
+  await lineEditor.goto(`${base}/dashboard`);
+  await lineEditor.getByRole('button', { name: /^Slides/ }).click();
+  await lineEditor
+    .getByRole('button', { name: 'New slide', exact: true })
+    .click();
+  await lineEditor
+    .getByLabel('Slide name', { exact: true })
+    .fill('Line statistics editor');
+  await lineEditor.locator('.layer-list button').first().click();
+  await lineEditor
+    .getByRole('button', { name: 'Delete layer', exact: true })
+    .click();
+  await lineEditor
+    .getByRole('button', { name: 'Add line graph widget', exact: true })
+    .click();
+  await lineEditor
+    .getByLabel('Data feed', { exact: true })
+    .selectOption(feed.id);
+  await lineEditor
+    .getByLabel('Value field', { exact: true })
+    .selectOption('gmv');
+  await lineEditor
+    .getByRole('radio', { name: 'Split header', exact: true })
+    .check();
+  const statisticsToggle = lineEditor.getByLabel('Show min / avg / max', {
+    exact: true,
+  });
+  assert.equal(await statisticsToggle.isChecked(), false);
+  await statisticsToggle.check();
+  await lineEditor
+    .getByRole('button', { name: 'Save slide', exact: true })
+    .click();
+  await lineEditor.getByText('All changes saved', { exact: true }).waitFor();
+  const statisticsSlide = (await api('/api/library')).slides.find(
+    (slide) => slide.name === 'Line statistics editor',
+  );
+  assert.equal(statisticsSlide.layers[0].data.card.showStats, true);
+  await lineEditor
+    .getByRole('button', { name: 'Back to slides', exact: true })
+    .click();
+  await lineEditor
+    .getByRole('button', { name: 'Edit Line statistics editor', exact: true })
+    .click();
+  await lineEditor.locator('.layer-list button').first().click();
+  assert.ok(await statisticsToggle.isChecked());
+  await statisticsToggle.uncheck();
+  assert.equal(
+    await lineEditor
+      .locator('.slide-canvas [data-card-part="stat-avg"]')
+      .count(),
+    0,
+  );
+
   const cards = [
     config(
       feed.id,
@@ -320,6 +375,7 @@ try {
         subtitle: '7-week velocity ($B)',
         footer: 'W1–W7 trend',
         footerRight: 'W7: 34.6',
+        showStats: true,
       },
     ),
     config(
@@ -336,6 +392,7 @@ try {
         subtitle: 'Omnichannel cart size',
         footer: 'W1–W7 trend',
         footerRight: 'W7: 78.45',
+        showStats: true,
       },
     ),
     config(
@@ -437,6 +494,19 @@ try {
     await playback.locator(`${visible} [data-card-part="row"]`).count(),
     7,
   );
+  const lineStatistics = playback.locator(`${visible} svg`).nth(2);
+  assert.equal(
+    await lineStatistics.locator('[data-card-part="stat-min"]').textContent(),
+    'MIN $27.10B',
+  );
+  assert.equal(
+    await lineStatistics.locator('[data-card-part="stat-avg"]').textContent(),
+    'AVG $30.06B',
+  );
+  assert.equal(
+    await lineStatistics.locator('[data-card-part="stat-max"]').textContent(),
+    'MAX $34.60B',
+  );
   const firstRow = playback
     .locator(`${visible} [data-card-part="row"]`)
     .first();
@@ -488,7 +558,7 @@ try {
   await api(
     `/api/data-feeds/${feed.id}/data`,
     'PUT',
-    { ...values, pickup: 95.7 },
+    { ...values, pickup: 95.7, gmv: series([-10, 20, 5]) },
     token.token,
   );
   await playback.waitForFunction(
@@ -505,6 +575,19 @@ try {
         window.cardFrame ===
         document.querySelector('.slide-frame[aria-hidden="false"]'),
     ),
+  );
+
+  assert.equal(
+    await lineStatistics.locator('[data-card-part="stat-min"]').textContent(),
+    'MIN $-10.00B',
+  );
+  assert.equal(
+    await lineStatistics.locator('[data-card-part="stat-avg"]').textContent(),
+    'AVG $5.00B',
+  );
+  assert.equal(
+    await lineStatistics.locator('[data-card-part="stat-max"]').textContent(),
+    'MAX $20.00B',
   );
 
   // The same renderer is used by the editor and the actual widget lifecycle.

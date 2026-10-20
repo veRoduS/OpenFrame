@@ -176,6 +176,8 @@ Player sync adds a top-level `dataFeeds` map keyed by referenced feed UUID, with
 
 Server 0.25.1 adds optional `layer.data.card` presentation settings for split header cards. Existing `mode`, `field`, and feed payloads are unchanged. `style` is `plain|split`, `header` is `blue|navy`, and `badge` is `spark|delta|none`. Optional text includes `prefix`, `subtitle`, `deltaText`, `deltaUnit`, `footer`, and `footerRight`. `deltaField` references a number in the same feed; it is active for a delta header or a split metric's body comparison. Bar cards choose `rows: table|bars` and `maxRows: 1..8`; an active table `rowDeltaField` references categories in the same feed, matched by label. Progress cards use positive `scaleMax` (default 100) independently of the goal in `target`/`targetField`. Omitted `card` retains Classic. Shared player 0.11.1 is required for the new appearance; older data-capable players retain their classic primary-value rendering. See [card setup and compatibility](widget-cards.md).
 
+Card settings also accept `showStats: boolean` (default false), available from server 0.25.5 / player 0.11.5. For split line cards this displays minimum, arithmetic average, and maximum over the current bounded series snapshot. It does not change ingestion data or manifest schemas; older players ignore this setting.
+
 ### Publication state, preview versions, and starter layers
 
 Library and playlist responses include `publicationState: "draft" | "published" | "changes"`, `publishedAt`, `publishedRevision`, and `publishedSlideIds`. State compares effective playback order, timing, schedules, name, and transition with the publication; folders, tags, access metadata, entry IDs, and automatic slide-content refreshes do not create playlist draft changes.

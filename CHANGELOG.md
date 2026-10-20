@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.25.5] - 2026-10-20
+
+- Add optional min/avg/max summaries to split line cards and center radial gauges with compact bottom-corner goals.
+
 ## [0.25.4] - 2026-10-20
 
 - Refine split cards with compact goal badges, larger gauges and line plots, and larger financial and metric values.

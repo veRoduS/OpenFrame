@@ -354,13 +354,9 @@ export function renderDataCard(
       );
     description += `. ${formatted(rawValue)}`;
   } else if (config.mode === 'progress') {
-    const stacked = bodyHeight > bodyWidth * 1.1;
-    const radius = Math.min(
-      stacked ? 100 : 68,
-      bodyHeight / (stacked ? 3.4 : 2) - 6,
-    );
-    const cx = stacked ? width / 2 : 16 + radius + 6;
-    const cy = stacked ? bodyTop + bodyHeight * 0.38 : bodyTop + bodyHeight / 2;
+    const radius = Math.min(100, bodyWidth / 2 - 6, bodyHeight / 2 - 6);
+    const cx = width / 2;
+    const cy = bodyTop + bodyHeight / 2;
     const scaleMax =
       Number.isFinite(card.scaleMax) && card.scaleMax > 0 ? card.scaleMax : 100;
     const ratio = clamp(rawValue / scaleMax, 0, 1);
@@ -397,20 +393,29 @@ export function renderDataCard(
       Number.isFinite(target) && target > 0
         ? `Goal: ${formatted(target)}`
         : 'Goal unavailable';
-    const goalSpace = stacked ? bodyWidth : width - cx - radius - 36;
-    const goalWidth = Math.min(goalSpace, textWidth(goal, 12) + 20);
-    const goalX = stacked ? (width - goalWidth) / 2 : cx + radius + 20;
-    const goalY = stacked ? cy + radius + 32 : cy;
+    const goalTop = bodyBottom - 22;
+    const distance = goalTop - cy;
+    const outerRadius = radius + 6;
+    const goalSpace =
+      distance >= outerRadius
+        ? bodyWidth
+        : width - 16 - cx - Math.sqrt(outerRadius ** 2 - distance ** 2) - 8;
+    const goalWidth = Math.min(goalSpace, textWidth(goal, 10) + 16);
+    const goalX = width - 16 - goalWidth;
+    const goalSize = Math.min(
+      10,
+      Math.max(8, (10 * (goalWidth - 16)) / textWidth(goal, 10)),
+    );
     node(surface, 'rect', {
       x: goalX,
-      y: goalY - 15,
+      y: goalTop,
       width: goalWidth,
-      height: 28,
-      rx: 9,
+      height: 22,
+      rx: 7,
       fill: 'rgba(169,221,247,0.35)',
       'data-card-part': 'goal-badge',
     });
-    label(surface, goalX + 10, goalY + 4, goal, 12, goalWidth - 20, {
+    label(surface, goalX + 8, goalTop + 14.5, goal, goalSize, goalWidth - 16, {
       'data-card-part': 'goal',
     });
     description += `. ${formatted(rawValue)}. ${goal}. Scale maximum ${scaleMax}`;
@@ -438,8 +443,10 @@ export function renderDataCard(
       );
     const top = bodyTop + Math.min(48, bodyHeight - 36),
       bottom = bodyBottom - 14;
-    let low = Math.min(...points.map((p) => p.value)),
-      high = Math.max(...points.map((p) => p.value));
+    const minimum = Math.min(...points.map((p) => p.value)),
+      maximum = Math.max(...points.map((p) => p.value));
+    let low = minimum,
+      high = maximum;
     if (high === low) {
       const pad = Math.max(1, Math.abs(high) * 0.05);
       low -= pad;
@@ -537,10 +544,37 @@ export function renderDataCard(
         day: 'numeric',
         timeZone: 'UTC',
       });
-    label(surface, 16, bodyBottom, date(points[0]), 10, bodyWidth / 2);
-    label(surface, width - 16, bodyBottom, date(latest), 10, bodyWidth / 2, {
-      'text-anchor': 'end',
-    });
+    if (card.showStats) {
+      const average =
+        points.reduce((sum, point) => sum + point.value, 0) / points.length;
+      const statistics = [
+        ['MIN', minimum],
+        ['AVG', average],
+        ['MAX', maximum],
+      ];
+      for (const [index, [name, value]] of statistics.entries()) {
+        const anchor = index === 0 ? 'start' : index === 1 ? 'middle' : 'end';
+        const x = index === 0 ? 16 : index === 1 ? width / 2 : width - 16;
+        label(
+          surface,
+          x,
+          bodyBottom,
+          `${name} ${formatted(value)}`,
+          10,
+          bodyWidth / 3 - 8,
+          {
+            'text-anchor': anchor,
+            'data-card-part': `stat-${name.toLowerCase()}`,
+          },
+        );
+      }
+      description += `. Minimum ${formatted(minimum)}. Average ${formatted(average)}. Maximum ${formatted(maximum)}`;
+    } else {
+      label(surface, 16, bodyBottom, date(points[0]), 10, bodyWidth / 2);
+      label(surface, width - 16, bodyBottom, date(latest), 10, bodyWidth / 2, {
+        'text-anchor': 'end',
+      });
+    }
     description += `. ${points.length} values. Latest ${formatted(latest.value)}`;
   } else if (config.mode === 'bar') {
     const bars = card.rows === 'bars';

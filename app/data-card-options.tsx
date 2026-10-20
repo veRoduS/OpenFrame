@@ -24,6 +24,7 @@ function cardSettings(config: WidgetConfig): DataCardConfig {
     rowDeltaField: '',
     maxRows: 4,
     scaleMax: 100,
+    showStats: false,
     ...config.card,
   };
 }
@@ -339,6 +340,16 @@ export function DataCardOptions({
             Use 100 for a percentage. The goal is set separately.
           </p>
         </>
+      )}
+      {config.mode === 'line' && (
+        <label className="data-feed-checkbox">
+          <input
+            type="checkbox"
+            checked={card.showStats}
+            onChange={(event) => patch({ showStats: event.target.checked })}
+          />
+          Show min / avg / max
+        </label>
       )}
       {config.mode === 'bar' && (
         <>
