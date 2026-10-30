@@ -5,6 +5,7 @@
 - [Public website](public-website.md): landing page, sign-in routes, and public sample imagery.
 
 - [Users and groups](users-and-groups.md): individual passwords, invitations, screen assignments, and View/Edit access.
+- [Home workspaces and group filters](home-workspace.md): optional admin home store/group, Home/Admin modes, and list filtering.
 - [Linked playlists](linked-playlists.md): inherited content, local overrides, folders, and tags.
 
 - [NWS weather widget](weather.md): shared location caching, forecast setup, offline behavior, and player upgrades.

@@ -316,6 +316,141 @@ async function fixture(t) {
   return { ...instance, client, admin, user };
 }
 
+void test('optional home preferences belong to each non-built-in admin and never change account permissions', async (t) => {
+  const { admin, user, client, db } = await fixture(t);
+  const first = await user('home-admin');
+  const other = await user('other-home-admin');
+  const member = await user('ordinary-home-user');
+  for (const person of [first, other])
+    assert.equal(
+      (await admin(`/api/users/${person.user.id}`, 'PATCH', { role: 'admin' }))
+        .status,
+      200,
+    );
+  const group = (
+    await admin('/api/groups', 'POST', { name: 'Home store team' })
+  ).data;
+  const site = (
+    await admin('/api/sites', 'POST', {
+      siteNumber: '042',
+      name: 'Home store',
+      accessGroupId: group.id,
+    })
+  ).data;
+  assert.equal((await first.call('/api/auth')).data.user.home, null);
+  assert.equal(
+    (await admin('/api/account/home', 'PATCH', { groupId: group.id })).status,
+    403,
+  );
+  assert.equal(
+    (await member.call('/api/account/home', 'PATCH', { groupId: group.id }))
+      .status,
+    403,
+  );
+  assert.equal(
+    (await client()('/api/account/home', 'PATCH', { groupId: group.id }))
+      .status,
+    401,
+  );
+  assert.equal(
+    (
+      await first.call('/api/account/home', 'PATCH', {
+        userId: other.user.id,
+        groupId: group.id,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await first.call('/api/account/home', 'PATCH', {
+        siteId: site.id,
+        groupId: group.id,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await first.call('/api/account/home', 'PATCH', { groupId: randomUUID() }))
+      .status,
+    400,
+  );
+  const selected = await first.call('/api/account/home', 'PATCH', {
+    groupId: group.id,
+  });
+  assert.equal(selected.status, 200);
+  assert.deepEqual(selected.data.home, {
+    siteId: null,
+    groupId: group.id,
+    label: group.name,
+  });
+  assert.equal((await first.call('/api/auth')).data.user.role, 'admin');
+  assert.equal((await first.call('/api/sites')).status, 200);
+  assert.equal((await other.call('/api/auth')).data.user.home, null);
+  const nextSession = client();
+  assert.equal(
+    (
+      await nextSession('/api/login', 'POST', {
+        username: 'home-admin',
+        password,
+      })
+    ).status,
+    200,
+  );
+  assert.deepEqual(
+    (await nextSession('/api/auth')).data.user.home,
+    selected.data.home,
+  );
+  assert.equal(
+    (await first.call('/api/account/home', 'PATCH', { siteId: site.id }))
+      .status,
+    200,
+  );
+  assert.deepEqual((await first.call('/api/auth')).data.user.home, {
+    siteId: site.id,
+    groupId: group.id,
+    label: '042 · Home store',
+  });
+  await admin(`/api/sites/${site.id}`, 'PATCH', { archived: true });
+  assert.equal((await first.call('/api/auth')).data.user.home, null);
+  await admin(`/api/sites/${site.id}`, 'PATCH', { archived: false });
+  const ungrouped = (
+    await admin('/api/sites', 'POST', {
+      siteNumber: '043',
+      name: 'No access group',
+    })
+  ).data;
+  assert.equal(
+    (await first.call('/api/account/home', 'PATCH', { siteId: ungrouped.id }))
+      .status,
+    400,
+  );
+  await admin(`/api/users/${first.user.id}`, 'PATCH', { role: 'user' });
+  assert.equal((await first.call('/api/auth')).data.user.home, null);
+  assert.equal((await first.call('/api/sites')).status, 403);
+  assert.equal(
+    (await first.call('/api/account/home', 'PATCH', {})).status,
+    403,
+  );
+  await admin(`/api/users/${first.user.id}`, 'PATCH', { role: 'admin' });
+  assert.equal(
+    (
+      await first.call('/api/account/home', 'PATCH', {
+        siteId: null,
+        groupId: null,
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await first.call('/api/auth')).data.user.home, null);
+  assert.equal(
+    db
+      .prepare('SELECT COUNT(*) AS n FROM user_home_preferences WHERE userId=?')
+      .get(first.user.id).n,
+    0,
+  );
+});
+
 async function uploadImage(call) {
   const form = new FormData();
   form.append(

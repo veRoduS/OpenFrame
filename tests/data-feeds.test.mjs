@@ -6,6 +6,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp } from '../server/app.mjs';
 import { dataWidgetSchema } from '../server/data-feeds.mjs';
+import { migrateKeyExpiry } from '../server/api-key-expiry.mjs';
 
 const definition = {
   name: 'Production',
@@ -534,9 +535,9 @@ void test('card settings are optional, strict, and bounded without changing clas
     { valueAlign: 'sideways' },
     { unexpected: true },
     { maxRows: 0 },
-    { maxRows: 41 },
+    { maxRows: 101 },
     { rowOffset: -1 },
-    { rowOffset: 40 },
+    { rowOffset: 100 },
     { rowOffset: 1.5 },
     { rowOffset: '1' },
     { showRowRange: 'false' },
@@ -615,7 +616,7 @@ void test('card settings are optional, strict, and bounded without changing clas
   }
   for (const card of [
     { style: 'plain', maxRows: 1, scaleMax: 0.01 },
-    { style: 'split', maxRows: 40, rowOffset: 39, scaleMax: 1e12 },
+    { style: 'split', maxRows: 100, rowOffset: 99, scaleMax: 1e12 },
   ])
     assert.equal(dataWidgetSchema.safeParse({ ...legacy, card }).success, true);
 });
@@ -940,10 +941,193 @@ async function applicationFixture(t, options = {}) {
   return { ...fixtureData, application, applicationKey, ingest, external };
 }
 
+void test('both key types support non-expiring issuance, in-place expiry changes and irreversible revocation', async (t) => {
+  const {
+    admin,
+    feed,
+    token,
+    write,
+    application,
+    applicationKey,
+    ingest,
+    client,
+    db,
+  } = await applicationFixture(t);
+  for (const [base, key, table, send] of [
+    [
+      `/api/data-feeds/${feed.id}/tokens`,
+      token,
+      'data_feed_tokens',
+      (secret) => write(payload, {}, false, feed.id, secret),
+    ],
+    [
+      `/api/data-feeds/applications/${application.id}/tokens`,
+      applicationKey,
+      'data_feed_application_tokens',
+      (secret) => ingest({ value: 42 }, 'expiry-check', secret),
+    ],
+  ]) {
+    const digestBefore = db
+      .prepare(`SELECT digest FROM ${table} WHERE id=?`)
+      .get(key.id).digest;
+    assert.equal(
+      (await client()(`${base}/${key.id}`, 'PATCH', { expiresInDays: null }))
+        .status,
+      401,
+    );
+    const changed = await admin(`${base}/${key.id}`, 'PATCH', {
+      expiresInDays: null,
+    });
+    assert.equal(changed.status, 200);
+    assert.equal(changed.data.expiresAt, null);
+    assert.equal('token' in changed.data, false);
+    assert.equal(
+      db.prepare(`SELECT digest FROM ${table} WHERE id=?`).get(key.id).digest,
+      digestBefore,
+    );
+    assert.ok([200, 201].includes((await send(key.token)).status));
+    const forever = await admin(base, 'POST', {
+      name: 'Permanent sender',
+      expiresInDays: null,
+    });
+    assert.equal(forever.status, 201);
+    assert.equal(forever.data.expiresAt, null);
+    assert.ok([200, 201].includes((await send(forever.data.token)).status));
+    const creator = db
+      .prepare(`SELECT creatorId FROM ${table} WHERE id=?`)
+      .get(forever.data.id).creatorId;
+    db.prepare('UPDATE users SET disabled=1 WHERE id=?').run(creator);
+    assert.equal((await send(forever.data.token)).status, 401);
+    db.prepare('UPDATE users SET disabled=0 WHERE id=?').run(creator);
+    const renewed = await admin(`${base}/${key.id}`, 'PATCH', {
+      expiresInDays: 7,
+    });
+    assert.ok(Date.parse(renewed.data.expiresAt) > Date.now() + 6 * 86400000);
+    for (const days of [0, 366, 'never', false])
+      assert.equal(
+        (await admin(`${base}/${key.id}`, 'PATCH', { expiresInDays: days }))
+          .status,
+        400,
+      );
+    await admin(`${base}/${key.id}`, 'DELETE');
+    assert.equal(
+      (await admin(`${base}/${key.id}`, 'PATCH', { expiresInDays: null }))
+        .status,
+      409,
+    );
+    assert.equal((await send(key.token)).status, 401);
+  }
+});
+
+void test('non-expiring keys count toward active-key caps and cannot be renewed around the cap', async (t) => {
+  const { admin, feed, token, application, applicationKey, db } =
+    await applicationFixture(t);
+  for (const [base, key, table] of [
+    [`/api/data-feeds/${feed.id}/tokens`, token, 'data_feed_tokens'],
+    [
+      `/api/data-feeds/applications/${application.id}/tokens`,
+      applicationKey,
+      'data_feed_application_tokens',
+    ],
+  ]) {
+    assert.equal(
+      (await admin(`${base}/${key.id}`, 'PATCH', { expiresInDays: null }))
+        .status,
+      200,
+    );
+    for (let i = 0; i < 19; i++)
+      assert.equal(
+        (
+          await admin(base, 'POST', {
+            name: `Long-lived sender ${i}`,
+            expiresInDays: null,
+          })
+        ).status,
+        201,
+      );
+    assert.equal(
+      (await admin(base, 'POST', { name: 'Overflow', expiresInDays: null }))
+        .status,
+      409,
+    );
+    assert.equal(
+      (await admin(`${base}/${key.id}`, 'PATCH', { expiresInDays: 90 })).status,
+      200,
+    );
+    db.prepare(
+      `UPDATE ${table} SET expiresAt='2000-01-01T00:00:00Z' WHERE id=?`,
+    ).run(key.id);
+    assert.equal(
+      (await admin(base, 'POST', { name: 'Replacement', expiresInDays: null }))
+        .status,
+      201,
+    );
+    assert.equal(
+      (await admin(`${base}/${key.id}`, 'PATCH', { expiresInDays: null }))
+        .status,
+      404,
+    );
+  }
+});
+
+void test('expiry migration preserves original key digests, indexes and usable credentials', async (t) => {
+  const { db, feed, token, write, applicationKey, ingest } =
+    await applicationFixture(t);
+  for (const [table, key] of [
+    ['data_feed_tokens', token],
+    ['data_feed_application_tokens', applicationKey],
+  ]) {
+    const row = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(key.id);
+    const schema = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name=?")
+      .get(table).sql;
+    const indexes = db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+      )
+      .all(table);
+    db.exec(
+      schema
+        .replace(table, `${table}_old`)
+        .replace(/expiresAt TEXT/i, 'expiresAt TEXT NOT NULL'),
+    );
+    db.exec(
+      `INSERT INTO ${table}_old SELECT * FROM ${table}; DROP TABLE ${table}; ALTER TABLE ${table}_old RENAME TO ${table};`,
+    );
+    for (const index of indexes) db.exec(index.sql);
+    assert.equal(
+      db
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .find((column) => column.name === 'expiresAt').notnull,
+      1,
+    );
+    migrateKeyExpiry(db, table);
+    migrateKeyExpiry(db, table);
+    assert.deepEqual(
+      db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(key.id),
+      row,
+    );
+    assert.equal(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='index' AND tbl_name=? AND sql IS NOT NULL",
+        )
+        .get(table).n,
+      indexes.length,
+    );
+  }
+  assert.equal(
+    (await write(payload, {}, false, feed.id, token.token)).status,
+    200,
+  );
+  assert.equal((await ingest({ value: 42 })).status, 201);
+});
+
 void test('SMCC table pushes infer categories in a separate stable source and retain omitted tables atomically', async (t) => {
   const { admin, ingest } = await applicationFixture(t, { name: 'SMCC' });
   const metrics = await ingest({ freight: 42 });
-  const rows = Array.from({ length: 40 }, (_, index) => ({
+  const rows = Array.from({ length: 100 }, (_, index) => ({
     label: `Store metric ${String(index + 1).padStart(2, '0')}`,
     value: index - 10.5,
   }));
@@ -971,7 +1155,7 @@ void test('SMCC table pushes infer categories in a separate stable source and re
   layer.data.card = {
     style: 'split',
     rows: 'table',
-    maxRows: 40,
+    maxRows: 100,
     rowOffset: 0,
     showRowRange: true,
   };

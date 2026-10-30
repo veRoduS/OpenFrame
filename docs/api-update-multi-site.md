@@ -5,8 +5,8 @@ Developer migration bulletin • 30 October 2026
 **Audience:** Developers maintaining existing OpenFrame metric integrations. The
 player/admin appendix applies only to custom enrollment or screen-management apps.
 
-**Target:** The multi-site API implemented through development server **0.29.5**
-and player **0.15.3**. This update is prepared for testing and has not yet been
+**Target:** The multi-site API implemented through development server **0.29.7**
+and player **0.15.4**. This update is prepared for testing and has not yet been
 published or deployed. The final release tag may differ. Confirm availability
 with the host administrator before changing production configuration;
 `GET /api/health` reports the deployed server version.
@@ -193,7 +193,7 @@ not appended. OpenFrame stores the latest snapshot, not an append-only history.
 | Count limits | 200 feeds globally; 50 applications; 20 active keys per application |
 | Number | Finite, within ±1 trillion |
 | Time series | At most 240 points with unique, increasing ISO timestamps |
-| Categories | At most 40 unique trimmed labels, each 1–60 characters |
+| Categories | At most 100 unique trimmed labels, each 1–60 characters |
 
 Source names match `[A-Za-z0-9][A-Za-z0-9_-]{0,79}`. Metric names match
 `[A-Za-z][A-Za-z0-9_]{0,39}`. Names are case-sensitive.
@@ -231,6 +231,8 @@ the administrator and do not need to call them.
 | `GET /api/sites` | Obtain site number/UUID metadata. |
 | `POST /api/sites` | Create `{siteNumber,name,accessGroupId?}`. |
 | `POST /api/data-feeds/applications/{id}/tokens` | Issue `{name,expiresInDays?,siteId}`; response still uses the one-time `token` field. |
+| `PATCH /api/data-feeds/applications/{id}/tokens/{keyId}` | Change `{expiresInDays}` without rotating the application secret; null means never expires. |
+| `PATCH /api/data-feeds/{id}/tokens/{keyId}` | Change `{expiresInDays}` without rotating the feed-specific secret. |
 | `POST /api/data-feeds/applications/{id}/assign-site` | Assign all of that application's Unassigned keys/sources together using `{siteId}`. |
 | `POST /api/data-feeds` | Manual feed creation accepts `siteId`, required once any site exists. |
 | `POST /api/data-feeds/{id}/assign-site` | Assign one Unassigned manual feed using `{siteId}`. |
@@ -242,9 +244,13 @@ Already assigned keys/sources are not moved by this migration. Assigning an
 already scoped manual feed to another site returns `409 IMMUTABLE_SITE`.
 
 Site numbers are strings in creation/enrollment; management assignments use UUIDs.
-New application keys require an active site once sites exist. Expiry remains
-1–365 days, default 90. Key secrets remain visible once at issuance; they cannot
-be retrieved later.
+New application keys require an active site once sites exist. Finite expiry is
+1–365 days, default 90; explicitly send `expiresInDays: null` for a non-expiring
+key. Metadata then returns `expiresAt: null`. Use `PATCH` on either key's
+management URL with `{ "expiresInDays": null }` or a day count to change an
+existing key without replacing its secret. Revoked keys cannot be renewed;
+non-expiring keys still count toward the 20-active-key cap. Key secrets remain
+visible once at issuance; they cannot be retrieved later.
 
 Archiving a site stops ingestion, new keys, and new enrollment at that site while
 retaining saved values. Revoking a key stops future writes and retains existing

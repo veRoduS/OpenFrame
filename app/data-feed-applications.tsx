@@ -1,3 +1,4 @@
+import { KeyExpiryFields, KeyExpiryEditor } from './api-key-expiry';
 import { SiteHistory } from './site-history';
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, Plus } from 'lucide-react';
@@ -35,7 +36,7 @@ type ApplicationToken = {
   siteId: string | null;
   id: string;
   name: string;
-  expiresAt: string;
+  expiresAt: string | null;
   revokedAt: string | null;
   lastUsedAt: string | null;
 };
@@ -59,7 +60,7 @@ export function DataFeedApplications({
   const [selected, setSelected] = useState<Application | null>(null);
   const [keys, setKeys] = useState<ApplicationToken[]>([]);
   const [keyName, setKeyName] = useState('');
-  const [expires, setExpires] = useState(90);
+  const [expires, setExpires] = useState<number | null>(90);
   const [secret, setSecret] = useState('');
   const [revoking, setRevoking] = useState<ApplicationToken | null>(null);
   const [deleting, setDeleting] = useState<Application | null>(null);
@@ -410,12 +411,32 @@ export function DataFeedApplications({
                   <small>
                     {key.revokedAt
                       ? 'Revoked'
-                      : `Expires ${new Date(key.expiresAt).toLocaleDateString()}`}
+                      : key.expiresAt === null
+                        ? 'Never expires'
+                        : `Expires ${new Date(key.expiresAt).toLocaleDateString()}`}
                     {key.lastUsedAt
                       ? ` · Last used ${new Date(key.lastUsedAt).toLocaleString()}`
                       : ' · Not used yet'}
                   </small>
                 </div>
+                {!key.revokedAt && (
+                  <KeyExpiryEditor
+                    name={key.name}
+                    expiresAt={key.expiresAt}
+                    onSave={async (days) => {
+                      await api(
+                        `${base}/${selected!.id}/tokens/${key.id}`,
+                        'PATCH',
+                        { expiresInDays: days },
+                      );
+                      setKeys(
+                        await api<ApplicationToken[]>(
+                          `${base}/${selected!.id}/tokens`,
+                        ),
+                      );
+                    }}
+                  />
+                )}
                 {!key.revokedAt && (
                   <button
                     disabled={busy}
@@ -543,17 +564,7 @@ export function DataFeedApplications({
                   placeholder="Production integration"
                 />
               </label>
-              <label>
-                Expires in days
-                <input
-                  type="number"
-                  value={expires}
-                  onChange={(event) => setExpires(Number(event.target.value))}
-                  min={1}
-                  max={365}
-                  required
-                />
-              </label>
+              <KeyExpiryFields value={expires} onChange={setExpires} />
               <Button type="submit">Generate application API key</Button>
             </fieldset>
           </form>

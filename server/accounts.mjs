@@ -50,6 +50,7 @@ export function createAccounts(db) {
     CREATE TABLE IF NOT EXISTS invitations (token TEXT PRIMARY KEY, userId TEXT, groupId TEXT, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS resource_access (kind TEXT NOT NULL, id TEXT NOT NULL, ownerId TEXT, PRIMARY KEY(kind,id));
     CREATE TABLE IF NOT EXISTS resource_grants (kind TEXT NOT NULL, id TEXT NOT NULL, userId TEXT NOT NULL DEFAULT '', groupId TEXT NOT NULL DEFAULT '', PRIMARY KEY(kind,id,userId,groupId));
+    CREATE TABLE IF NOT EXISTS user_home_preferences (userId TEXT PRIMARY KEY, siteId TEXT, groupId TEXT);
   `);
   db.exec(`CREATE TABLE IF NOT EXISTS resource_permissions (kind TEXT NOT NULL,id TEXT NOT NULL,userId TEXT NOT NULL DEFAULT '',groupId TEXT NOT NULL DEFAULT '',permission TEXT NOT NULL CHECK(permission IN ('view','edit')),PRIMARY KEY(kind,id,userId,groupId));
     CREATE TABLE IF NOT EXISTS resource_management (kind TEXT NOT NULL,id TEXT NOT NULL,groupId TEXT NOT NULL,PRIMARY KEY(kind,id));`);
@@ -81,6 +82,30 @@ export function createAccounts(db) {
   );
   const context = new AsyncLocalStorage();
   const userById = (id) => db.prepare('SELECT * FROM users WHERE id=?').get(id);
+  function homePreference(user) {
+    if (user.role !== 'admin' || user.username === 'admin') return null;
+    const saved = db
+      .prepare('SELECT * FROM user_home_preferences WHERE userId=?')
+      .get(user.id);
+    if (!saved) return null;
+    const site = saved.siteId
+      ? db
+          .prepare('SELECT * FROM sites WHERE id=? AND archivedAt IS NULL')
+          .get(saved.siteId)
+      : null;
+    if (saved.siteId && !site) return null;
+    const groupId = site ? site.accessGroupId : saved.groupId;
+    const group = db
+      .prepare('SELECT * FROM groups WHERE id=?')
+      .get(groupId || '');
+    return group
+      ? {
+          siteId: site?.id || null,
+          groupId: group.id,
+          label: site ? `${site.siteNumber} · ${site.name}` : group.name,
+        }
+      : null;
+  }
   const descendants = `WITH RECURSIVE effective_groups(id) AS (
     SELECT groupId FROM memberships WHERE userId=?
     UNION
@@ -440,7 +465,7 @@ export function createAccounts(db) {
       res.json({
         setup: !db.prepare('SELECT id FROM users LIMIT 1').get(),
         authenticated: !!user,
-        user: user ? publicUser(user) : null,
+        user: user ? { ...publicUser(user), home: homePreference(user) } : null,
       });
     });
     app.post('/api/setup', rateLimit, (req, res) => {
@@ -485,6 +510,49 @@ export function createAccounts(db) {
         );
       res.clearCookie('openframe_session', { path: '/' });
       res.json({ ok: true });
+    });
+    app.patch('/api/account/home', administrator, (req, res) => {
+      if (req.user.username === 'admin')
+        throw fail(
+          403,
+          'The built-in admin account always uses the full workspace',
+        );
+      const input = z
+        .object({
+          siteId: z.uuid().nullable().default(null),
+          groupId: z.uuid().nullable().default(null),
+        })
+        .strict()
+        .refine(
+          (value) => !(value.siteId && value.groupId),
+          'Choose a home store or group, not both',
+        )
+        .parse(req.body);
+      const site = input.siteId
+        ? db
+            .prepare('SELECT * FROM sites WHERE id=? AND archivedAt IS NULL')
+            .get(input.siteId)
+        : null;
+      if (input.siteId && !site) throw fail(400, 'Choose an active home store');
+      const groupId = site ? site.accessGroupId : input.groupId;
+      if (
+        (input.siteId || input.groupId) &&
+        (!groupId ||
+          !db.prepare('SELECT id FROM groups WHERE id=?').get(groupId))
+      )
+        throw fail(
+          400,
+          'Choose a group, or configure an access group for this store first',
+        );
+      if (input.siteId || input.groupId)
+        db.prepare(
+          'INSERT INTO user_home_preferences(userId,siteId,groupId) VALUES (?,?,?) ON CONFLICT(userId) DO UPDATE SET siteId=excluded.siteId,groupId=excluded.groupId',
+        ).run(req.user.id, input.siteId, input.groupId);
+      else
+        db.prepare('DELETE FROM user_home_preferences WHERE userId=?').run(
+          req.user.id,
+        );
+      res.json({ home: homePreference(req.user) });
     });
     app.post('/api/account/password', rateLimit, admin, (req, res) => {
       const input = z
@@ -590,6 +658,7 @@ export function createAccounts(db) {
           'resource_permissions',
           'memberships',
           'user_sessions',
+          'user_home_preferences',
           'invitations',
         ])
           db.prepare(`DELETE FROM ${table} WHERE userId=?`).run(user.id);

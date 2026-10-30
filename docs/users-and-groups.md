@@ -86,3 +86,5 @@ Rolling back to a release without user management removes these access protectio
 The sidebar footer shows the signed-in name beside the version and sign-out control. Hover or focus a slide’s **Live** badge to see the published playlists assigned to online screens that make the slide live.
 
 Folders on Slides, Playlists, and Media are shared navigation metadata: all signed-in users can see every folder and its nesting, but only global admins can create, edit, reparent, delete, or manage access to folders. Legacy folder owners and Edit recipients no longer have folder management permission. Users can move their editable content into any existing folder; private and inherited read-only contents stay protected. No existing folder, content record, or grant is deleted by this policy change.
+
+Admins other than the built-in `admin` account can optionally choose a [home store/group](home-workspace.md) and switch between Home and Admin modes. Leaving the preference unset preserves the current workspace.

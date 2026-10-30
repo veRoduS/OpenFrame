@@ -1,3 +1,4 @@
+import { expiryDays, keyExpiry, migrateKeyExpiry } from './api-key-expiry.mjs';
 import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -40,8 +41,8 @@ const dataCardSchema = z
     footerRight: z.string().max(40).default(''),
     rows: z.enum(['table', 'bars']).default('table'),
     rowDeltaField: z.string().max(40).default(''),
-    maxRows: z.number().int().min(1).max(40).default(4),
-    rowOffset: z.number().int().min(0).max(39).default(0),
+    maxRows: z.number().int().min(1).max(100).default(4),
+    rowOffset: z.number().int().min(0).max(99).default(0),
     showRowRange: z.boolean().default(true),
     scaleMax: z.number().positive().max(1e12).default(100),
     showStats: z.boolean().default(false),
@@ -138,7 +139,7 @@ const values = {
         .object({ label: z.string().trim().min(1).max(60), value: number })
         .strict(),
     )
-    .max(40)
+    .max(100)
     .refine(
       (rows) => new Set(rows.map((r) => r.label)).size === rows.length,
       'Category labels must be unique',
@@ -180,8 +181,9 @@ export function mountDataFeeds(
   db.exec(`CREATE TABLE IF NOT EXISTS data_feed_tokens (
     id TEXT PRIMARY KEY, feedId TEXT NOT NULL, digest TEXT NOT NULL UNIQUE,
     creatorId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL,
-    expiresAt TEXT NOT NULL, revokedAt TEXT, lastUsedAt TEXT);
+    expiresAt TEXT, revokedAt TEXT, lastUsedAt TEXT);
     CREATE INDEX IF NOT EXISTS data_feed_token_feed ON data_feed_tokens(feedId);`);
+  migrateKeyExpiry(db, 'data_feed_tokens');
   const raw = (id) => {
     const row = db
       .prepare("SELECT body FROM records WHERE kind='data-feed' AND id=?")
@@ -527,7 +529,7 @@ export function mountDataFeeds(
     const input = z
       .object({
         name: z.string().trim().min(1).max(80),
-        expiresInDays: z.number().int().min(1).max(365).default(90),
+        expiresInDays: expiryDays.default(90),
       })
       .strict()
       .parse(req.body);
@@ -535,7 +537,7 @@ export function mountDataFeeds(
     if (
       db
         .prepare(
-          'SELECT count(*) AS count FROM data_feed_tokens WHERE feedId=? AND revokedAt IS NULL AND expiresAt>?',
+          'SELECT count(*) AS count FROM data_feed_tokens WHERE feedId=? AND revokedAt IS NULL AND (expiresAt IS NULL OR expiresAt>?)',
         )
         .get(req.params.id, now).count >= 20
     )
@@ -560,7 +562,7 @@ export function mountDataFeeds(
         req.user.id,
         input.name,
         now,
-        new Date(Date.now() + input.expiresInDays * 86400000).toISOString(),
+        keyExpiry(input.expiresInDays),
       );
       auditSite(
         db,
@@ -579,6 +581,56 @@ export function mountDataFeeds(
       token,
     });
   });
+  app.patch(
+    '/api/data-feeds/:id/tokens/:tokenId',
+    administrator,
+    (req, res) => {
+      const feed = requireEditable('data-feed', req.params.id);
+      if (feed.siteId) requireActiveSite(db, feed.siteId);
+      const input = z
+        .object({ expiresInDays: expiryDays })
+        .strict()
+        .parse(req.body);
+      const key = db
+        .prepare('SELECT * FROM data_feed_tokens WHERE feedId=? AND id=?')
+        .get(req.params.id, req.params.tokenId);
+      if (!key) throw fail(404, 'NOT_FOUND', 'API key not found');
+      if (key.revokedAt)
+        throw fail(409, 'TOKEN_REVOKED', 'Revoked keys cannot be renewed');
+      if (
+        db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM data_feed_tokens WHERE feedId=? AND id<>? AND revokedAt IS NULL AND (expiresAt IS NULL OR expiresAt>?)',
+          )
+          .get(req.params.id, key.id, new Date().toISOString()).n >= 20
+      )
+        throw fail(
+          409,
+          'TOKEN_LIMIT',
+          'Maximum of 20 active keys per feed reached',
+        );
+      siteTransaction(db, () => {
+        db.prepare('UPDATE data_feed_tokens SET expiresAt=? WHERE id=?').run(
+          keyExpiry(input.expiresInDays),
+          key.id,
+        );
+        auditSite(
+          db,
+          req.user,
+          'feed-key-expiry-changed',
+          'feed-key',
+          key.id,
+          feed.siteId || null,
+          feed.siteId || null,
+        );
+      });
+      res.json(
+        db
+          .prepare(`SELECT ${tokenFields} FROM data_feed_tokens WHERE id=?`)
+          .get(key.id),
+      );
+    },
+  );
   app.delete(
     '/api/data-feeds/:id/tokens/:tokenId',
     administrator,
@@ -624,7 +676,7 @@ export function mountDataFeeds(
     if (
       !row ||
       row.revokedAt ||
-      row.expiresAt <= new Date().toISOString() ||
+      (row.expiresAt !== null && row.expiresAt <= new Date().toISOString()) ||
       !feed ||
       !accounts.canEdit(creator, 'data-feed', feed.id)
     )

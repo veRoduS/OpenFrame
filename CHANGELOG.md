@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.29.7] - 2026-10-30
+
+- Add non-expiring API keys, visible group filters, optional admin home workspaces and 100-row SMCC tables
+
 ## [0.29.6] - 2026-10-30
 
 - Update Vite, Zod, Multer and body-parser to resolve high-severity dependency advisories

@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
+import { expiryDays, keyExpiry, migrateKeyExpiry } from './api-key-expiry.mjs';
 
 const digest = (key) => createHash('sha256').update(key).digest('hex');
 const fail = (status, code, message) =>
@@ -15,7 +16,7 @@ const keySchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     siteId: z.uuid().nullable().default(null),
-    expiresInDays: z.number().int().min(1).max(365).default(90),
+    expiresInDays: expiryDays.default(90),
   })
   .strict();
 const sourceKey = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/);
@@ -32,7 +33,7 @@ export function mountDataFeedApplications(
     CREATE TABLE IF NOT EXISTS data_feed_application_tokens (
     id TEXT PRIMARY KEY, applicationId TEXT NOT NULL, digest TEXT NOT NULL UNIQUE,
     creatorId TEXT NOT NULL, name TEXT NOT NULL, createdAt TEXT NOT NULL,
-    expiresAt TEXT NOT NULL, revokedAt TEXT, lastUsedAt TEXT);
+    expiresAt TEXT, revokedAt TEXT, lastUsedAt TEXT);
     CREATE INDEX IF NOT EXISTS data_feed_application_token_scope ON data_feed_application_tokens(applicationId);
     CREATE TABLE IF NOT EXISTS data_feed_application_sources (
     applicationId TEXT NOT NULL, sourceKey TEXT NOT NULL, feedId TEXT NOT NULL UNIQUE,
@@ -67,6 +68,7 @@ export function mountDataFeedApplications(
     db.exec('ROLLBACK TO site_source_migration; RELEASE site_source_migration');
     throw error;
   }
+  migrateKeyExpiry(db, 'data_feed_application_tokens');
   const metadata = (application) => ({
     ...application,
     unassignedFeedCount: db
@@ -247,7 +249,7 @@ export function mountDataFeedApplications(
       if (
         db
           .prepare(
-            'SELECT COUNT(*) AS n FROM data_feed_application_tokens WHERE applicationId=? AND revokedAt IS NULL AND expiresAt>?',
+            'SELECT COUNT(*) AS n FROM data_feed_application_tokens WHERE applicationId=? AND revokedAt IS NULL AND (expiresAt IS NULL OR expiresAt>?)',
           )
           .get(req.params.id, now).n >= 20
       )
@@ -271,7 +273,7 @@ export function mountDataFeedApplications(
           req.user.id,
           input.name,
           now,
-          new Date(Date.now() + input.expiresInDays * 86400000).toISOString(),
+          keyExpiry(input.expiresInDays),
           input.siteId,
         );
         auditSite(
@@ -292,6 +294,59 @@ export function mountDataFeedApplications(
           .get(id),
         token,
       });
+    },
+  );
+  app.patch(
+    '/api/data-feeds/applications/:id/tokens/:tokenId',
+    administrator,
+    (req, res) => {
+      applicationById(req.params.id);
+      const input = z
+        .object({ expiresInDays: expiryDays })
+        .strict()
+        .parse(req.body);
+      const key = db
+        .prepare(
+          'SELECT * FROM data_feed_application_tokens WHERE applicationId=? AND id=?',
+        )
+        .get(req.params.id, req.params.tokenId);
+      if (!key) throw fail(404, 'NOT_FOUND', 'API key not found');
+      if (key.revokedAt)
+        throw fail(409, 'TOKEN_REVOKED', 'Revoked keys cannot be renewed');
+      if (key.siteId) requireActiveSite(db, key.siteId);
+      if (
+        db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM data_feed_application_tokens WHERE applicationId=? AND id<>? AND revokedAt IS NULL AND (expiresAt IS NULL OR expiresAt>?)',
+          )
+          .get(req.params.id, key.id, new Date().toISOString()).n >= 20
+      )
+        throw fail(
+          409,
+          'TOKEN_LIMIT',
+          'Maximum of 20 active keys per application reached',
+        );
+      siteTransaction(db, () => {
+        db.prepare(
+          'UPDATE data_feed_application_tokens SET expiresAt=? WHERE id=?',
+        ).run(keyExpiry(input.expiresInDays), key.id);
+        auditSite(
+          db,
+          req.user,
+          'application-key-expiry-changed',
+          'application-key',
+          key.id,
+          key.siteId,
+          key.siteId,
+        );
+      });
+      res.json(
+        db
+          .prepare(
+            `SELECT ${keyFields} FROM data_feed_application_tokens WHERE id=?`,
+          )
+          .get(key.id),
+      );
     },
   );
   app.delete(
@@ -348,7 +403,7 @@ export function mountDataFeedApplications(
     if (
       !key ||
       key.revokedAt ||
-      key.expiresAt <= new Date().toISOString() ||
+      (key.expiresAt !== null && key.expiresAt <= new Date().toISOString()) ||
       !application ||
       !creator ||
       creator.disabled ||

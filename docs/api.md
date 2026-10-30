@@ -197,6 +197,24 @@ Generated text layers may carry `starterText:true` only for the exact initial st
 
 ## Site assignment and shared metrics
 
+Server **0.29.7** adds optional [home workspaces](home-workspace.md) through
+`PATCH /api/account/home` and nullable `user.home` in `GET /api/auth`. This is a
+self-service preference for non-built-in admins; it does not alter their role or
+API permissions. The normal `admin` account and users without a home retain
+their existing workspace.
+
+Both API-key creation endpoints accept `expiresInDays: null` for no expiration.
+The default remains 90 days; a finite value must be 1–365. Key metadata now has
+nullable `expiresAt`. An admin can `PATCH` either existing key-management URL
+with `{expiresInDays: null}` or a day count, retaining the key's secret and ID.
+Revoked keys return 409; non-expiring keys count toward the existing active-key
+cap. See the [data-feed API](data-feeds-api.md) and OpenAPI for exact paths.
+
+SMCC/category fields now accept up to 100 rows, with the existing 32 KiB body,
+label and numeric limits. `card.maxRows` accepts 1–100 and `card.rowOffset` accepts
+0–99. Player **0.15.4** is required for ranges or views beyond 40 rows; existing
+smaller views remain supported. See [widget cards](widget-cards.md).
+
 See [Sites](sites.md) and the [data-feed API](data-feeds-api.md#sites-initial-storage-support).
 `POST /api/devices/:id/site` accepts `{siteId}` for an approved Unassigned screen
 (administrator only). Its last heartbeat must identify player 0.15.1 or newer.

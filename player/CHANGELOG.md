@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.15.4] - 2026-10-30
+
+- Render up to 100 SMCC/category rows and row ranges with matching deltas
+
 ## [0.15.3] - 2026-10-30
 
 - Clarify store-member pairing approval in Android TV setup

@@ -132,3 +132,12 @@ policy without an upgrade. Player **0.15.3** updates Android setup wording to
 explain store-member approval; earlier setup wording still mentions an
 administrator. Sites without access groups and enrollments without site numbers
 retain administrator approval, and transfers remain administrator-only.
+
+Server **0.29.7** and player **0.15.4** expand category/SMCC tables to 100 rows,
+including row ranges and matching deltas. The schema-4 format, sync and ingestion
+methods are unchanged. Upgrade affected players before publishing views or ranges
+beyond 40 rows; older players retain their 40-row renderer bound. Existing
+smaller publications work in both directions, and new players keep rendering
+older snapshots. The renderer remains bounded to 100 category rows with no new
+timers, network requests or frames. Non-expiring API keys and home-workspace
+preferences are server/web features and do not require a player update.

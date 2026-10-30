@@ -97,6 +97,7 @@ try {
   await dialog
     .getByLabel('Application name', { exact: true })
     .fill('Simple integration');
+  await dialog.getByLabel('Never expires', { exact: true }).check();
   await dialog
     .getByRole('button', { name: 'Generate API key', exact: true })
     .click();

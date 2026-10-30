@@ -933,6 +933,7 @@ export function createApp({
           siteNumber,
           name,
           archivedAt,
+          accessGroupId: site.accessGroupId || null,
           canApprove: canApproveSite({ ...site, archivedAt }),
         })),
       dataFeeds: list('data-feed').map((feed) =>

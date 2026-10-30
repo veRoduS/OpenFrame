@@ -45,6 +45,7 @@ export function LibraryFilters({
   searchPlaceholder = 'Search by name',
   onReset,
   additionalActive = 0,
+  groupAlwaysVisible = false,
 }: {
   filter: LibraryFilter;
   onChange: (filter: LibraryFilter) => void;
@@ -59,13 +60,35 @@ export function LibraryFilters({
   searchPlaceholder?: string;
   onReset?: () => void;
   additionalActive?: number;
+  groupAlwaysVisible?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const controlsId = useId();
   const active =
     Number(!!filter.group) + Number(!!filter.status) + additionalActive;
+  const groupControl = (
+    <label>
+      Group
+      <select
+        aria-label="Group"
+        value={filter.group}
+        onChange={(event) => onChange({ ...filter, group: event.target.value })}
+      >
+        <option value="">All groups</option>
+        <option value="ungrouped">No visible group</option>
+        {orderedTree(groups).map(({ item, depth }) => (
+          <option key={item.id} value={item.id}>
+            {indentedName(item.name, depth)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
   return (
-    <section className="library-filters" aria-label={`${noun} filters`}>
+    <section
+      className={`library-filters${groupAlwaysVisible ? ' has-group-filter' : ''}`}
+      aria-label={`${noun} filters`}
+    >
       <label className="library-search">
         Search {noun.toLowerCase()}
         <input
@@ -78,6 +101,7 @@ export function LibraryFilters({
           }
         />
       </label>
+      {groupAlwaysVisible && groupControl}
       <button
         type="button"
         className="library-filter-toggle"
@@ -93,24 +117,7 @@ export function LibraryFilters({
       >
         {filterControls || (
           <>
-            <label>
-              Group
-              <select
-                aria-label="Group"
-                value={filter.group}
-                onChange={(event) =>
-                  onChange({ ...filter, group: event.target.value })
-                }
-              >
-                <option value="">All groups</option>
-                <option value="ungrouped">No visible group</option>
-                {orderedTree(groups).map(({ item, depth }) => (
-                  <option key={item.id} value={item.id}>
-                    {indentedName(item.name, depth)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {!groupAlwaysVisible && groupControl}
             <label>
               Status
               <select

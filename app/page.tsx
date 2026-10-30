@@ -1,3 +1,5 @@
+import { HomeFocusSettings } from './home-focus-settings';
+import { focusHomeLibrary } from './home-focus';
 import { SiteTransfer } from './site-transfer';
 import { useSiteFilter, clearSiteFilters } from './hooks/use-site-filter';
 import { ANDROID_GITHUB_APK } from '../server/android-release-config.mjs';
@@ -25,6 +27,7 @@ import { StockSettings } from './stock-settings';
 import {
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -252,7 +255,62 @@ export default function App() {
   const [activation, setActivation] = useState(() =>
     new URLSearchParams(location.hash.slice(1)).get('activate'),
   );
-  const [library, setLibrary] = useState<Library>(emptyLibrary);
+  const [fullLibrary, setLibrary] = useState<Library>(emptyLibrary);
+  const [adminMode, setAdminMode] = useState(true);
+  const eligibleHome =
+    auth?.user?.role === 'admin' && auth.user.username !== 'admin'
+      ? auth.user.home
+      : null;
+  const homeSite = eligibleHome?.siteId
+    ? fullLibrary.sites?.find(
+        (site) =>
+          site.id === eligibleHome.siteId &&
+          !site.archivedAt &&
+          site.accessGroupId &&
+          fullLibrary.groups?.some((group) => group.id === site.accessGroupId),
+      )
+    : null;
+  const home = useMemo(
+    () =>
+      eligibleHome &&
+      (eligibleHome.siteId
+        ? homeSite
+        : fullLibrary.groups?.some(
+            (group) => group.id === eligibleHome.groupId,
+          ))
+        ? {
+            ...eligibleHome,
+            groupId: homeSite?.accessGroupId || eligibleHome.groupId,
+            label: homeSite
+              ? `${homeSite.siteNumber} · ${homeSite.name}`
+              : fullLibrary.groups?.find(
+                  (group) => group.id === eligibleHome.groupId,
+                )?.name || eligibleHome.label,
+          }
+        : null,
+    [eligibleHome, homeSite, fullLibrary.groups],
+  );
+  const focusedHome = home && !adminMode ? home : null;
+  const adminControls = auth?.user?.role === 'admin' && !focusedHome;
+  const library = useMemo(
+    () =>
+      focusedHome ? focusHomeLibrary(fullLibrary, focusedHome) : fullLibrary,
+    [fullLibrary, focusedHome],
+  );
+  const homeUserId = auth?.user?.id;
+  useEffect(() => {
+    if (!home || !homeUserId) {
+      setAdminMode(true);
+      return;
+    }
+    try {
+      setAdminMode(
+        localStorage.getItem(`openframe.admin-mode.${homeUserId}`) === 'admin',
+      );
+    } catch {
+      setAdminMode(false);
+    }
+  }, [homeUserId, home]);
   const [fonts, setFonts] = useState<CustomFont[]>([]);
   const loadedFontUrls = useRef(new Map<string, string>());
   const [view, setView] = useState<View>(workspaceView);
@@ -323,11 +381,11 @@ export default function App() {
   useEffect(() => {
     if (
       auth?.authenticated &&
-      auth.user?.role !== 'admin' &&
+      !adminControls &&
       (view === 'accounts' || view === 'settings')
     )
       setView('slides');
-  }, [auth, view]);
+  }, [auth, view, adminControls]);
   const [filters, setFilters] = useState<
     Record<'slides' | 'playlists' | 'devices', LibraryFilter>
   >(() => ({
@@ -596,6 +654,7 @@ export default function App() {
   async function createSlide() {
     const slide = await api<Slide>('/api/slides', 'POST', {
       name: 'Untitled slide',
+      ...(focusedHome ? { managingGroupId: focusedHome.groupId } : {}),
       width: 1920,
       height: 1080,
       background: '#ffffff',
@@ -618,7 +677,9 @@ export default function App() {
     const saved = await api<Playlist>(
       p.id ? `/api/playlists/${p.id}` : '/api/playlists',
       p.id ? 'PUT' : 'POST',
-      p,
+      !p.id && p.managingGroupId === undefined && focusedHome
+        ? { ...p, managingGroupId: focusedHome.groupId }
+        : p,
     );
     await refresh();
     return saved;
@@ -646,7 +707,7 @@ export default function App() {
   const pairingSites = (library.sites || []).filter(
     (site) =>
       !site.archivedAt &&
-      (auth?.user?.role === 'admin' ||
+      (adminControls ||
         (site.canApprove &&
           (!pairingScreen ||
             site.siteNumber === pairingScreen.requestedSiteNumber))),
@@ -760,6 +821,7 @@ export default function App() {
           }));
       }}
       groups={groups}
+      groupAlwaysVisible
       statuses={statuses}
       shown={shown}
       total={library[key]?.length || 0}
@@ -808,7 +870,7 @@ export default function App() {
           : library.playlistFolders || []
       }
       groups={groups}
-      isAdmin={auth?.user?.role === 'admin'}
+      isAdmin={adminControls}
       filter={organizationFilters[kind]}
       onFilter={(filter) =>
         setOrganizationFilters((current) => ({ ...current, [kind]: filter }))
@@ -979,9 +1041,9 @@ export default function App() {
                 {(Object.entries(viewInfo) as [View, typeof viewInfo.slides][])
                   .filter(([key]) =>
                     key === 'password'
-                      ? auth.user?.role !== 'admin'
+                      ? !adminControls
                       : !['accounts', 'settings'].includes(key) ||
-                        auth.user?.role === 'admin',
+                        adminControls,
                   )
                   .map(([key, item]) => (
                     <SidebarMenuItem key={key}>
@@ -1040,6 +1102,52 @@ export default function App() {
                   <LogOut size={17} />
                 </IconButton>
               </div>
+              {auth.user && (
+                <HomeFocusSettings
+                  user={{ ...auth.user, home }}
+                  library={fullLibrary}
+                  adminMode={adminMode}
+                  onMode={(next) => {
+                    setAdminMode(next);
+                    try {
+                      localStorage.setItem(
+                        `openframe.admin-mode.${auth.user!.id}`,
+                        next ? 'admin' : 'home',
+                      );
+                    } catch {
+                      /* Storage is optional. */
+                    }
+                    setFilters({
+                      slides: { ...clearLibraryFilter },
+                      playlists: { ...clearLibraryFilter },
+                      devices: { ...clearLibraryFilter },
+                    });
+                    setScreenSite('');
+                  }}
+                  onSaved={(next) => {
+                    setAuth((current) =>
+                      current?.user
+                        ? { ...current, user: { ...current.user, home: next } }
+                        : current,
+                    );
+                    setAdminMode(!next);
+                    try {
+                      localStorage.setItem(
+                        `openframe.admin-mode.${auth.user!.id}`,
+                        next ? 'home' : 'admin',
+                      );
+                    } catch {
+                      /* Storage is optional. */
+                    }
+                    setFilters({
+                      slides: { ...clearLibraryFilter },
+                      playlists: { ...clearLibraryFilter },
+                      devices: { ...clearLibraryFilter },
+                    });
+                    setScreenSite('');
+                  }}
+                />
+              )}
             </SidebarFooter>
           </Sidebar>
           <main className="main-workspace">
@@ -1105,6 +1213,9 @@ export default function App() {
                         setPlaylist({
                           id: '',
                           name: 'Untitled playlist',
+                          ...(focusedHome
+                            ? { managingGroupId: focusedHome.groupId }
+                            : {}),
                           items: [],
                         })
                       }
@@ -1113,7 +1224,7 @@ export default function App() {
                       New playlist
                     </button>
                   )}
-                  {view === 'devices' && auth.user?.role === 'admin' && (
+                  {view === 'devices' && adminControls && (
                     <>
                       <button onClick={() => setSetupOpen(true)}>
                         <FileCog size={18} />
@@ -1137,7 +1248,7 @@ export default function App() {
                       </button>
                     </>
                   )}
-                  {view === 'devices' && auth.user?.role !== 'admin' && (
+                  {view === 'devices' && !adminControls && (
                     <>
                       <IconButton
                         label="Refresh screens"
@@ -1207,13 +1318,13 @@ export default function App() {
               )}
               {libraryState === 'ready' && (
                 <>
-                  {view === 'accounts' && auth.user?.role === 'admin' && (
+                  {view === 'accounts' && adminControls && auth.user && (
                     <Accounts user={auth.user} refresh={refresh} />
                   )}
                   {view === 'password' && auth.user && (
                     <PasswordSettings user={auth.user} />
                   )}
-                  {view === 'settings' && auth.user?.role === 'admin' && (
+                  {view === 'settings' && adminControls && (
                     <div className="account-section workspace-settings">
                       <DataFeeds
                         sites={library.sites || []}
@@ -1406,7 +1517,8 @@ export default function App() {
                                         run(async () => {
                                           await api('/api/slides', 'POST', {
                                             ...slide,
-                                            managingGroupId: null,
+                                            managingGroupId:
+                                              focusedHome?.groupId || null,
                                             folderId: null,
                                             name: `${slide.name.slice(0, 90)} copy`,
                                           });
@@ -1694,6 +1806,9 @@ export default function App() {
                                   setPlaylist({
                                     id: '',
                                     name: 'Untitled playlist',
+                                    ...(focusedHome
+                                      ? { managingGroupId: focusedHome.groupId }
+                                      : {}),
                                     items: [],
                                   })
                                 }
@@ -1820,7 +1935,7 @@ export default function App() {
                                   await refresh();
                                 }, 'Site assigned. Waiting for the player to sync.')
                               }
-                              canManage={auth.user?.role === 'admin'}
+                              canManage={adminControls}
                               canApprove={!!d.canApprove}
                               playlists={library.playlists}
                               busy={busy}
@@ -1901,7 +2016,7 @@ export default function App() {
                         <div className="empty-state">
                           <Monitor size={38} strokeWidth={1.4} />
                           <h2>Ready for your first screen.</h2>
-                          {auth.user?.role === 'admin' ? (
+                          {adminControls ? (
                             <button onClick={() => setPairOpen(true)}>
                               <Plus size={18} />
                               Pair a screen
@@ -1919,7 +2034,7 @@ export default function App() {
                   )}
                   {view === 'media' && (
                     <MediaLibrary
-                      isAdmin={auth.user?.role === 'admin'}
+                      isAdmin={adminControls}
                       assets={library.assets}
                       folders={library.folders}
                       onRefresh={refresh}
@@ -2039,7 +2154,8 @@ export default function App() {
               folders={library.slideFolders || []}
               assets={library.assets}
               groups={groups}
-              isAdmin={auth.user?.role === 'admin'}
+              isAdmin={adminControls}
+              homeGroupId={focusedHome?.groupId}
               masterName={
                 library.playlists.find((p) => p.id === playlist.fork?.masterId)
                   ?.name
@@ -2118,13 +2234,15 @@ export default function App() {
                   <select
                     name="group"
                     aria-label="Managing group"
-                    defaultValue=""
+                    defaultValue={focusedHome?.groupId || ''}
                   >
                     <option value="">Personal playlist</option>
                     {orderedTree(groups)
                       .filter(
                         ({ item }) =>
-                          auth.user?.role === 'admin' || item.directMember,
+                          adminControls ||
+                          item.directMember ||
+                          item.id === focusedHome?.groupId,
                       )
                       .map(({ item, depth }) => (
                         <option key={item.id} value={item.id}>
@@ -4582,6 +4700,7 @@ function PlaylistEditor({
   assets,
   groups,
   isAdmin,
+  homeGroupId,
   masterName,
   onClose,
   onSave,
@@ -4596,6 +4715,7 @@ function PlaylistEditor({
   assets: Asset[];
   groups: NonNullable<Library['groups']>;
   isAdmin: boolean;
+  homeGroupId?: string;
   masterName?: string;
   onClose: () => void;
   onSave: (p: Playlist) => Promise<Playlist>;
@@ -4832,7 +4952,10 @@ function PlaylistEditor({
               >
                 <option value="">Personal playlist</option>
                 {orderedTree(groups)
-                  .filter(({ item }) => isAdmin || item.directMember)
+                  .filter(
+                    ({ item }) =>
+                      isAdmin || item.directMember || item.id === homeGroupId,
+                  )
                   .map(({ item, depth }) => (
                     <option key={item.id} value={item.id}>
                       {indentedName(item.name, depth)}

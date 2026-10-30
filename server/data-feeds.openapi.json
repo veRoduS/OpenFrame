@@ -1389,6 +1389,156 @@
           }
         ],
         "description": "Admin session required."
+      },
+      "patch": {
+        "operationId": "changeFeedKeyExpiry",
+        "summary": "Admin session required; change the expiration of an existing, non-revoked API key",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyExpiryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated public key metadata; the existing secret remains unchanged and is not returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON or schema: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session missing or token invalid: INVALID_TOKEN for external writes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin access required, or request origin rejected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Resource limit, immutable fields, or feed in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE: maximum 32768-byte update body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "UNSUPPORTED_MEDIA_TYPE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED: maximum 60 authorized attempts per minute per feed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Minimum seconds to wait",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "feedId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tokenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     },
     "/api/data-feeds/openapi.json": {
@@ -1935,6 +2085,87 @@
             }
           }
         }
+      },
+      "patch": {
+        "operationId": "changeApplicationKeyExpiry",
+        "summary": "Admin session required; change the expiration of an existing, non-revoked API key",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyExpiryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated public key metadata; the existing secret remains unchanged and is not returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationTokenMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin permission required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Application/key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Application/field/feed/key limit, missing group, or application still has feeds",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/data-feeds/ingest/{sourceKey}": {
@@ -1953,7 +2184,7 @@
       "post": {
         "operationId": "ingestApplicationMetrics",
         "summary": "Automatically create a scoped feed and append typed metrics; merge values atomically",
-        "description": "Numeric tables use nonempty arrays of label/value rows and are inferred as categories fields. A separate source such as production-tables keeps tables independent from same-named number fields. Existing category limits apply: 40 rows, unique labels up to 60 characters, and numeric values within plus or minus one trillion. Included tables replace their arrays; omitted fields retain their data.",
+        "description": "Numeric tables use nonempty arrays of label/value rows and are inferred as categories fields. A separate source such as production-tables keeps tables independent from same-named number fields. Existing category limits apply: 100 rows, unique labels up to 60 characters, and numeric values within plus or minus one trillion. Included tables replace their arrays; omitted fields retain their data.",
         "security": [
           {
             "ApplicationWriteToken": []
@@ -2654,7 +2885,7 @@
             },
             {
               "type": "array",
-              "maxItems": 40,
+              "maxItems": 100,
               "items": {
                 "type": "object",
                 "required": [
@@ -2755,10 +2986,14 @@
             "maxLength": 80
           },
           "expiresInDays": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "minimum": 1,
             "maximum": 365,
-            "default": 90
+            "default": 90,
+            "description": "Number of days from now, or null for a non-expiring key. Omitted on creation defaults to 90 days."
           }
         }
       },
@@ -2790,8 +3025,12 @@
             "format": "date-time"
           },
           "expiresAt": {
-            "type": "string",
-            "format": "date-time"
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Expiration timestamp, or null when the key never expires. Revocation and creator authorization still apply."
           },
           "revokedAt": {
             "type": [
@@ -2938,8 +3177,12 @@
             "format": "date-time"
           },
           "expiresAt": {
-            "type": "string",
-            "format": "date-time"
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Expiration timestamp, or null when the key never expires. Revocation and creator authorization still apply."
           },
           "revokedAt": {
             "type": [
@@ -3030,7 +3273,7 @@
             },
             {
               "type": "array",
-              "maxItems": 40,
+              "maxItems": 100,
               "items": {
                 "type": "object",
                 "required": [
@@ -3123,10 +3366,14 @@
             "maxLength": 80
           },
           "expiresInDays": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "minimum": 1,
             "maximum": 365,
-            "default": 90
+            "default": 90,
+            "description": "Number of days from now, or null for a non-expiring key. Omitted on creation defaults to 90 days."
           },
           "siteId": {
             "type": [
@@ -3226,6 +3473,24 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "KeyExpiryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expiresInDays"
+        ],
+        "properties": {
+          "expiresInDays": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 365,
+            "description": "Set null to never expire, or 1\u2013365 days from now. Revoked keys cannot be renewed."
           }
         }
       }

@@ -1,3 +1,4 @@
+import { KeyExpiryFields, KeyExpiryEditor } from './api-key-expiry';
 import { useSiteFilter } from './hooks/use-site-filter';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DataFeedApplications } from './data-feed-applications';
@@ -47,7 +48,7 @@ export const dataModes = [
 type Token = {
   id: string;
   name: string;
-  expiresAt: string;
+  expiresAt: string | null;
   revokedAt: string | null;
   lastUsedAt: string | null;
 };
@@ -111,7 +112,7 @@ export function DataFeeds({
   } | null>(null);
   const [tokens, setTokens] = useState<Token[]>([]);
   const [tokenName, setTokenName] = useState('');
-  const [expires, setExpires] = useState(90);
+  const [expires, setExpires] = useState<number | null>(90);
   const [secret, setSecret] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -706,9 +707,9 @@ export function DataFeeds({
                   <p className="muted">
                     Generate a separate key for each application that sends data
                     to this feed. Keys can update only this feed; they cannot
-                    read data or edit slides. They expire and can be revoked at
-                    any time. Keys also stop working if their creator loses Edit
-                    access.
+                    read data or edit slides. Set an expiry or choose Never
+                    expires. They can be revoked at any time. Keys also stop
+                    working if their creator loses Edit access.
                   </p>
                   {tokens.map((token) => (
                     <div className="data-feed-token" key={token.id}>
@@ -717,12 +718,26 @@ export function DataFeeds({
                         <small>
                           {token.revokedAt
                             ? 'Revoked'
-                            : `Expires ${new Date(token.expiresAt).toLocaleDateString()}`}
+                            : token.expiresAt === null
+                              ? 'Never expires'
+                              : `Expires ${new Date(token.expiresAt).toLocaleDateString()}`}
                           {token.lastUsedAt
                             ? ` · Last used ${new Date(token.lastUsedAt).toLocaleString()}`
                             : ' · Never used'}
                         </small>
                       </span>
+                      {!token.revokedAt && (
+                        <KeyExpiryEditor
+                          name={token.name}
+                          expiresAt={token.expiresAt}
+                          onSave={async (days) => {
+                            await api(`${base}/tokens/${token.id}`, 'PATCH', {
+                              expiresInDays: days,
+                            });
+                            setTokens(await api<Token[]>(`${base}/tokens`));
+                          }}
+                        />
+                      )}
                       <button
                         className="ghost"
                         disabled={busy || !!token.revokedAt}
@@ -758,17 +773,7 @@ export function DataFeeds({
                           placeholder="Sales dashboard integration"
                         />
                       </label>
-                      <label>
-                        Expires in days
-                        <input
-                          type="number"
-                          min={1}
-                          max={365}
-                          required
-                          value={expires}
-                          onChange={(e) => setExpires(Number(e.target.value))}
-                        />
-                      </label>
+                      <KeyExpiryFields value={expires} onChange={setExpires} />
                       <Button type="submit">Generate API key</Button>
                     </fieldset>
                   </form>
