@@ -151,7 +151,7 @@ New slides mark their generated “Something worth\nsharing.” text as a starte
 Deleting a slide is blocked while it remains in a playlist draft or publication. The confirmation lists visible dependent playlists; remove the slide, save the drafts, and publish their replacements first. Restart/revoke confirmations explain screen interruption and reconnect behavior. Revoking a feed API key requires confirmation and immediately stops that application's updates.
 
 Administrators can change **Settings → Data feeds → Feed limits → Fields per
-feed** (local server revision 0.31.1+). The default is 100, with a range of 1–500.
+feed** (server 0.32.0+). The default is 100, with a range of 1–500.
 Changes take effect immediately and persist after restart. Lowering the limit
 preserves existing fields and value updates; new feeds/additional fields must
 fit the current setting. Existing numbered sources are not automatically merged.

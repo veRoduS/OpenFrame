@@ -53,7 +53,7 @@ Successful JSON responses contain `applicationId`, `sourceKey`, `feedId`, `field
 
 Existing field types cannot change. New chart fields require a nonempty array. Each chart value replaces that field's whole array; points are not appended automatically. Strings and booleans are unsupported. Numbers must be finite and within ±1 trillion. Time series allow 240 points with unique, increasing ISO timestamps; categories allow 40 entries with unique, trimmed labels of 1–60 characters.
 
-**Limits:** source names match `[A-Za-z0-9][A-Za-z0-9_-]{0,79}` and are case-sensitive; metric names match `[A-Za-z][A-Za-z0-9_]{0,39}`. The default is 100 fields per feed; administrators can set 1–500 under Settings → Data feeds → Feed limits (local server revision 0.31.1+). Bodies remain limited to 32 KiB. Existing wider feeds continue accepting value updates after lowering the setting. Use another source for more fields. The server allows 200 total feeds; each application/site shares a 60-call/minute budget across its keys and sources, with a 600-call/minute application ceiling.
+**Limits:** source names match `[A-Za-z0-9][A-Za-z0-9_-]{0,79}` and are case-sensitive; metric names match `[A-Za-z][A-Za-z0-9_]{0,39}`. The default is 100 fields per feed; administrators can set 1–500 under Settings → Data feeds → Feed limits (server 0.32.0+). Bodies remain limited to 32 KiB. Existing wider feeds continue accepting value updates after lowering the setting. Use another source for more fields. The server allows 200 total feeds; each application/site shares a 60-call/minute budget across its keys and sources, with a 600-call/minute application ceiling.
 
 ## Errors and key lifecycle
 

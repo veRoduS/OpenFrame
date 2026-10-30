@@ -28,7 +28,7 @@ managing group. Existing feed ownership stays unchanged. Keys authorize only
 the selected existing stores; rotate a key to add stores. The application itself
 is not tied to a single site.
 
-## Configurable field limits (local server revision 0.31.1+)
+## Configurable field limits (server 0.32.0+)
 
 The default is **100 fields per feed**. Administrators can set **1–500** in
 **Settings → Data feeds → Feed limits**. The persistent setting applies immediately

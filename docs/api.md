@@ -333,7 +333,7 @@ excluded from legacy assign-site operations. See the
 [SMCC handoff](smcc-integration-update.md) and
 [OpenAPI contract](../server/data-feeds.openapi.json).
 
-### Configurable field limit (local server revision 0.31.1+)
+### Configurable field limit (server 0.32.0+)
 
 Administrator sessions read `GET /api/settings/data-feeds` and update
 `PUT /api/settings/data-feeds` with `{"maxFieldsPerFeed":100}`. The default is 100;

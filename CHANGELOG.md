@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.32.0] - 2026-10-30
+
+- Release configurable feed field limits with a default of 100 and admin controls from 1 to 500
+
 ## [0.31.1] - 2026-10-30
 
 - Raise the default feed field limit to 100 and add persistent admin controls for 1–500 fields without disrupting existing feeds
