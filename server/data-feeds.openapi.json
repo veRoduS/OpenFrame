@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenFrame Data Feeds API",
-    "version": "1.2.0",
-    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md. Application ingestion is namespaced by application, assigned site, and source name. Existing unassigned keys retain a separate legacy namespace. Central application keys can submit atomic batches for explicitly selected stores using ingest-stores. Each screen still receives only its authorized local snapshots."
+    "version": "1.3.0",
+    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md. Application ingestion is namespaced by application, assigned site, and source name. Existing unassigned keys retain a separate legacy namespace. Central application keys can submit atomic batches for explicitly selected stores using ingest-stores. Each screen still receives only its authorized local snapshots. Field limits default to 100 and are administrator-configurable from 1 to 500; existing wider feeds retain their schema and accept value updates after the configured limit is lowered."
   },
   "servers": [
     {
@@ -2848,7 +2848,7 @@
       "post": {
         "operationId": "ingestStoreBatch",
         "summary": "Atomically merge one source across selected stores with a central application key",
-        "description": "Server 0.30.3+. Central keys only. Maximum 256 KiB JSON and 50 distinct authorized active stores; each metrics/tables section is nonempty, <=32 KiB and <=20 fields. Metrics use the named source; tables use sourceKey + -tables (80 characters maximum). Array values replace rows, omitted fields/stores remain unchanged. Field types must match across stores. The entire request rolls back on failure. Uses 60 attempts/minute per application/store and 600 store attempts/minute per application, shared with the original endpoint. New feeds belong to the site access group or application managing group; existing ownership remains unchanged.",
+        "description": "Server 0.30.3+. Central keys only. Maximum 256 KiB JSON and 50 distinct authorized active stores; each metrics/tables section is nonempty, <=32 KiB and <= the configured field limit (default 100, configurable 1\u2013500). Metrics use the named source; tables use sourceKey + -tables (80 characters maximum). Array values replace rows, omitted fields/stores remain unchanged. Field types must match across stores. The entire request rolls back on failure. Uses 60 attempts/minute per application/store and 600 store attempts/minute per application, shared with the original endpoint. New feeds belong to the site access group or application managing group; existing ownership remains unchanged.",
         "security": [
           {
             "ApplicationWriteToken": []
@@ -3007,6 +3007,120 @@
           "description": "Stable case-sensitive feed name chosen by the application, scoped by the application key."
         }
       ]
+    },
+    "/api/settings/data-feeds": {
+      "get": {
+        "operationId": "getFeedLimits",
+        "summary": "Administrator reads workspace field limits",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current persistent workspace setting. Existing wider feeds retain all fields and accept value updates; only new schemas/fields are restricted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setFeedLimits",
+        "summary": "Administrator changes the persistent field limit without restarting",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["maxFieldsPerFeed"],
+                "properties": {
+                  "maxFieldsPerFeed": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500,
+                    "default": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current persistent workspace setting. Existing wider feeds retain all fields and accept value updates; only new schemas/fields are restricted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedLimits"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3063,11 +3177,11 @@
           "fields": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 20,
+            "maxItems": 500,
             "items": {
               "$ref": "#/components/schemas/Field"
             },
-            "description": "Unique field keys. Definitions cannot be changed after creation."
+            "description": "Unique field keys. Definitions cannot be changed after creation. New feeds must fit the workspace field limit (default 100, configurable 1\u2013500)."
           },
           "siteId": {
             "type": ["string", "null"],
@@ -3094,7 +3208,7 @@
               "fields": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 20,
+                "maxItems": 500,
                 "items": {
                   "$ref": "#/components/schemas/Field"
                 },
@@ -3150,8 +3264,8 @@
       "SnapshotData": {
         "type": "object",
         "minProperties": 1,
-        "maxProperties": 20,
-        "description": "Complete snapshot: exactly the declared keys, each value matching its feed field type. This general schema cannot encode a feed-specific field definition. Series timestamps and category labels must be unique. Total encoded request <=32768 bytes. Null clears a number; [] clears a chart.",
+        "maxProperties": 500,
+        "description": "Complete snapshot: exactly the declared keys, each value matching its feed field type. This general schema cannot encode a feed-specific field definition. Series timestamps and category labels must be unique. Total encoded request <=32768 bytes. Null clears a number; [] clears a chart. The configured field limit does not prevent updates to already-declared fields after it is lowered.",
         "additionalProperties": {
           "anyOf": [
             {
@@ -3473,8 +3587,8 @@
       "IngestData": {
         "type": "object",
         "minProperties": 1,
-        "maxProperties": 20,
-        "description": "Named metric updates, merged atomically. Unknown names create fields inferred from number/null or nonempty series/category arrays; existing types are immutable. Omitted metrics keep their values. At most 20 fields total per feed. Null clears a number; [] clears an existing chart but cannot define a new chart type. Payload <=32768 bytes.",
+        "maxProperties": 500,
+        "description": "Named metric updates, merged atomically. Unknown names create fields inferred from number/null or nonempty series/category arrays; existing types are immutable. Omitted metrics keep their values. Field limit defaults to 100 and is administrator-configurable from 1 to 500. Existing wider feeds can update their declared fields after the setting is lowered. Null clears a number; [] clears an existing chart but cannot define a new chart type. Payload <=32768 bytes.",
         "additionalProperties": {
           "anyOf": [
             {
@@ -3833,11 +3947,11 @@
                 "metrics": {
                   "type": "object",
                   "minProperties": 1,
-                  "maxProperties": 20,
+                  "maxProperties": 500,
                   "propertyNames": {
                     "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$"
                   },
-                  "description": "At most 32 KiB when serialized; omitted fields retain previous values.",
+                  "description": "At most 32 KiB when serialized; omitted fields retain previous values. Field limit defaults to 100 and can be configured from 1 to 500; existing wider feeds can update their existing fields after the limit is lowered.",
                   "additionalProperties": {
                     "anyOf": [
                       {
@@ -3878,11 +3992,11 @@
                 "tables": {
                   "type": "object",
                   "minProperties": 1,
-                  "maxProperties": 20,
+                  "maxProperties": 500,
                   "propertyNames": {
                     "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$"
                   },
-                  "description": "At most 32 KiB when serialized; omitted fields retain previous values.",
+                  "description": "At most 32 KiB when serialized; omitted fields retain previous values. Field limit defaults to 100 and can be configured from 1 to 500; existing wider feeds can update their existing fields after the limit is lowered.",
                   "additionalProperties": {
                     "type": "array",
                     "maxItems": 100,
@@ -3951,6 +4065,24 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "FeedLimits": {
+        "type": "object",
+        "required": ["maxFieldsPerFeed", "minimum", "maximum"],
+        "properties": {
+          "maxFieldsPerFeed": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100
+          },
+          "minimum": {
+            "const": 1
+          },
+          "maximum": {
+            "const": 500
           }
         }
       }

@@ -124,6 +124,9 @@ jobs:
       - name: Application table ingestion and rendering
         timeout-minutes: 4
         run: node tests/data-tables.browser.mjs
+      - name: Configurable feed field limits
+        timeout-minutes: 4
+        run: node tests/data-feed-limits.browser.mjs
       - name: Central multi-store feeds and keys
         timeout-minutes: 4
         run: node tests/multi-store-feeds.browser.mjs

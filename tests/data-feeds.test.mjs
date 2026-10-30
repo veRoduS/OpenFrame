@@ -1861,6 +1861,7 @@ void test('application keys cannot read or manage feeds, cross namespaces, or re
 
 void test('automatic fields validate atomically with immutable types and bounded ingestion bodies', async (t) => {
   const { admin, ingest, application, db } = await applicationFixture(t);
+  await admin('/api/settings/data-feeds', 'PUT', { maxFieldsPerFeed: 20 });
   const first = await ingest({ completed: 42 });
   const before = (await admin(`/api/data-feeds/${first.data.feedId}/data`))
     .data;
@@ -3186,6 +3187,7 @@ void test('one central application writes isolated store metrics and tables; ret
 
 void test('central batches reject unauthorized stores, invalid values, schemas and body limits without partial writes', async (t) => {
   const { admin, batch, db, application, sites } = await centralFixture(t);
+  await admin('/api/settings/data-feeds', 'PUT', { maxFieldsPerFeed: 20 });
   await batch([{ siteNumber: '02882', metrics: { completed: 1 } }]);
   const before = () =>
     db
@@ -3668,4 +3670,281 @@ void test('central contract examples work and quota/body failures leave all stor
     ).status,
     200,
   );
+});
+
+const metricFields = (count) =>
+  Object.fromEntries(
+    Array.from({ length: count }, (_, index) => [`metric${index}`, index]),
+  );
+const manualFields = (count) =>
+  Object.keys(metricFields(count)).map((key) => ({ key, type: 'number' }));
+
+void test('feeds default to 100 fields and only admins can change the bounded workspace limit', async (t) => {
+  const { admin, client, user, ingest, feed, write } =
+    await applicationFixture(t);
+  const path = '/api/settings/data-feeds';
+  const initial = await admin(path);
+  assert.equal(initial.status, 200);
+  assert.deepEqual(initial.data, {
+    maxFieldsPerFeed: 100,
+    minimum: 1,
+    maximum: 500,
+  });
+  assert.equal(initial.headers.get('cache-control'), 'no-store');
+  const member = await user('field-limit-member');
+  for (const call of [client(), member.call]) {
+    assert.ok((await call(path)).status >= 400);
+    assert.ok(
+      (await call(path, 'PUT', { maxFieldsPerFeed: 120 })).status >= 400,
+    );
+  }
+  for (const value of [0, 501, 1.5, '100', null])
+    assert.equal(
+      (await admin(path, 'PUT', { maxFieldsPerFeed: value })).status,
+      400,
+    );
+  assert.equal(
+    (await admin(path, 'PUT', { maxFieldsPerFeed: 100, extra: true })).status,
+    400,
+  );
+  assert.equal((await admin(path, 'PUT', {})).status, 400);
+  assert.equal((await admin(path)).data.maxFieldsPerFeed, 100);
+  const first = await ingest(metricFields(100), 'full');
+  assert.equal(first.status, 201);
+  assert.equal(first.data.fields.length, 100);
+  const saved = await admin('/api/slides', 'POST', {
+    ...slide(first.data.feedId),
+    layers: [widget(first.data.feedId, 'metric', 'metric99')],
+  });
+  assert.equal(saved.status, 201);
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Hundred-field playback',
+      items: [{ slideId: saved.data.id, duration: 30 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const preview = (await admin(`/api/preview/${playlist.id}?version=published`))
+    .data;
+  assert.equal(
+    Object.keys(preview.dataFeeds[first.data.feedId].data).length,
+    100,
+  );
+  assert.equal(preview.dataFeeds[first.data.feedId].data.metric99, 99);
+  const player = client();
+  const screen = (
+    await player('/api/player/enroll', 'POST', { name: 'Hundred-field screen' })
+  ).data;
+  await admin(`/api/devices/${screen.id}/approve`, 'POST', {
+    code: screen.code,
+  });
+  await admin(`/api/devices/${screen.id}`, 'PUT', {
+    name: 'Hundred-field screen',
+    playlistId: playlist.id,
+    blank: false,
+    rotation: 0,
+  });
+  const audience = (
+    await admin('/api/groups', 'POST', { name: 'Hundred-field audience' })
+  ).data;
+  await admin(`/api/access/data-feed/${first.data.feedId}`, 'POST', {
+    groupId: audience.id,
+  });
+  await admin(`/api/access/device/${screen.id}`, 'POST', {
+    groupId: audience.id,
+  });
+  const synced = await player(
+    '/api/player/sync',
+    'POST',
+    { version: '0.15.5' },
+    { Authorization: `Bearer ${screen.token}` },
+  );
+  assert.equal(synced.status, 200);
+  assert.equal(synced.data.dataFeeds[first.data.feedId].data.metric99, 99);
+  assert.equal(
+    Object.keys(synced.data.dataFeeds[first.data.feedId].data).length,
+    100,
+  );
+  assert.equal((await ingest(metricFields(101), 'too-wide')).status, 400);
+  assert.equal((await ingest({ extra: 1 }, 'full')).data.code, 'FIELD_LIMIT');
+  const manual = await admin('/api/data-feeds', 'POST', {
+    name: 'Hundred fields',
+    fields: manualFields(100),
+  });
+  assert.equal(manual.status, 201);
+  assert.equal(
+    (
+      await admin('/api/data-feeds', 'POST', {
+        name: 'Too wide',
+        fields: manualFields(101),
+      })
+    ).data.code,
+    'FIELD_LIMIT',
+  );
+  // Existing feed-specific keys keep accepting their fixed schema independently.
+  assert.equal((await write()).status, 200);
+  assert.equal((await admin(`/api/data-feeds/${feed.id}`)).status, 200);
+});
+
+void test('live field-limit changes apply atomically to central batches and preserve existing wider feeds when lowered', async (t) => {
+  const { admin, batch, sites, application, db } = await centralFixture(t);
+  const path = '/api/settings/data-feeds';
+  const stores = sites.slice(0, 2).map((site) => ({
+    siteNumber: site.siteNumber,
+    metrics: metricFields(45),
+  }));
+  assert.equal((await batch(stores)).status, 200);
+  const feeds = (await admin('/api/data-feeds')).data.filter(
+    (feed) => feed.applicationId === application.id,
+  );
+  assert.equal(feeds.length, 2);
+  assert.ok(feeds.every((feed) => feed.fields.length === 45));
+  assert.equal(
+    (await admin(path, 'PUT', { maxFieldsPerFeed: 125 })).status,
+    200,
+  );
+  assert.equal(
+    (
+      await batch(
+        stores.map((store) => ({ ...store, metrics: metricFields(125) })),
+      )
+    ).status,
+    200,
+  );
+  const original = () =>
+    db
+      .prepare("SELECT body FROM records WHERE kind='data-feed' ORDER BY id")
+      .all();
+  const before = original();
+  const tooWide = await batch([
+    { siteNumber: sites[0].siteNumber, metrics: { metric0: 999 } },
+    { siteNumber: sites[1].siteNumber, metrics: { extra: 1 } },
+  ]);
+  assert.equal(tooWide.data.code, 'FIELD_LIMIT');
+  assert.deepEqual(original(), before);
+  assert.equal(
+    (await admin(path, 'PUT', { maxFieldsPerFeed: 20 })).status,
+    200,
+  );
+  const update = await batch(
+    stores.map((store) => ({
+      ...store,
+      metrics: { ...metricFields(125), metric0: 88 },
+    })),
+  );
+  assert.equal(update.status, 200);
+  for (const feed of feeds) {
+    const saved = (await admin(`/api/data-feeds/${feed.id}`)).data;
+    assert.equal(saved.fields.length, 125);
+    assert.equal(
+      (await admin(`/api/data-feeds/${feed.id}/data`)).data.data.metric0,
+      88,
+    );
+    assert.equal(
+      (
+        await admin(`/api/data-feeds/${feed.id}`, 'PUT', {
+          name: 'Renamed wider feed',
+          fields: saved.fields,
+        })
+      ).status,
+      200,
+    );
+  }
+  assert.equal(
+    (await batch([{ siteNumber: sites[0].siteNumber, metrics: { extra: 3 } }]))
+      .data.code,
+    'FIELD_LIMIT',
+  );
+  assert.equal(
+    (
+      await batch(
+        [{ siteNumber: sites[0].siteNumber, metrics: metricFields(21) }],
+        undefined,
+        'new-source',
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await batch(
+        [{ siteNumber: sites[0].siteNumber, metrics: metricFields(20) }],
+        undefined,
+        'new-source',
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await admin(path, 'PUT', { maxFieldsPerFeed: 500 })).status,
+    200,
+  );
+  assert.equal(
+    (
+      await batch(
+        [{ siteNumber: sites[0].siteNumber, metrics: metricFields(500) }],
+        undefined,
+        'wide-source',
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await batch(
+        [{ siteNumber: sites[0].siteNumber, metrics: metricFields(501) }],
+        undefined,
+        'too-wide-source',
+      )
+    ).status,
+    400,
+  );
+});
+
+void test('configured field limits persist across restart and existing application credentials use the saved value', async (t) => {
+  const { admin, db, applicationKey } = await applicationFixture(t);
+  await admin('/api/settings/data-feeds', 'PUT', { maxFieldsPerFeed: 130 });
+  const dataDir = path.dirname(
+    db
+      .prepare('PRAGMA database_list')
+      .all()
+      .find((row) => row.name === 'main').file,
+  );
+  const reopened = createApp({ dataDir });
+  const server = reopened.app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  try {
+    const result = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/data-feeds/ingest/restarted`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${applicationKey.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(metricFields(130)),
+      },
+    );
+    assert.equal(result.status, 201);
+    assert.equal((await result.json()).fields.length, 130);
+    const above = await fetch(
+      `http://127.0.0.1:${server.address().port}/api/data-feeds/ingest/rejected`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${applicationKey.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(metricFields(131)),
+      },
+    );
+    assert.equal(above.status, 400);
+  } finally {
+    reopened.close();
+    await new Promise((resolve) => server.close(resolve));
+    reopened.db.close();
+  }
 });

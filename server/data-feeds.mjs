@@ -6,6 +6,7 @@ import contract from './data-feeds.openapi.json' with { type: 'json' };
 import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
 import { mountDataFeedApplications } from './data-feed-applications.mjs';
 import { createDataFeedReset } from './data-feed-reset.mjs';
+import { mountDataFeedLimits, MAX_FEED_FIELDS } from './data-feed-limits.mjs';
 
 export const fieldSchema = z
   .object({
@@ -21,7 +22,7 @@ export const feedSchema = z
     fields: z
       .array(fieldSchema)
       .min(1)
-      .max(20)
+      .max(MAX_FEED_FIELDS)
       .refine(
         (fields) => new Set(fields.map((f) => f.key)).size === fields.length,
         'Field keys must be unique',
@@ -185,6 +186,7 @@ export function mountDataFeeds(
     expiresAt TEXT, revokedAt TEXT, lastUsedAt TEXT);
     CREATE INDEX IF NOT EXISTS data_feed_token_feed ON data_feed_tokens(feedId);`);
   migrateKeyExpiry(db, 'data_feed_tokens');
+  const fieldLimits = mountDataFeedLimits(app, { db, administrator });
   const raw = (id) => {
     const row = db
       .prepare("SELECT body FROM records WHERE kind='data-feed' AND id=?")
@@ -215,6 +217,7 @@ export function mountDataFeeds(
     fieldSchema,
     values,
     resetConnections,
+    fieldLimits,
   });
   const tokenFields = 'id,feedId,name,createdAt,expiresAt,revokedAt,lastUsedAt';
   const references = (slide, id) => {
@@ -407,6 +410,13 @@ export function mountDataFeeds(
   );
   app.post('/api/data-feeds', administrator, (req, res) => {
     const input = feedSchema.parse(req.body);
+    const limit = fieldLimits.read().maxFieldsPerFeed;
+    if (input.fields.length > limit)
+      throw fail(
+        409,
+        'FIELD_LIMIT',
+        `Maximum of ${limit} fields per feed; adjust Feed limits in Settings`,
+      );
     if (input.siteId) requireActiveSite(db, input.siteId);
     else if (db.prepare('SELECT COUNT(*) AS n FROM sites').get().n)
       throw fail(400, 'SITE_REQUIRED', 'Choose a site for this feed');

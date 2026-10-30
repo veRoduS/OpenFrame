@@ -1,6 +1,7 @@
 import { KeyExpiryFields, KeyExpiryEditor } from './api-key-expiry';
 import { useSiteFilter } from './hooks/use-site-filter';
 import { useEffect, useId, useRef, useState } from 'react';
+import { DataFeedLimitSettings } from './data-feed-limit-settings';
 import { DataFeedApplications } from './data-feed-applications';
 import { DataFeedResetButton } from './data-feed-reset';
 import {
@@ -97,6 +98,7 @@ export function DataFeeds({
   onAccess: (resource: SharedResource) => void;
 }) {
   const [applicationRevision, setApplicationRevision] = useState(0);
+  const [maxFieldsPerFeed, setMaxFieldsPerFeed] = useState(100);
   const [query, setQuery] = useState('');
   const [filterSite, setFilterSite] = useSiteFilter('metrics', userId, sites);
   const [createSite, setCreateSite] = useState('');
@@ -283,6 +285,7 @@ export function DataFeeds({
           onRefresh={onRefresh}
         />
       )}
+      {isAdmin && <DataFeedLimitSettings onChange={setMaxFieldsPerFeed} />}
       {isAdmin && (
         <DataFeedResetButton
           onComplete={async () => {
@@ -621,7 +624,7 @@ export function DataFeeds({
               <button
                 type="button"
                 className="ghost"
-                disabled={fields.length >= 20}
+                disabled={fields.length >= maxFieldsPerFeed}
                 onClick={() =>
                   setFields([...fields, { key: '', type: 'number' }])
                 }

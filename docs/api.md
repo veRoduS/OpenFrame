@@ -332,3 +332,13 @@ that selection or null for existing keys. Scope is immutable. Central keys are
 excluded from legacy assign-site operations. See the
 [SMCC handoff](smcc-integration-update.md) and
 [OpenAPI contract](../server/data-feeds.openapi.json).
+
+### Configurable field limit (local server revision 0.31.1+)
+
+Administrator sessions read `GET /api/settings/data-feeds` and update
+`PUT /api/settings/data-feeds` with `{"maxFieldsPerFeed":100}`. The default is 100;
+allowed values are integers from 1 to 500. The persistent setting applies
+immediately to new manual feeds and application field creation. Existing wider
+feeds preserve data/schema and can update existing values after lowering it.
+Body sizes, table rows, series points, feed counts, rate limits and player
+delivery remain unchanged. See [the API guide](data-feeds-api.md).

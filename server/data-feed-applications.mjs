@@ -45,6 +45,7 @@ export function mountDataFeedApplications(
     fieldSchema,
     values,
     resetConnections,
+    fieldLimits,
   },
 ) {
   db.exec(`CREATE TABLE IF NOT EXISTS data_feed_applications (
@@ -535,8 +536,6 @@ export function mountDataFeedApplications(
   ) => {
     z.record(z.string(), z.unknown()).parse(body);
     const entries = Object.entries(body);
-    if (!entries.length || entries.length > 20)
-      throw fail(400, 'INVALID_PAYLOAD', 'Send 1–20 fields per section');
     if (Buffer.byteLength(JSON.stringify(body)) > 32768)
       throw fail(
         413,
@@ -549,6 +548,15 @@ export function mountDataFeedApplications(
       )
       .get(application.id, siteId || '', source);
     const existing = mapping && raw(mapping.feedId);
+    const limit = fieldLimits.read().maxFieldsPerFeed;
+    // Lowering the limit never blocks value updates to existing wider feeds.
+    const allowedInputFields = Math.max(limit, existing?.fields.length || 0);
+    if (!entries.length || entries.length > allowedInputFields)
+      throw fail(
+        400,
+        'INVALID_PAYLOAD',
+        `Send 1–${allowedInputFields} fields per section`,
+      );
     if (mapping && !existing)
       throw fail(
         409,
@@ -596,11 +604,11 @@ export function mountDataFeedApplications(
         writable: true,
       });
     }
-    if (fields.length > 20)
+    if (fields.length > limit && fields.length > (existing?.fields.length || 0))
       throw fail(
         409,
         'FIELD_LIMIT',
-        'Maximum of 20 fields per feed reached; use another feed name',
+        `Maximum of ${limit} fields per feed reached; adjust Feed limits in Settings or use another source`,
       );
     const updatedAt = new Date().toISOString();
     const feed = {

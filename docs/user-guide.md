@@ -149,3 +149,9 @@ Publish the playlist layout once. Further data updates appear through normal pla
 New slides mark their generated “Something worth\nsharing.” text as a starter. Publishing removes that layer if its text was never edited, including when an image covers it. Saving and draft previews keep the starter until publication. Changing its text clears the marker; changing it back later does not make it eligible for cleanup. Text added deliberately, and existing unmarked slides, are preserved. Cleanup updates editable source slides and their existing publications. For a shared slide you can only view, cleanup affects your published snapshot without changing the owner's slide. Failed publications leave source slides untouched.
 
 Deleting a slide is blocked while it remains in a playlist draft or publication. The confirmation lists visible dependent playlists; remove the slide, save the drafts, and publish their replacements first. Restart/revoke confirmations explain screen interruption and reconnect behavior. Revoking a feed API key requires confirmation and immediately stops that application's updates.
+
+Administrators can change **Settings → Data feeds → Feed limits → Fields per
+feed** (local server revision 0.31.1+). The default is 100, with a range of 1–500.
+Changes take effect immediately and persist after restart. Lowering the limit
+preserves existing fields and value updates; new feeds/additional fields must
+fit the current setting. Existing numbered sources are not automatically merged.

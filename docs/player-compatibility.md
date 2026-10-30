@@ -186,3 +186,9 @@ It materializes the same per-site/source feeds used by existing relative widget
 bindings, without changing manifests, snapshots, or installed player code.
 Existing single-store keys retain their original endpoint and semantics. Player
 0.15.5 remains compatible; this server change needs no new APK.
+
+Local server revision 0.31.1 raises the default feed field limit to 100 and lets
+administrators set 1–500. Metadata may list more fields; published manifests and
+player snapshots keep their existing formats and complete-feed delivery.
+Existing wider feeds retain their fields and accept value updates if the setting
+is lowered. Player 0.15.5 remains compatible; no APK change is required.
