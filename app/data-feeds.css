@@ -228,3 +228,19 @@ button.data-feed-open {
 .data-feed-endpoint input {
   width: 100%;
 }
+
+.site-settings-row {
+  flex-wrap: wrap;
+}
+.site-settings-row > label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.site-settings-row select {
+  width: 100%;
+  min-width: 0;
+}
+.site-history li {
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}

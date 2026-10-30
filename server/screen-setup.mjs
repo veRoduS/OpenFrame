@@ -1,3 +1,4 @@
+import { siteNumberSchema, siteByNumber } from './sites.mjs';
 import {
   createCipheriv,
   createDecipheriv,
@@ -47,6 +48,7 @@ const credential = z
 const setupSchema = z
   .object({
     name,
+    siteNumber: siteNumberSchema.optional(),
     server: origin.optional(),
     vpnId: z.uuid().optional(),
     wifi: z
@@ -269,6 +271,7 @@ export function mountScreenSetup(
   const publicSetup = (s) => ({
     id: s.id,
     name: s.name,
+    siteNumber: s.siteNumber || null,
     server: s.server,
     vpnId: s.vpnId,
     createdAt: s.createdAt,
@@ -346,7 +349,9 @@ export function mountScreenSetup(
       if (!server) throw fail(400, 'A server origin is required');
       if (input.access && !server.startsWith('https://'))
         throw fail(400, 'Cloudflare Access requires an HTTPS server');
+      if (input.siteNumber) siteByNumber(db, input.siteNumber);
       const config = {
+        ...(input.siteNumber ? { siteNumber: input.siteNumber } : {}),
         name: input.name,
         server,
         ...(input.wifi
@@ -367,6 +372,7 @@ export function mountScreenSetup(
         id,
         name: input.name,
         server,
+        siteNumber: input.siteNumber || null,
         vpnId: vpn?.id || null,
         createdAt: new Date().toISOString(),
         encrypted,

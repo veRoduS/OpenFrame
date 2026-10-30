@@ -34,10 +34,16 @@ final class PlayerAgent {
     private volatile String playback;
     private volatile long playbackAt;
     private String error, verifiedRevision;
+    private final String siteNumber;
     private boolean connected;
     private long lastContact;
 
     PlayerAgent(File root, String server, String name, String version) throws Exception {
+        this(root, server, name, version, "");
+    }
+
+    PlayerAgent(File root, String server, String name, String version, String siteNumber) throws Exception {
+        this.siteNumber = normalizeSiteNumber(siteNumber);
         this.server = normalizeServer(server);
         this.name = name;
         this.version = version;
@@ -48,6 +54,13 @@ final class PlayerAgent {
         identity = readJson(new File(directory, "identity.json"));
         state = readJson(new File(directory, "state.json"));
         publish();
+    }
+
+    static String normalizeSiteNumber(String value) {
+        String site = value == null ? "" : value.trim();
+        if (!site.isEmpty() && !site.matches("[0-9]{1,20}"))
+            throw new IllegalArgumentException("Site number must contain 1–20 digits.");
+        return site;
     }
 
     static String normalizeServer(String value) {
@@ -94,7 +107,7 @@ final class PlayerAgent {
         } catch (Exception ignored) { /* Reject malformed browser telemetry. */ }
     }
 
-    void tick() {
+    synchronized void tick() {
         try {
             sync();
         } catch (Exception ex) {
@@ -121,7 +134,9 @@ final class PlayerAgent {
 
     private void sync() throws Exception {
         if (!identity.has("token")) {
-            JSONObject enrolled = request("/api/player/enroll", new JSONObject().put("name", name));
+            JSONObject enrollment = new JSONObject().put("name", name);
+            if (!siteNumber.isEmpty()) enrollment.put("siteNumber", siteNumber);
+            JSONObject enrolled = request("/api/player/enroll", enrollment);
             enrolled.getString("token");
             saveJson(new File(directory, "identity.json"), enrolled);
             identity = enrolled;
@@ -133,12 +148,60 @@ final class PlayerAgent {
         }
         JSONObject response = request("/api/player/sync", new JSONObject()
                 .put("revision", oldManifest == null ? JSONObject.NULL : oldManifest.opt("revision"))
+                .put("siteAck", state.optLong("siteRevision"))
                 .put("version", version).put("uptime", (System.nanoTime() - started) / 1e9)
                 .put("error", error == null ? JSONObject.NULL : error)
                 .put("commandAck", state.opt("commandAck"))
                 .put("playback", report == null ? JSONObject.NULL : report));
+        long nextSiteRevision = response.has("siteRevision") ? response.getLong("siteRevision") : 0;
+        long priorSiteRevision = state.optLong("siteRevision");
+        if (nextSiteRevision < 0 || nextSiteRevision > 9007199254740991L ||
+                (response.has("siteRevision") && !(response.get("siteRevision") instanceof Number)) ||
+                (response.has("siteRevision") && response.getDouble("siteRevision") != nextSiteRevision))
+            throw new IOException("Invalid site assignment revision");
+        if (nextSiteRevision < priorSiteRevision) throw new IOException("Stale site assignment response");
         connected = true;
         lastContact = System.currentTimeMillis() / 1000;
+        String nextSite = response.isNull("siteId") ? "" : response.getString("siteId");
+        String priorSite = state.isNull("siteId") ? "" : state.getString("siteId");
+        if (priorSiteRevision > 0 && nextSiteRevision == priorSiteRevision && !nextSite.equals(priorSite))
+            throw new IOException("Site changed without a new assignment revision");
+        if (nextSiteRevision > priorSiteRevision || (response.has("siteId") && !nextSite.equals(priorSite))) {
+            JSONObject cleared = new JSONObject().put("approved", response.optBoolean("approved"))
+                    .put("siteId", response.opt("siteId")).put("siteNumber", response.opt("siteNumber")).put("siteRevision", nextSiteRevision)
+                    .put("generation", state.optLong("generation") + 1).put("commandAck", state.opt("commandAck")).put("dataFeeds", new JSONObject())
+                    .put("manifest", new JSONObject().put("schemaVersion", 2).put("revision", "site-pending")
+                            .put("name", "Waiting for site content").put("items", new JSONArray()).put("assets", new JSONArray()));
+            saveJson(new File(directory, "state.json"), cleared);
+            state = cleared;
+            verifiedRevision = null;
+            oldManifest = null;
+            publish();
+        }
+        if (response.optBoolean("approved") && response.has("dataFeeds")) {
+            JSONObject incoming = response.optJSONObject("dataFeeds");
+            if (incoming == null) throw new IOException("Invalid data feed snapshot map");
+            JSONObject previous = state.optJSONObject("dataFeeds");
+            JSONObject cleared = new JSONObject(state.toString());
+            JSONObject cleaned = previous == null ? new JSONObject() : new JSONObject(previous.toString());
+            boolean changed = false;
+            if (previous != null) for (java.util.Iterator<String> ids = previous.keys(); ids.hasNext();) {
+                String id = ids.next();
+                JSONObject next = incoming.optJSONObject(id), old = previous.getJSONObject(id);
+                if ((next == null || "unavailable".equals(next.optString("status"))) &&
+                        (!"unavailable".equals(old.optString("status")) || !old.isNull("data"))) {
+                    cleaned.put(id, new JSONObject().put("revision", JSONObject.NULL).put("updatedAt", JSONObject.NULL)
+                            .put("data", JSONObject.NULL).put("status", "unavailable"));
+                    changed = true;
+                }
+            }
+            if (changed) {
+                cleared.put("dataFeeds", cleaned);
+                saveJson(new File(directory, "state.json"), cleared);
+                state = cleared;
+                publish();
+            }
+        }
         JSONObject command = response.optJSONObject("command");
         boolean execute = command != null && !command.getString("id").equals(state.optString("commandAck"));
         String nextRevision = null;

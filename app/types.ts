@@ -68,6 +68,7 @@ export type Layer = {
   data?: {
     mode: 'metric' | 'progress' | 'line' | 'bar';
     feedId: string | null;
+    siteBinding?: { applicationId: string; sourceKey: string };
     field: string;
     title: string;
     unit: string;
@@ -228,7 +229,26 @@ export type MediaFolder = {
   name: string;
   parentId?: string | null;
 };
+export type Site = {
+  canApprove?: boolean;
+  accessGroupId?: string | null;
+  id: string;
+  siteNumber: string;
+  name: string;
+  archivedAt: string | null;
+};
 export type Device = {
+  canApprove?: boolean;
+  siteRevision?: number;
+  siteTransfer?: {
+    id: string;
+    fromSiteId: string;
+    toSiteId: string;
+    requestedAt: string;
+    clearedAt: string | null;
+  };
+  siteId?: string | null;
+  requestedSiteNumber?: string | null;
   accessTags?: AccessTag[];
   groupIds?: string[];
   id: string;
@@ -255,6 +275,8 @@ export type Device = {
   command?: { type: string } | null;
 };
 export type DataFeed = {
+  siteNumber?: string | null;
+  siteId?: string | null;
   id: string;
   applicationId?: string;
   sourceKey?: string;
@@ -266,6 +288,7 @@ export type DataFeed = {
   updatedAt: string | null;
 };
 export type Library = {
+  sites?: Site[];
   dataFeeds?: DataFeed[];
   groups?: {
     id: string;

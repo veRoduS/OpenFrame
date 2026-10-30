@@ -51,7 +51,7 @@ import json, os, sys
 data = json.load(open(sys.argv[1]))
 os.umask(0o077)
 with open('/etc/openframe/config.json', 'w') as f:
-    json.dump({k: data[k] for k in ('server', 'name', 'cloudflare_access') if k in data}, f)
+    json.dump({k: data[k] for k in ('server', 'name', 'siteNumber', 'cloudflare_access') if k in data}, f)
 PY
 chown root:openframe /etc/openframe/config.json
 chmod 640 /etc/openframe/config.json

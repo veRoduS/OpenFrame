@@ -1,3 +1,4 @@
+import { SiteHistory } from './site-history';
 import { useEffect, useState } from 'react';
 import { Copy, KeyRound, Plus } from 'lucide-react';
 import { api, type Library } from './types';
@@ -21,8 +22,17 @@ type Application = {
   name: string;
   managingGroupId: string | null;
   feedCount: number;
+  unassignedFeedCount?: number;
+};
+type Site = {
+  accessGroupId?: string | null;
+  id: string;
+  siteNumber: string;
+  name: string;
+  archivedAt: string | null;
 };
 type ApplicationToken = {
+  siteId: string | null;
   id: string;
   name: string;
   expiresAt: string;
@@ -36,6 +46,12 @@ export function DataFeedApplications({
 }: {
   groups?: Library['groups'];
 }) {
+  const [sites, setSites] = useState<Site[]>([]);
+  const [siteId, setSiteId] = useState('');
+  const [legacySiteId, setLegacySiteId] = useState('');
+  const [siteNumber, setSiteNumber] = useState('');
+  const [siteName, setSiteName] = useState('');
+  const [siteAccessGroup, setSiteAccessGroup] = useState('');
   const [applications, setApplications] = useState<Application[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -55,7 +71,11 @@ export function DataFeedApplications({
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
-        const value = await api<Application[]>(base);
+        const [value, siteList] = await Promise.all([
+          api<Application[]>(base),
+          api<Site[]>('/api/sites'),
+        ]);
+        if (active) setSites(siteList);
         if (active) setApplications(value);
       } catch (cause) {
         if (active) setError((cause as Error).message);
@@ -103,12 +123,129 @@ export function DataFeedApplications({
       className="data-feed-applications"
       aria-labelledby="data-feed-applications-heading"
     >
+      <details>
+        <summary>Sites ({sites.length})</summary>
+        <p className="muted">
+          Create a location, then select it when issuing an application key.
+          Existing unassigned keys keep their original feeds.
+        </p>
+        <p className="muted">
+          Choose an access group to let its members and subgroups approve new
+          screens requesting this site. Without a group, approval requires an
+          administrator.
+        </p>
+        {sites.map((site) => (
+          <div className="data-feed-token site-settings-row" key={site.id}>
+            <span>
+              {site.siteNumber} · {site.name}
+              {site.archivedAt ? ' · Archived' : ''}
+            </span>
+            <label>
+              Access group
+              <select
+                aria-label={`Access group for site ${site.siteNumber}`}
+                value={site.accessGroupId || ''}
+                disabled={busy}
+                onChange={(event) =>
+                  void run(async () => {
+                    await api(`/api/sites/${site.id}`, 'PATCH', {
+                      accessGroupId: event.target.value || null,
+                    });
+                    setSites(await api<Site[]>('/api/sites'));
+                  })
+                }
+              >
+                <option value="">Resource sharing only</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  await api(`/api/sites/${site.id}`, 'PATCH', {
+                    archived: !site.archivedAt,
+                  });
+                  setSites(await api<Site[]>('/api/sites'));
+                })
+              }
+            >
+              {site.archivedAt ? 'Restore' : 'Archive'}
+            </button>
+          </div>
+        ))}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void run(async () => {
+              const site = await api<Site>('/api/sites', 'POST', {
+                siteNumber,
+                name: siteName,
+                accessGroupId: siteAccessGroup || null,
+              });
+              setSites(await api<Site[]>('/api/sites'));
+              setSiteId(site.id);
+              setSiteNumber('');
+              setSiteName('');
+            });
+          }}
+        >
+          <fieldset disabled={busy}>
+            <label>
+              Site number
+              <input
+                value={siteNumber}
+                onChange={(event) => setSiteNumber(event.target.value)}
+                pattern="[0-9]{1,20}"
+                maxLength={20}
+                required
+                placeholder="001"
+              />
+            </label>
+            <label>
+              Site name
+              <input
+                value={siteName}
+                onChange={(event) => setSiteName(event.target.value)}
+                maxLength={100}
+                required
+              />
+            </label>
+            <label>
+              Access group
+              <select
+                aria-label="New site access group"
+                value={siteAccessGroup}
+                onChange={(event) => setSiteAccessGroup(event.target.value)}
+              >
+                <option value="">Resource sharing only</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="muted">
+              An access group requires membership in that group or its
+              descendants as well as resource access. Administrators retain
+              access.
+            </p>
+            <Button type="submit">Create site</Button>
+          </fieldset>
+        </form>
+      </details>
+      <SiteHistory sites={sites} />
       <div className="data-feed-toolbar">
         <div>
           <h3 id="data-feed-applications-heading">Application API keys</h3>
           <p className="muted">
-            Give an application one key. Its first push creates its feeds and
-            metrics automatically.
+            Give an application a key for each site. Its first push creates its
+            feeds and metrics automatically.
           </p>
         </div>
         <Button
@@ -155,6 +292,7 @@ export function DataFeedApplications({
                       ),
                     );
                     setKeyName('');
+                    setLegacySiteId('');
                     setExpires(90);
                     setSecret('');
                     setSelected(application);
@@ -242,8 +380,9 @@ export function DataFeedApplications({
         <DialogContent className="of-modal data-feed-modal" size="standard">
           <DialogTitle>Application keys: {selected?.name}</DialogTitle>
           <DialogDescription>
-            Each key can create and update this application’s own feeds. The
-            same key works with any feed name supplied by the application.
+            Each key can create and update this application’s feeds at its
+            assigned site. The same key works with any feed name supplied by the
+            application.
           </DialogDescription>
           {error && (
             <p className="inline-error" role="alert">
@@ -256,6 +395,18 @@ export function DataFeedApplications({
               <div className="data-feed-token" key={key.id}>
                 <div>
                   <strong>{key.name}</strong>
+                  <small>
+                    {key.siteId
+                      ? (() => {
+                          const site = sites.find(
+                            (item) => item.id === key.siteId,
+                          );
+                          return site
+                            ? `${site.siteNumber} · ${site.name}`
+                            : 'Site unavailable';
+                        })()
+                      : 'Unassigned · legacy feeds'}
+                  </small>
                   <small>
                     {key.revokedAt
                       ? 'Revoked'
@@ -280,6 +431,61 @@ export function DataFeedApplications({
               </div>
             ))}
           </div>
+          {!!sites.length &&
+            (keys.some((key) => !key.siteId) ||
+              !!selected?.unassignedFeedCount) && (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!selected) return;
+                  void run(async () => {
+                    const updated = await api<Application>(
+                      `${base}/${selected.id}/assign-site`,
+                      'POST',
+                      { siteId: legacySiteId },
+                    );
+                    setSelected(updated);
+                    setKeys(
+                      await api<ApplicationToken[]>(
+                        `${base}/${selected.id}/tokens`,
+                      ),
+                    );
+                    await reload();
+                    setNotice(
+                      'Existing keys and feeds assigned. Upgrade and assign the matching screens before using site-bound playback.',
+                    );
+                  });
+                }}
+              >
+                <fieldset disabled={busy}>
+                  <p>
+                    Assign all existing unassigned keys and feeds for this
+                    application to their original location. Feed IDs, values,
+                    and secrets are preserved. Existing screens must also be
+                    assigned to that site.
+                  </p>
+                  <label>
+                    Site for existing integration
+                    <select
+                      aria-label="Site for existing integration"
+                      value={legacySiteId}
+                      required
+                      onChange={(event) => setLegacySiteId(event.target.value)}
+                    >
+                      <option value="">Choose the original site</option>
+                      {sites
+                        .filter((site) => !site.archivedAt)
+                        .map((site) => (
+                          <option key={site.id} value={site.id}>
+                            {site.siteNumber} · {site.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <Button type="submit">Assign existing integration</Button>
+                </fieldset>
+              </form>
+            )}
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -288,7 +494,11 @@ export function DataFeedApplications({
                 const result = await api<ApplicationToken & { token: string }>(
                   `${base}/${selected.id}/tokens`,
                   'POST',
-                  { name: keyName, expiresInDays: expires },
+                  {
+                    name: keyName,
+                    expiresInDays: expires,
+                    siteId: siteId || null,
+                  },
                 );
                 setSecret(result.token);
                 setKeyName('');
@@ -301,6 +511,28 @@ export function DataFeedApplications({
             }}
           >
             <fieldset disabled={busy}>
+              <label>
+                Site
+                <select
+                  aria-label="Site"
+                  value={siteId}
+                  required={sites.length > 0}
+                  onChange={(event) => setSiteId(event.target.value)}
+                >
+                  <option value="">
+                    {sites.length
+                      ? 'Choose a site'
+                      : 'Unassigned · legacy feeds'}
+                  </option>
+                  {sites
+                    .filter((site) => !site.archivedAt)
+                    .map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.siteNumber} · {site.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
               <label>
                 Key name
                 <input

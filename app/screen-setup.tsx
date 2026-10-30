@@ -22,6 +22,7 @@ type Vpn = {
   createdAt: string;
 };
 type Setup = {
+  siteNumber?: string | null;
   id: string;
   name: string;
   server: string;
@@ -49,6 +50,7 @@ export function ScreenSetup({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const [siteNumber, setSiteNumber] = useState('');
   const [server, setServer] = useState('');
   const [vpnId, setVpnId] = useState('');
   const [transport, setTransport] = useState('direct');
@@ -121,6 +123,7 @@ export function ScreenSetup({
   async function create() {
     const setup = await api<Setup>('/api/screen-setup/setups', 'POST', {
       name,
+      ...(siteNumber.trim() ? { siteNumber: siteNumber.trim() } : {}),
       ...(transport === 'wireguard' ? { vpnId } : { server }),
       ...(wifi ? { wifi: { ssid, password, country } } : {}),
       ...(access
@@ -236,6 +239,17 @@ export function ScreenSetup({
                 }}
               >
                 <div className="setup-grid">
+                  <label>
+                    Site number
+                    <input
+                      aria-label="Site number"
+                      value={siteNumber}
+                      onChange={(event) => setSiteNumber(event.target.value)}
+                      pattern="[0-9]{1,20}"
+                      maxLength={20}
+                      placeholder="001"
+                    />
+                  </label>
                   <label>
                     Screen name
                     <input
@@ -533,6 +547,7 @@ export function ScreenSetup({
                   <div className="setup-row" key={s.id}>
                     <div>
                       <strong>{s.name}</strong>
+                      {s.siteNumber && <small>Site {s.siteNumber}</small>}
                       <small>{s.server}</small>
                       <small>{new Date(s.createdAt).toLocaleString()}</small>
                     </div>

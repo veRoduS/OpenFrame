@@ -28,6 +28,73 @@ class PlayerTests(unittest.TestCase):
         return {'id': 'clip', 'kind': 'video', 'filename': filename, 'url': '/media/' + filename,
                 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
 
+    def test_site_enrollment_preserves_leading_zeros_and_reuses_credentials(self):
+        self.agent = module.Agent({**self.config, 'siteNumber': '001'}, self.tmp.name)
+        self.agent.credentials = {}
+        with patch.object(self.agent, 'request', side_effect=[{'token': 'paired', 'code': 'ABC123'}, {'approved': False}]) as request:
+            self.agent.sync()
+            self.assertEqual(request.call_args_list[0].args[1]['siteNumber'], '001')
+        with patch.object(self.agent, 'request', return_value={'approved': False}) as request:
+            self.agent.sync()
+            self.assertEqual(request.call_count, 1)
+            self.assertEqual(request.call_args.args[0], '/api/player/sync')
+
+    def test_site_change_clears_metrics_before_failed_media_and_offline_restart(self):
+        current = self.response('old')
+        current.update(siteId='site-a', dataFeeds={'old-feed': {'data': {'completed': 99}}})
+        with patch.object(self.agent, 'request', return_value=current):
+            self.agent.sync()
+        incoming = self.response('new', [self.asset(b'new media')])
+        incoming['siteId'] = 'site-b'
+        with patch.object(self.agent, 'request', return_value=incoming), patch.object(self.agent, 'download', side_effect=OSError('offline')):
+            with self.assertRaises(OSError):
+                self.agent.sync()
+        self.assertEqual(self.agent.state['siteId'], 'site-b')
+        self.assertEqual(self.agent.state['dataFeeds'], {})
+        self.assertEqual(self.agent.state['manifest']['items'], [])
+        restarted = module.Agent(self.config, self.tmp.name)
+        self.assertEqual(restarted.state['dataFeeds'], {})
+        self.assertEqual(restarted.state['manifest']['revision'], 'site-pending')
+        with patch.object(restarted, 'request', return_value=self.response('ready') | {'siteId': 'site-b'}):
+            restarted.sync()
+        self.assertEqual(restarted.state['manifest']['revision'], 'ready')
+
+    def test_transfer_revision_fences_delayed_responses_and_acks_persisted_clear(self):
+        module.atomic_json(self.agent.cache / 'identity.json', self.agent.credentials)
+        current = self.response('original') | {'siteId': 'site-a', 'siteRevision': 1, 'dataFeeds': {'old-feed': {'data': {'completed': 99}}}}
+        with patch.object(self.agent, 'request', return_value=current):
+            self.agent.sync()
+        incoming = self.response('destination', [self.asset(b'new content')]) | {'siteId': 'site-b', 'siteRevision': 2}
+        with patch.object(self.agent, 'request', return_value=incoming), patch.object(self.agent, 'download', side_effect=OSError('offline')):
+            with self.assertRaises(OSError):
+                self.agent.sync()
+        self.assertEqual(self.agent.state['siteRevision'], 2)
+        restarted = module.Agent(self.config, self.tmp.name)
+        saved = (restarted.cache / 'state.json').read_bytes()
+        for delayed in [current, self.response('legacy'), self.response('wrong-site') | {'siteId': 'site-a', 'siteRevision': 2}, self.response('invalid') | {'siteRevision': True}]:
+            with patch.object(restarted, 'request', return_value=delayed) as request:
+                with self.assertRaises(ValueError):
+                    restarted.sync()
+                self.assertEqual(request.call_args.args[1]['siteAck'], 2)
+            self.assertEqual((restarted.cache / 'state.json').read_bytes(), saved)
+            self.assertEqual(restarted.state['dataFeeds'], {})
+        with patch.object(restarted, 'request', return_value=self.response('ready') | {'siteId': 'site-b', 'siteRevision': 2}):
+            restarted.sync()
+        self.assertEqual(restarted.state['manifest']['revision'], 'ready')
+
+    def test_revoked_metrics_clear_even_when_replacement_media_fails(self):
+        current = self.response('current') | {'dataFeeds': {'feed': {'status': 'ready', 'data': {'completed': 42}}}}
+        with patch.object(self.agent, 'request', return_value=current):
+            self.agent.sync()
+        for snapshots in [{'feed': {'status': 'unavailable', 'data': None}}, {}]:
+            incoming = self.response('next', [self.asset(b'new media')]) | {'dataFeeds': snapshots}
+            with patch.object(self.agent, 'request', return_value=incoming), patch.object(self.agent, 'download', side_effect=OSError('offline')):
+                with self.assertRaises(OSError):
+                    self.agent.sync()
+            self.assertEqual(self.agent.state['manifest']['revision'], 'current')
+            self.assertIsNone(self.agent.state['dataFeeds']['feed']['data'])
+            self.assertEqual(module.Agent(self.config, self.tmp.name).state['dataFeeds']['feed']['status'], 'unavailable')
+
     def test_api_json_reads_are_bounded_and_oversized_sync_preserves_cache(self):
         media = b'offline cached media'
         asset = self.asset(media)

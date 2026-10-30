@@ -17,7 +17,7 @@ public class PlayerAgentTest {
     @Rule public TemporaryFolder temp = new TemporaryFolder();
     private HttpServer server;
     private String origin;
-    private JSONObject response, lastRequest;
+    private JSONObject response, lastRequest, lastEnrollment;
     private String unauthorizedCode;
     private int status = 200;
     private int enrollmentStatus = 201;
@@ -39,6 +39,7 @@ public class PlayerAgentTest {
                 int code = 200;
                 if (path.equals("/api/player/enroll")) {
                     enrollments.incrementAndGet();
+                    lastEnrollment = new JSONObject(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                     code = enrollmentStatus;
                     body = (enrollmentBody == null ? "{\"id\":\"device\",\"token\":\"secret-token\",\"code\":\"ABC123\"}" : enrollmentBody).getBytes(StandardCharsets.UTF_8);
                 } else if (!"Bearer secret-token".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
@@ -78,6 +79,83 @@ public class PlayerAgentTest {
         assertFalse(first.snapshot().contains(origin));
         agent().tick();
         assertEquals(1, enrollments.get());
+    }
+
+    @Test public void enrollmentIncludesSiteAndKeepsIdentity() throws Exception {
+        PlayerAgent player = new PlayerAgent(temp.getRoot(), origin, "North TV", "0.15.1", "001");
+        player.tick();
+        assertEquals("001", lastEnrollment.getString("siteNumber"));
+        new PlayerAgent(temp.getRoot(), origin, "North TV", "0.15.1", "002").tick();
+        assertEquals(1, enrollments.get());
+        assertEquals("001", PlayerAgent.normalizeSiteNumber(" 001 "));
+        try { PlayerAgent.normalizeSiteNumber("not-a-site"); fail(); } catch (IllegalArgumentException expected) { }
+    }
+
+    @Test public void nullSitePreservesLegacyCacheWhenNewMediaFails() throws Exception {
+        PlayerAgent player = agent();
+        publish("legacy", PlayerAgent.sha256(image));
+        player.tick();
+        publish("failed", "0".repeat(64));
+        response.put("siteId", JSONObject.NULL);
+        player.tick();
+        assertEquals("legacy", new JSONObject(player.snapshot()).getJSONObject("manifest").getString("revision"));
+    }
+
+    @Test public void siteChangeClearsOldMetricsEvenIfNewMediaFails() throws Exception {
+        PlayerAgent player = agent();
+        publish("old", PlayerAgent.sha256(image));
+        response.put("siteId", "site-a").put("dataFeeds", new JSONObject().put("old-feed", new JSONObject().put("data", new JSONObject().put("completed", 99))));
+        player.tick();
+        assertTrue(player.snapshot().contains("old-feed"));
+        publish("new", "0".repeat(64));
+        response.put("siteId", "site-b");
+        player.tick();
+        JSONObject cleared = new JSONObject(player.snapshot());
+        assertEquals(0, cleared.getJSONObject("dataFeeds").length());
+        assertEquals("site-pending", cleared.getJSONObject("manifest").getString("revision"));
+        assertFalse(agent().snapshot().contains("old-feed"));
+    }
+
+    @Test public void transferRevisionRejectsDelayedRepliesAndAcknowledgesPersistedClear() throws Exception {
+        PlayerAgent player = agent();
+        publish("original", PlayerAgent.sha256(image));
+        response.put("siteId", "site-a").put("siteRevision", 1)
+                .put("dataFeeds", new JSONObject().put("old-feed", new JSONObject().put("data", new JSONObject().put("completed", 99))));
+        player.tick();
+        publish("destination", "0".repeat(64));
+        response.put("siteId", "site-b").put("siteRevision", 2);
+        player.tick();
+        PlayerAgent restarted = agent();
+        publish("delayed", PlayerAgent.sha256(image));
+        response.put("siteId", "site-a").put("siteRevision", 1)
+                .put("dataFeeds", new JSONObject().put("old-feed", new JSONObject().put("data", new JSONObject().put("completed", 99))));
+        restarted.tick();
+        assertEquals(2, lastRequest.getLong("siteAck"));
+        assertFalse(restarted.snapshot().contains("old-feed"));
+        assertEquals("site-pending", new JSONObject(restarted.snapshot()).getJSONObject("manifest").getString("revision"));
+        response.put("siteRevision", 2);
+        restarted.tick();
+        assertFalse(restarted.snapshot().contains("old-feed"));
+        response.remove("siteRevision");
+        restarted.tick();
+        assertFalse(restarted.snapshot().contains("old-feed"));
+        response.put("siteId", "site-b").put("siteRevision", 2).remove("dataFeeds");
+        restarted.tick();
+        assertEquals("delayed", new JSONObject(restarted.snapshot()).getJSONObject("manifest").getString("revision"));
+    }
+
+    @Test public void revokedMetricsClearBeforeReplacementMediaCompletes() throws Exception {
+        PlayerAgent player = agent();
+        publish("current", PlayerAgent.sha256(image));
+        response.put("dataFeeds", new JSONObject().put("feed", new JSONObject().put("status", "ready").put("data", new JSONObject().put("completed", 42))));
+        player.tick();
+        publish("next", "0".repeat(64));
+        response.put("dataFeeds", new JSONObject().put("feed", new JSONObject().put("status", "unavailable").put("data", JSONObject.NULL)));
+        player.tick();
+        JSONObject visible = new JSONObject(player.snapshot());
+        assertEquals("current", visible.getJSONObject("manifest").getString("revision"));
+        assertTrue(visible.getJSONObject("dataFeeds").getJSONObject("feed").isNull("data"));
+        assertTrue(new JSONObject(agent().snapshot()).getJSONObject("dataFeeds").getJSONObject("feed").isNull("data"));
     }
 
     @Test public void legacyEnrollment200StillPairs() throws Exception {

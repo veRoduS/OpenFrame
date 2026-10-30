@@ -8,6 +8,8 @@ This guide is a complete handoff for a developer or AI building an integration. 
 
 OpenFrame supports **application API keys** that automatically create feeds and metrics on first push, and existing **feed-specific API keys** for fixed-schema integrations. Both are credentials for external applications. They work without a browser session or OpenFrame password. Send a key in the `Authorization: Bearer YOUR_API_KEY` header. The management API retains its existing `/tokens` routes and `token` response field for compatibility; these tokens are the API keys shown in Settings. Existing keys continue working. From server 0.22.2, Settings and the session-based feed setup and key-management endpoints require an admin account; users with viewing access can still use shared feeds in slide widgets.
 
+For an existing integration, start with the [API update and migration bulletin](api-update-multi-site.md).
+
 ## Application keys: automatic metric creation
 
 For a concise integration handoff, use the [application metrics API one-pager](data-feeds-api-one-pager.md).
@@ -24,7 +26,7 @@ curl --fail-with-body --request POST \
   --data '{"completed":42,"goal":100}'
 ```
 
-The first successful request creates a reusable feed named after the application and source, defines `completed` and `goal` as Number fields, and returns HTTP **201**. Later requests to the same name with any key belonging to the same application return **200** and update the same feed ID. The application can choose other feed names with the same key. Different applications using `production` get separate feeds; keys cannot read snapshots, modify another application's feeds, manage sharing, or act as an OpenFrame login. Existing `ofd_` feed keys cannot use this endpoint; application keys use the `ofa_` prefix.
+The first successful request creates a reusable feed named after the application and source, defines `completed` and `goal` as Number fields, and returns HTTP **201**. Later requests to the same name with any key belonging to the same application and site return **200** and update the same feed ID. The application can choose other feed names with the same key. Different applications or sites using `production` get separate feeds; keys cannot read snapshots, modify another application's feeds, manage sharing, or act as an OpenFrame login. Existing `ofd_` feed keys cannot use this endpoint; application keys use the `ofa_` prefix.
 
 ```json
 {
@@ -40,7 +42,7 @@ The first successful request creates a reusable feed named after the application
 
 A later push such as `{"completed":43,"orders":12}` updates `completed`, creates `orders`, and keeps `goal` at 100. This endpoint **merges named metrics**; it does not require a complete snapshot. New numeric values or null create Number fields. Nonempty arrays of `{time,value}` create Time series fields; nonempty arrays of `{label,value}` create Categories fields. Once created, a metric's type cannot change. Null clears an existing number; an empty array clears an existing chart. New chart fields need a nonempty first array so their type can be identified. All existing value bounds and chart validation below still apply.
 
-Feed names are case-sensitive, 1–80 characters, starting with a letter or number and containing only letters, numbers, underscores or hyphens. Metric keys use the existing 1–40 character field-key rules below. Each request has 1–20 metrics; each feed may accumulate at most 20 fields. Use another feed name for an additional set of metrics. Payloads remain limited to **32 KiB**. The **60 ingestion calls per minute per application** budget is shared by all its keys and feed names, including parsed requests with invalid metric values; applications have independent budgets. Writes validate the entire request before committing feed creation, fields, values, ownership, source mapping and key usage together. Invalid requests retain the previous data and schema.
+Feed names are case-sensitive, 1–80 characters, starting with a letter or number and containing only letters, numbers, underscores or hyphens. Metric keys use the existing 1–40 character field-key rules below. Each request has 1–20 metrics; each feed may accumulate at most 20 fields. Use another feed name for an additional set of metrics. Payloads remain limited to **32 KiB**. The **60 ingestion calls per minute per application/site** budget is shared by its keys and feed names, including parsed requests with invalid metric values. An application also has a **600/minute aggregate ceiling**. Saturated-site rejections do not consume other sites’ aggregate allowance. Unassigned keys share a separate 60/minute scope. Writes validate the entire request before committing feed creation, fields, values, ownership, source mapping and key usage together. Invalid requests retain the previous data and schema.
 
 The server supports up to 50 registered applications, 20 active keys per application and 200 total feeds across both modes. Expired/revoked key metadata is pruned when generating another key. Application keys expire in 1–365 days and can be revoked under **Manage keys**. The issuing account must remain an active admin: disabling, deleting or demoting it stops writes. User deletion also explicitly revokes its application keys. Rotating a key within the same application preserves its feed names and IDs.
 
@@ -191,3 +193,54 @@ python3 push-data-feed.py snapshot.json
 ```
 
 The script validates basic configuration, uses a 10-second timeout, honors rate-limit delays, and retries connection/5xx failures up to three times. It never prints the token. For an AI handoff, include this guide and OpenAPI JSON plus your field definitions and intended update schedule; supply credentials separately.
+
+## Sites: initial storage support
+
+Site support introduced in 0.29.1 is extended by server **0.29.2** and player
+**0.15.1**. See [Sites and shared metric layouts](sites.md) for setup, converting
+existing integrations, player upgrades, permissions, and rollout limits.
+
+Feed identity is `(applicationId, siteId, sourceKey)`. Ingestion derives the site
+from the authorized application key; metric bodies and source URLs are unchanged.
+A rotated key for the same application/site updates the same feed IDs. Keys for
+different sites cannot overwrite each other's values. Application ingestion uses a shared 60/minute budget per application/site and a
+600/minute application ceiling. Saturated-site rejections do not consume the
+aggregate budget. Feed and key count limits remain unchanged. Site numbers use 1–20 digits and retain leading zeros.
+
+Administrative endpoints (administrator session required):
+
+- `GET /api/sites`: list sites, including archived sites.
+- `POST /api/sites`: `{ "siteNumber": "001", "name": "North" }`.
+- `PATCH /api/sites/{id}`: optional `name` and/or `archived` boolean.
+- `POST /api/data-feeds/applications/{id}/tokens`: existing key request plus
+  `siteId` (an internal UUID). New keys require an active site once sites exist.
+- `POST /api/data-feeds/applications/{id}/assign-site`: `{ "siteId": "UUID" }`.
+  Atomically assigns all unassigned keys and sources for that application,
+  preserving hashes, feed IDs, data, grants, and published references. Returns
+  `assignedFeeds` and `assignedKeys` counts. Repeated assignment is harmless.
+  A destination source collision returns `409 SITE_SOURCE_CONFLICT` and changes
+  nothing. Already site-bound integrations cannot be moved through this operation.
+
+Existing integrations remain in a separate Unassigned namespace until explicitly
+assigned. Feed-specific keys inherit the site's assignment from their feed.
+Archiving a site prevents ingestion through either credential type, retains data,
+and does not blank already approved screens. Errors include `SITE_REQUIRED`,
+`INVALID_SITE`, `SITE_ARCHIVED`, and `SITE_SOURCE_CONFLICT`.
+
+Shared widgets retain an example `feedId` for authoring and optionally store
+`siteBinding: { applicationId, sourceKey }`. The server resolves that source to the
+approved screen's site, validates field types and permissions, and emits a
+concrete `feedId` and only the permitted values. Missing local data is unavailable,
+with no cross-site fallback. Existing fixed-feed bindings stay fixed. Preview
+requests can select `siteId` and use the same resolution and field checks.
+
+The source-mapping migration is transactional and repeatable. Back up before
+upgrading; downgrade only with the matching pre-upgrade database and server.
+
+
+Server 0.29.3 adds manual feed site assignment (`POST /api/data-feeds/{id}/assign-site`),
+conditional `siteId` on new manual feed creation, optional site `accessGroupId`,
+and paginated administrator-only site history. Existing manual feed IDs, snapshots,
+fields and token hashes are preserved by first assignment; feed sites are immutable
+afterward. A site access group adds a membership gate to existing resource rights.
+See [site transfers, permissions, history and saved views](sites.md) for operation.

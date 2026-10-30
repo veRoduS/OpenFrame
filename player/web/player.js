@@ -13,6 +13,8 @@ const previewVersion =
   new URLSearchParams(location.search).get('version') === 'published'
     ? '?version=published'
     : '';
+const previewSite = new URLSearchParams(location.search).get('siteId');
+const previewQuery = `${previewVersion || '?version=draft'}${previewSite ? `&siteId=${encodeURIComponent(previewSite)}` : ''}`;
 const connectionStatus = document.getElementById('connection-status');
 let suspended = document.hidden,
   lastState = null,
@@ -102,7 +104,7 @@ async function poll() {
   try {
     const response = await fetch(
       preview
-        ? `/api/preview/${encodeURIComponent(preview)}${previewVersion}`
+        ? `/api/preview/${encodeURIComponent(preview)}${previewQuery}`
         : '/local/state',
       { cache: 'no-store', signal: abort.signal },
     );

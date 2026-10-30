@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import contract from './data-feeds.openapi.json' with { type: 'json' };
+import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
 import { mountDataFeedApplications } from './data-feed-applications.mjs';
 
 export const fieldSchema = z
@@ -14,6 +15,7 @@ export const feedSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     managingGroupId: z.uuid().nullable().optional(),
+    siteId: z.uuid().nullable().optional(),
     fields: z
       .array(fieldSchema)
       .min(1)
@@ -59,6 +61,13 @@ export const dataWidgetSchema = z
   .object({
     mode: z.enum(['metric', 'progress', 'line', 'bar']).default('metric'),
     feedId: z.uuid().nullable().default(null),
+    siteBinding: z
+      .object({
+        applicationId: z.uuid(),
+        sourceKey: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/),
+      })
+      .strict()
+      .optional(),
     field: z.string().max(40).default(''),
     title: z.string().max(80).default(''),
     unit: z.string().max(20).default(''),
@@ -179,7 +188,14 @@ export function mountDataFeeds(
       .get(id);
     return row ? JSON.parse(row.body) : null;
   };
-  const publicFeed = (feed) => publicResource('data-feed', feedMetadata(feed));
+  const publicFeed = (feed) =>
+    publicResource('data-feed', {
+      ...feedMetadata(feed),
+      siteNumber: feed.siteId
+        ? db.prepare('SELECT siteNumber FROM sites WHERE id=?').get(feed.siteId)
+            ?.siteNumber || null
+        : null,
+    });
   mountDataFeedApplications(app, {
     db,
     accounts,
@@ -191,10 +207,22 @@ export function mountDataFeeds(
     values,
   });
   const tokenFields = 'id,feedId,name,createdAt,expiresAt,revokedAt,lastUsedAt';
+  const references = (slide, id) => {
+    const feed = raw(id);
+    return slide.layers.some(
+      (layer) =>
+        layer.type === 'data' &&
+        (layer.data?.feedId === id ||
+          (feed?.applicationId &&
+            layer.data?.siteBinding?.applicationId === feed.applicationId &&
+            layer.data.siteBinding.sourceKey === feed.sourceKey)),
+    );
+  };
   const inUse = (id) =>
-    allRecords('slide').some((s) =>
-      s.layers.some((l) => l.type === 'data' && l.data?.feedId === id),
-    ) || allRecords('playlist').some((p) => feedIds(p.published).includes(id));
+    allRecords('slide').some((slide) => references(slide, id)) ||
+    allRecords('playlist').some((playlist) =>
+      playlist.published?.items?.some((item) => references(item.slide, id)),
+    );
   function validateLayers(slide, user) {
     for (const layer of slide.layers.filter((l) => l.type === 'data')) {
       const config = layer.data;
@@ -211,60 +239,116 @@ export function mountDataFeeds(
           'FEED_ACCESS_REQUIRED',
           'Viewing access to the data feed is required',
         );
-      const expected =
-        config.mode === 'line'
-          ? 'series'
-          : config.mode === 'bar'
-            ? 'categories'
-            : 'number';
       if (
-        !feed.fields.some((f) => f.key === config.field && f.type === expected)
+        config.siteBinding &&
+        (!feed.siteId ||
+          feed.applicationId !== config.siteBinding.applicationId ||
+          feed.sourceKey !== config.siteBinding.sourceKey)
       )
         throw fail(
           400,
           'INVALID_BINDING',
-          `Choose a ${expected} field for the data widget`,
+          'Site binding must match a site-bound application feed',
         );
-      if (
-        config.targetField &&
-        !feed.fields.some(
-          (f) => f.key === config.targetField && f.type === 'number',
-        )
-      )
-        throw fail(
-          400,
-          'INVALID_BINDING',
-          'Progress target must reference a number field',
-        );
-      if (config.card?.style === 'split') {
-        if (
-          (config.card.badge === 'delta' || config.mode === 'metric') &&
-          config.card.deltaField &&
-          !feed.fields.some(
-            (f) => f.key === config.card.deltaField && f.type === 'number',
-          )
-        )
-          throw fail(
-            400,
-            'INVALID_BINDING',
-            'Card change must reference a number field in the selected feed',
-          );
-        if (
-          config.mode === 'bar' &&
-          config.card.rows === 'table' &&
-          config.card.rowDeltaField &&
-          !feed.fields.some(
-            (f) =>
-              f.key === config.card.rowDeltaField && f.type === 'categories',
-          )
-        )
-          throw fail(
-            400,
-            'INVALID_BINDING',
-            'Row changes must reference a categories field in the selected feed',
-          );
-      }
+      validateFields(config, feed);
     }
+  }
+  function validateFields(config, feed) {
+    const expected =
+      config.mode === 'line'
+        ? 'series'
+        : config.mode === 'bar'
+          ? 'categories'
+          : 'number';
+    if (!feed.fields.some((f) => f.key === config.field && f.type === expected))
+      throw fail(
+        400,
+        'INVALID_BINDING',
+        `Choose a ${expected} field for the data widget`,
+      );
+    if (
+      config.targetField &&
+      !feed.fields.some(
+        (f) => f.key === config.targetField && f.type === 'number',
+      )
+    )
+      throw fail(
+        400,
+        'INVALID_BINDING',
+        'Progress target must reference a number field',
+      );
+    if (config.card?.style === 'split') {
+      if (
+        (config.card.badge === 'delta' || config.mode === 'metric') &&
+        config.card.deltaField &&
+        !feed.fields.some(
+          (f) => f.key === config.card.deltaField && f.type === 'number',
+        )
+      )
+        throw fail(
+          400,
+          'INVALID_BINDING',
+          'Card change must reference a number field in the selected feed',
+        );
+      if (
+        config.mode === 'bar' &&
+        config.card.rows === 'table' &&
+        config.card.rowDeltaField &&
+        !feed.fields.some(
+          (f) => f.key === config.card.rowDeltaField && f.type === 'categories',
+        )
+      )
+        throw fail(
+          400,
+          'INVALID_BINDING',
+          'Row changes must reference a categories field in the selected feed',
+        );
+    }
+  }
+  function resolveSites(manifest, siteId, visible = () => true) {
+    if (!manifest) return manifest;
+    const resolved = structuredClone(manifest);
+    const bindings = [];
+    for (const item of resolved.items || [])
+      for (const layer of item.slide?.layers || []) {
+        const config = layer.type === 'data' && layer.data;
+        if (!config?.siteBinding) continue;
+        const { applicationId, sourceKey } = config.siteBinding;
+        const mapping =
+          siteId &&
+          db
+            .prepare(
+              'SELECT feedId FROM data_feed_application_sources WHERE applicationId=? AND siteId=? AND sourceKey=?',
+            )
+            .get(applicationId, siteId, sourceKey);
+        const feed = mapping && raw(mapping.feedId);
+        let available =
+          !!feed &&
+          feed.siteId === siteId &&
+          feed.applicationId === applicationId &&
+          feed.sourceKey === sourceKey &&
+          visible(feed.id);
+        if (available) {
+          try {
+            validateFields(config, feed);
+          } catch {
+            available = false;
+          }
+        }
+        const missing = digest(
+          JSON.stringify([siteId, applicationId, sourceKey, config.field]),
+        );
+        config.feedId = available
+          ? feed.id
+          : `${missing.slice(0, 8)}-${missing.slice(8, 12)}-4${missing.slice(13, 16)}-a${missing.slice(17, 20)}-${missing.slice(20, 32)}`;
+        bindings.push([layer.id, config.feedId]);
+        delete config.siteBinding;
+      }
+    if (bindings.length)
+      resolved.revision = digest(
+        JSON.stringify([manifest.revision, siteId || null, bindings]),
+      );
+    return resolved;
   }
   function snapshots(manifest, visible = () => true) {
     return Object.fromEntries(
@@ -304,17 +388,65 @@ export function mountDataFeeds(
   );
   app.post('/api/data-feeds', administrator, (req, res) => {
     const input = feedSchema.parse(req.body);
+    if (input.siteId) requireActiveSite(db, input.siteId);
+    else if (db.prepare('SELECT COUNT(*) AS n FROM sites').get().n)
+      throw fail(400, 'SITE_REQUIRED', 'Choose a site for this feed');
     if (allRecords('data-feed').length >= 200)
       throw fail(409, 'FEED_LIMIT', 'Maximum of 200 feeds reached');
-    const feed = put('data-feed', {
-      ...input,
-      id: randomUUID(),
-      createdAt: new Date().toISOString(),
-      updatedAt: null,
-      revision: null,
-      data: null,
+    const feed = siteTransaction(db, () => {
+      const saved = put('data-feed', {
+        ...input,
+        siteId: input.siteId || null,
+        id: randomUUID(),
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+        revision: null,
+        data: null,
+      });
+      auditSite(
+        db,
+        req.user,
+        'feed-created',
+        'data-feed',
+        saved.id,
+        null,
+        saved.siteId,
+      );
+      return saved;
     });
     res.status(201).json(publicFeed(feed));
+  });
+  app.post('/api/data-feeds/:id/assign-site', administrator, (req, res) => {
+    const feed = requireEditable('data-feed', req.params.id);
+    const { siteId } = z.object({ siteId: z.uuid() }).strict().parse(req.body);
+    requireActiveSite(db, siteId);
+    if (feed.applicationId)
+      throw fail(
+        409,
+        'APPLICATION_FEED',
+        'Assign application feeds through the application key dialog',
+      );
+    if (feed.siteId && feed.siteId !== siteId)
+      throw fail(
+        409,
+        'IMMUTABLE_SITE',
+        'Feed sites cannot be changed; create a new feed for another location',
+      );
+    const saved = siteTransaction(db, () => {
+      const next = put('data-feed', { ...feed, siteId });
+      if (!feed.siteId)
+        auditSite(
+          db,
+          req.user,
+          'feed-site-assigned',
+          'data-feed',
+          feed.id,
+          null,
+          siteId,
+        );
+      return next;
+    });
+    res.json(publicFeed(saved));
   });
   app.get('/api/data-feeds/:id', admin, (req, res) =>
     res.json(publicFeed(requireRecord('data-feed', req.params.id))),
@@ -322,6 +454,12 @@ export function mountDataFeeds(
   app.put('/api/data-feeds/:id', administrator, (req, res) => {
     const feed = requireEditable('data-feed', req.params.id);
     const input = feedSchema.parse(req.body);
+    if (input.siteId !== undefined && input.siteId !== (feed.siteId || null))
+      throw fail(
+        409,
+        'IMMUTABLE_SITE',
+        'Use the site assignment action for an unassigned feed',
+      );
     if (JSON.stringify(input.fields) !== JSON.stringify(feed.fields))
       throw fail(
         409,
@@ -384,7 +522,8 @@ export function mountDataFeeds(
     );
   });
   app.post('/api/data-feeds/:id/tokens', administrator, (req, res) => {
-    requireEditable('data-feed', req.params.id);
+    const feed = requireEditable('data-feed', req.params.id);
+    if (feed.siteId) requireActiveSite(db, feed.siteId);
     const input = z
       .object({
         name: z.string().trim().min(1).max(80),
@@ -411,17 +550,28 @@ export function mountDataFeeds(
     ).run(req.params.id, now);
     const token = `ofd_${randomBytes(32).toString('base64url')}`;
     const id = randomUUID();
-    db.prepare(
-      'INSERT INTO data_feed_tokens VALUES (?,?,?,?,?,?,?,NULL,NULL)',
-    ).run(
-      id,
-      req.params.id,
-      digest(token),
-      req.user.id,
-      input.name,
-      now,
-      new Date(Date.now() + input.expiresInDays * 86400000).toISOString(),
-    );
+    siteTransaction(db, () => {
+      db.prepare(
+        'INSERT INTO data_feed_tokens VALUES (?,?,?,?,?,?,?,NULL,NULL)',
+      ).run(
+        id,
+        req.params.id,
+        digest(token),
+        req.user.id,
+        input.name,
+        now,
+        new Date(Date.now() + input.expiresInDays * 86400000).toISOString(),
+      );
+      auditSite(
+        db,
+        req.user,
+        'feed-key-created',
+        'feed-key',
+        id,
+        null,
+        raw(req.params.id).siteId || null,
+      );
+    });
     res.status(201).json({
       ...db
         .prepare(`SELECT ${tokenFields} FROM data_feed_tokens WHERE id=?`)
@@ -433,16 +583,27 @@ export function mountDataFeeds(
     '/api/data-feeds/:id/tokens/:tokenId',
     administrator,
     (req, res) => {
-      requireEditable('data-feed', req.params.id);
-      if (
-        !db
-          .prepare(
-            'UPDATE data_feed_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE id=? AND feedId=?',
-          )
-          .run(new Date().toISOString(), req.params.tokenId, req.params.id)
-          .changes
-      )
-        throw fail(404, 'NOT_FOUND', 'Token not found');
+      const feed = requireEditable('data-feed', req.params.id);
+      siteTransaction(db, () => {
+        if (
+          !db
+            .prepare(
+              'UPDATE data_feed_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE id=? AND feedId=?',
+            )
+            .run(new Date().toISOString(), req.params.tokenId, req.params.id)
+            .changes
+        )
+          throw fail(404, 'NOT_FOUND', 'Token not found');
+        auditSite(
+          db,
+          req.user,
+          'feed-key-revoked',
+          'feed-key',
+          req.params.tokenId,
+          feed.siteId || null,
+          feed.siteId || null,
+        );
+      });
       res.json({ ok: true });
     },
   );
@@ -472,6 +633,7 @@ export function mountDataFeeds(
         'INVALID_TOKEN',
         'Invalid, expired, revoked, or unauthorized feed token',
       );
+    if (feed.siteId) requireActiveSite(db, feed.siteId);
     if (!req.is('application/json'))
       throw fail(
         415,
@@ -518,5 +680,5 @@ export function mountDataFeeds(
     }
     res.json({ feedId: feed.id, revision, updatedAt });
   });
-  return { snapshots, validateLayers };
+  return { snapshots, validateLayers, resolveSites };
 }

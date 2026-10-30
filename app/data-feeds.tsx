@@ -1,3 +1,4 @@
+import { useSiteFilter } from './hooks/use-site-filter';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DataFeedApplications } from './data-feed-applications';
 import {
@@ -78,18 +79,25 @@ function exampleRequest(feed: DataFeed, url: string) {
 }
 export function DataFeeds({
   feeds,
+  sites = [],
+  userId,
   groups = [],
   isAdmin,
   onRefresh,
   onAccess,
 }: {
   feeds: DataFeed[];
+  sites?: Library['sites'];
+  userId?: string;
   groups?: Library['groups'];
   isAdmin: boolean;
   onRefresh: () => Promise<void>;
   onAccess: (resource: SharedResource) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [filterSite, setFilterSite] = useSiteFilter('metrics', userId, sites);
+  const [createSite, setCreateSite] = useState('');
+  const [legacySite, setLegacySite] = useState('');
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [group, setGroup] = useState('');
@@ -212,6 +220,22 @@ export function DataFeeds({
       {isAdmin && <DataFeedApplications groups={groups} />}
       <div className="data-feed-toolbar">
         <label>
+          Site
+          <select
+            aria-label="Filter metrics by site"
+            value={filterSite}
+            onChange={(event) => setFilterSite(event.target.value)}
+          >
+            <option value="">All sites</option>
+            <option value="unassigned">Unassigned</option>
+            {sites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.siteNumber} · {site.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Find a feed
           <input
             type="search"
@@ -247,6 +271,13 @@ export function DataFeeds({
       {!!feeds.length && (
         <div className="data-feed-list">
           {feeds
+            .filter(
+              (feed) =>
+                !filterSite ||
+                (filterSite === 'unassigned'
+                  ? !feed.siteId
+                  : feed.siteId === filterSite),
+            )
             .filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
             .map((feed) => (
               <article key={feed.id}>
@@ -254,12 +285,16 @@ export function DataFeeds({
                   className="data-feed-open"
                   onClick={() => {
                     setSecret('');
+                    setLegacySite('');
                     setSelected(feed);
                   }}
                 >
                   <Database size={22} />
                   <span>
-                    <strong>{feed.name}</strong>
+                    <strong>
+                      {feed.name}
+                      {feed.siteNumber ? ` · Site ${feed.siteNumber}` : ''}
+                    </strong>
                     <small>
                       {feed.fields.length}{' '}
                       {feed.fields.length === 1 ? 'field' : 'fields'} ·{' '}
@@ -360,6 +395,7 @@ export function DataFeeds({
                 await api('/api/data-feeds', 'POST', {
                   name,
                   managingGroupId: group || null,
+                  siteId: createSite || null,
                   fields,
                 });
                 await onRefresh();
@@ -368,6 +404,26 @@ export function DataFeeds({
             }}
           >
             <fieldset disabled={busy}>
+              <label>
+                Site
+                <select
+                  aria-label="Feed site"
+                  value={createSite}
+                  required={sites.length > 0}
+                  onChange={(event) => setCreateSite(event.target.value)}
+                >
+                  <option value="">
+                    {sites.length ? 'Choose a site' : 'Unassigned'}
+                  </option>
+                  {sites
+                    .filter((site) => !site.archivedAt)
+                    .map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.siteNumber} · {site.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
               <label>
                 Name
                 <input
@@ -522,6 +578,56 @@ export function DataFeeds({
               <p className="muted">
                 Feed ID <code className="data-feed-id">{selected.id}</code>
               </p>
+              {selected.siteNumber && <p>Site {selected.siteNumber}</p>}
+              {isAdmin &&
+                !selected.siteId &&
+                !selected.applicationId &&
+                !!sites.length && (
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void run(async () => {
+                        const next = await api<DataFeed>(
+                          `${base}/assign-site`,
+                          'POST',
+                          { siteId: legacySite },
+                        );
+                        setSelected(next);
+                        await onRefresh();
+                        setLegacySite('');
+                      });
+                    }}
+                  >
+                    <fieldset disabled={busy}>
+                      <p>
+                        Assign this existing feed to its original location. Feed
+                        ID, API keys, values, and published bindings are
+                        preserved.
+                      </p>
+                      <label>
+                        Original site
+                        <select
+                          aria-label="Original feed site"
+                          value={legacySite}
+                          required
+                          onChange={(event) =>
+                            setLegacySite(event.target.value)
+                          }
+                        >
+                          <option value="">Choose a site</option>
+                          {sites
+                            .filter((site) => !site.archivedAt)
+                            .map((site) => (
+                              <option key={site.id} value={site.id}>
+                                {site.siteNumber} · {site.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <button>Assign feed site</button>
+                    </fieldset>
+                  </form>
+                )}
               {!selected.readOnly && (
                 <form
                   onSubmit={(event) => {
@@ -939,6 +1045,13 @@ export function DataWidgetOptions({
               const f = feeds.find((v) => v.id === e.target.value);
               patch({
                 feedId: f?.id || null,
+                siteBinding:
+                  config.siteBinding &&
+                  f?.applicationId &&
+                  f.sourceKey &&
+                  f.siteId
+                    ? { applicationId: f.applicationId, sourceKey: f.sourceKey }
+                    : undefined,
                 field: f?.fields.find((v) => v.type === expected)?.key || '',
                 targetField: '',
                 ...(config.card
@@ -958,10 +1071,37 @@ export function DataWidgetOptions({
             {feeds.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}
+                {f.siteNumber ? ` · Site ${f.siteNumber}` : ''}
               </option>
             ))}
           </select>
         </label>
+        {feed?.siteId && feed.applicationId && feed.sourceKey && (
+          <label className="data-feed-checkbox">
+            <input
+              type="checkbox"
+              checked={!!config.siteBinding}
+              onChange={(event) =>
+                patch({
+                  siteBinding: event.target.checked
+                    ? {
+                        applicationId: feed.applicationId!,
+                        sourceKey: feed.sourceKey!,
+                      }
+                    : undefined,
+                })
+              }
+            />
+            Use each screen’s site metrics
+          </label>
+        )}
+        {config.siteBinding && (
+          <p className="muted">
+            The selected feed supplies the example fields. Published screens use
+            their approved site’s matching source. Missing local metrics show as
+            unavailable.
+          </p>
+        )}
         <label>
           Value field
           <select

@@ -73,8 +73,8 @@ All JSON responses use UTF-8. Errors are `{ "error": "message" }` with an approp
 | PUT / DELETE | `/api/playlists/:id` | Replace draft/delete playlist; deletion blocked while assigned |
 | POST | `/api/playlists/:id/publish` | Snapshot current slides; requires nonempty playlist. Later saves to an included slide refresh its published copy and referenced asset list automatically; playlist structure and settings still require republishing |
 | GET | `/api/preview/:id` | Renderable saved-draft manifest for administrator preview |
-| POST | `/api/player/enroll` | Enroll `{name}`; returns `{id,token,code}` |
-| POST | `/api/devices/:id/approve` | Approve by matching `{code}` |
+| POST | `/api/player/enroll` | Enroll `{name,siteNumber?}`; returns `{id,token,code}` |
+| POST | `/api/devices/:id/approve` | Approve by matching `{code}` and selecting `siteId` once sites exist |
 | PUT | `/api/devices/:id` | Set `{name,playlistId,blank,rotation}`; playlistId may be null |
 | POST | `/api/devices/:id/command` | Queue `{type:"refresh"}` or `{type:"reboot"}` |
 | DELETE | `/api/devices/:id` | Revoke and remove device |
@@ -193,3 +193,75 @@ Library and playlist responses include `publicationState: "draft" | "published" 
 `GET /api/preview/:id` previews the saved draft. `?version=published` previews the actual publication and returns 404 if none exists. Both require normal playlist viewing access. The browser player preview accepts `version=published`; normal player synchronization is unchanged.
 
 Generated text layers may carry `starterText:true` only for the exact initial string `Something worth\nsharing.`. Editing the text or omitting its marker permanently removes the marker for that existing layer. Publishing removes untouched marked layers from the snapshot and from source slides the publisher can edit, in one transaction; source slides with only View access are retained. Draft previews never trigger cleanup. The marker is not sent to players. Existing unmarked layers are never inferred to be starters.
+
+
+## Site assignment and shared metrics
+
+See [Sites](sites.md) and the [data-feed API](data-feeds-api.md#sites-initial-storage-support).
+`POST /api/devices/:id/site` accepts `{siteId}` for an approved Unassigned screen
+(administrator only). Its last heartbeat must identify player 0.15.1 or newer.
+Already assigned screens use the reviewed transfer endpoint; this first-assignment
+endpoint, pairing, normal device updates, and heartbeat claims cannot move them.
+
+Enrollment records the requested `siteNumber` separately from the approved site.
+Unknown/archived site numbers fail; omitting the number supports older clients.
+Approval accepts `{code,siteId}` and validates an active site. Approved sync
+responses include `siteId` and `siteNumber`. Site identifiers are not credentials.
+`GET /api/library` includes the sites associated with visible feeds/screens;
+administrators see all sites. Server 0.29.5 also includes active sites whose
+configured access group (or subgroups) the signed-in user belongs to, plus
+pending screens requesting those sites. Library sites and devices include a
+`canApprove` boolean for the current user; this does not grant general access
+to edit pending screens.
+
+`POST /api/devices/:id/approve` accepts a signed-in store member as well as an
+administrator. A non-admin must be a current member of the requested site's
+configured access group or a descendant group, supply the matching pairing
+code, and approve only that requested site. Omitting `siteId` selects that
+requested site for members. Wrong store/missing membership returns 403; an
+already approved screen returns 409 for members. Sites without access groups
+and enrollments without site numbers remain administrator-only. Member approval
+atomically sets the site, shares the screen with the store access group and its
+subgroups, and records the acting user in site history without assigning personal
+ownership to that user. Content/feed
+permissions remain separate; transfers and first assignment of an already
+approved Unassigned screen remain administrator-only.
+
+Data widget authoring optionally accepts `siteBinding: {applicationId,sourceKey}`
+inside `layer.data`, along with an example `feedId`. The server resolves that
+binding for each authenticated screen before sending the manifest. Its effective
+revision incorporates site and resolved IDs, not metric values. Preview requests
+accept `?siteId=UUID`; the selected site and existing feed permissions constrain
+snapshots. A missing or incompatible local feed is explicitly unavailable.
+
+
+## Reviewed site transfers and history (0.29.3 / 0.15.2)
+
+- `GET /api/devices/:id/site-preview?siteId=UUID` (administrator): returns old/new
+  sites, `issues`, `detachPlaylist`, resulting playlist ID, removed-share count,
+  last-known online status, and `reviewToken`. Requires an approved, assigned
+  screen reporting player 0.15.2+. A pending unconfirmed transfer blocks another.
+- `POST /api/devices/:id/transfer` (administrator): `{siteId,reviewToken}`. Rejects
+  stale reviews with 409. Atomically updates site/revision, resets screen ownership
+  to the acting administrator, removes old shares, cancels commands, and records
+  history. Shared content stays assigned; incompatible fixed-feed playlists are
+  detached. Does not move feed data or grant destination users access automatically.
+- Approved sync responses include integer `siteRevision`; upgraded players send
+  `siteAck` only after persisting the new scope and clearing the previous cache.
+  A future acknowledgement returns 400; older acknowledgements leave the transfer
+  pending. Public device metadata contains `siteTransfer` with `requestedAt` and
+  nullable `clearedAt`. The clearing event is recorded once for the exact revision.
+- `POST /api/data-feeds/:id/assign-site` (administrator): `{siteId}` assigns an
+  unassigned manual feed once, preserving keys/data/IDs. Application feeds use
+  their bulk application assignment. Reassigning an already scoped feed returns 409.
+- `GET /api/sites/audit?siteId=UUID&limit=50&before=CURSOR` (administrator): bounded,
+  descending event history with `entries` and nullable `nextCursor`. Limit is
+  1–100. Pass the returned cursor unchanged for older entries. No raw keys,
+  device tokens or metric snapshots are included.
+
+Site create/update accepts optional nullable `accessGroupId`. Configuring it
+requires non-admin users to belong to that group or its descendants as well as
+holding resource access. Parent/sibling groups and direct shares cannot bypass
+this boundary. The gate is applied to library listings, direct feed requests,
+previews, screen mutations/commands, and device feed audiences. Without an access
+group, existing resource-sharing rules remain in effect.

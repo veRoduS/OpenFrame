@@ -115,6 +115,13 @@ public final class PlayerActivity extends Activity {
         name.setSingleLine(true);
         name.setText(getPreferences(MODE_PRIVATE).getString("name", "Android TV"));
         layout.addView(name);
+        layout.addView(text("Site number (optional for existing single-site servers)", 16));
+        EditText site = new EditText(this);
+        site.setSingleLine(true);
+        site.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        site.setText(getPreferences(MODE_PRIVATE).getString("siteNumber", ""));
+        layout.addView(site);
+        layout.addView(text("A user from your store or an administrator confirms the site during pairing. Changing this field does not move an already paired screen.", 14));
         TextView error = text("", 16);
         Button connect = new Button(this);
         connect.setText("Connect and show pairing code");
@@ -122,9 +129,10 @@ public final class PlayerActivity extends Activity {
             try {
                 String origin = PlayerAgent.normalizeServer(server.getText().toString());
                 String screenName = name.getText().toString().trim();
+                String siteNumber = PlayerAgent.normalizeSiteNumber(site.getText().toString());
                 if (screenName.isEmpty() || screenName.length() > 100) throw new IllegalArgumentException("Use a screen name between 1 and 100 characters.");
                 Runnable save = () -> {
-                    getPreferences(MODE_PRIVATE).edit().putString("server", origin).putString("name", screenName).apply();
+                    getPreferences(MODE_PRIVATE).edit().putString("server", origin).putString("name", screenName).putString("siteNumber", siteNumber).apply();
                     startPlayer(origin, screenName);
                 };
                 if (origin.startsWith("http:")) {
@@ -158,9 +166,10 @@ public final class PlayerActivity extends Activity {
         int request = ++generation;
         setContentView(text("Opening OpenFrame…", 24));
         // Construct after any in-flight sync finishes, so changing settings cannot race identity/state writes.
+        String siteNumber = getPreferences(MODE_PRIVATE).getString("siteNumber", "");
         worker.execute(() -> {
             try {
-                PlayerAgent current = new PlayerAgent(new File(getFilesDir(), "players"), server, name, BuildConfig.VERSION_NAME);
+                PlayerAgent current = new PlayerAgent(new File(getFilesDir(), "players"), server, name, BuildConfig.VERSION_NAME, siteNumber);
                 runOnUiThread(() -> {
                     if (!isDestroyed() && request == generation) openPlayer(current);
                 });

@@ -2,6 +2,26 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.29.5] - 2026-10-30
+
+- Allow store access-group members to approve their store's pending screens
+
+## [0.29.4] - 2026-10-30
+
+- Add shareable developer API migration bulletin for site-scoped metrics and legacy ingestion methods
+
+## [0.29.3] - 2026-10-30
+
+- Add reviewed site transfers with cache acknowledgements, site access groups, audit history, legacy feed assignment, and per-site budgets
+
+## [0.29.2] - 2026-10-29
+
+- Add player site enrollment and approval, shared site-local metric layouts, and existing-integration assignment
+
+## [0.29.1] - 2026-10-29
+
+- Start multi-site support with site registry, site-bound application keys, and isolated metric source storage
+
 ## [0.29.0] - 2026-10-20
 
 - Preserve configured blue/navy headers, title and spark colors, and outer borders while circle rings alone show red/yellow/green goal status.
