@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.15.5] - 2026-10-30
+
+- Render forecast cards with full-width hourly rows and a compact layout for narrow cards
+
 ## [0.15.4] - 2026-10-30
 
 - Render up to 100 SMCC/category rows and row ranges with matching deltas

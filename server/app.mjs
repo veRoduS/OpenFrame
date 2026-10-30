@@ -1607,7 +1607,9 @@ export function createApp({
                   (layer) =>
                     ['shape', 'stocks'].includes(layer.type) ||
                     (layer.type === 'weather' &&
-                      layer.weather?.layout === 'vertical'),
+                      ['vertical', 'forecast-card'].includes(
+                        layer.weather?.layout,
+                      )),
                 ),
               )
             ? 3

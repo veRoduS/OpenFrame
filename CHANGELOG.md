@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.29.9] - 2026-10-30
+
+- Add a forecast card preset with full-width hourly weather rows
+
 ## [0.29.8] - 2026-10-30
 
 - Add fork slide skipping and parent-group slide sharing; remove image megapixel cap while preserving file-size limits

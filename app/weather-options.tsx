@@ -117,13 +117,25 @@ export function WeatherOptions({
           aria-label="Weather layout"
           value={config.layout || 'horizontal'}
           onChange={(event) =>
-            onChange({ layout: event.target.value as Config['layout'] })
+            onChange({
+              layout: event.target.value as Config['layout'],
+              ...(event.target.value === 'forecast-card'
+                ? { mode: 'six-hour' }
+                : {}),
+            })
           }
         >
           <option value="horizontal">Horizontal</option>
           <option value="vertical">Vertical</option>
+          <option value="forecast-card">Forecast card</option>
         </select>
       </label>
+      {config.layout === 'forecast-card' && (
+        <small>
+          Full-width hourly rows for a forecast card. Resize to fit your card;
+          Auto-size fills the available space.
+        </small>
+      )}
       {onFitSidebar && (
         <button type="button" onClick={onFitSidebar}>
           Fit right sidebar

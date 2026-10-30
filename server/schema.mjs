@@ -82,7 +82,9 @@ export const layerSchema = z
         longitude: z.number().min(-180).max(180).nullable(),
         unit: z.enum(['F', 'C']).default('F'),
         mode: z.enum(['current', 'six-hour']).default('current'),
-        layout: z.enum(['horizontal', 'vertical']).default('horizontal'),
+        layout: z
+          .enum(['horizontal', 'vertical', 'forecast-card'])
+          .default('horizontal'),
         zip: z
           .string()
           .regex(/^\d{5}$/)

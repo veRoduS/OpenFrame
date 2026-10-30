@@ -222,6 +222,20 @@ void test('weather schema and formatting cover units, missing data, stale and ex
   };
   assert.ok(layerSchema.safeParse(layer).success);
   assert.equal(layerSchema.parse(layer).weather.mode, 'current');
+  assert.equal(layerSchema.parse(layer).weather.layout, 'horizontal');
+  assert.equal(
+    layerSchema.parse({
+      ...layer,
+      weather: { ...config, layout: 'forecast-card' },
+    }).weather.layout,
+    'forecast-card',
+  );
+  assert.ok(
+    !layerSchema.safeParse({
+      ...layer,
+      weather: { ...config, layout: 'unknown' },
+    }).success,
+  );
   assert.ok(
     !layerSchema.safeParse({ ...layer, weather: { ...config, mode: 'weekly' } })
       .success,
@@ -283,51 +297,55 @@ function mockElement() {
   };
 }
 
-void test('weather widgets prepare without networking or timers and subscribe only while visible', async (t) => {
-  t.mock.method(Date, 'now', () => start);
-  const timers = new Set();
-  t.mock.method(globalThis, 'setTimeout', (fn) => {
-    timers.add(fn);
-    return fn;
+for (const layout of ['horizontal', 'forecast-card'])
+  void test(`weather ${layout} widgets prepare without networking or timers and subscribe only while visible`, async (t) => {
+    t.mock.method(Date, 'now', () => start);
+    const timers = new Set();
+    t.mock.method(globalThis, 'setTimeout', (fn) => {
+      timers.add(fn);
+      return fn;
+    });
+    t.mock.method(globalThis, 'clearTimeout', (id) => timers.delete(id));
+    setWeatherSnapshots({ [weatherKey(config)]: snapshot });
+    const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        createElement: mockElement,
+        createElementNS: mockElement,
+      },
+    });
+    t.after(() => {
+      if (oldDocument)
+        Object.defineProperty(globalThis, 'document', oldDocument);
+      else delete globalThis.document;
+    });
+    const element = {
+      dataset: {},
+      style: {},
+      textContent: '',
+      replaceChildren(...children) {
+        this.textContent = children.map((child) => child.textContent).join('');
+      },
+    };
+    const controller = widgets.get('weather')(element, {
+      weather: { ...config, layout },
+    });
+    await controller.ready;
+    assert.match(element.textContent, /72/);
+    assert.equal(timers.size, 0);
+    setWeatherSnapshots({});
+    assert.match(element.textContent, /72/);
+    controller.activate();
+    assert.match(element.textContent, /Waiting/);
+    assert.equal(timers.size, 1);
+    setWeatherSnapshots({ [weatherKey(config)]: snapshot });
+    assert.match(element.textContent, /72/);
+    controller.dispose();
+    assert.equal(timers.size, 0);
+    setWeatherSnapshots({});
+    assert.match(element.textContent, /72/);
   });
-  t.mock.method(globalThis, 'clearTimeout', (id) => timers.delete(id));
-  setWeatherSnapshots({ [weatherKey(config)]: snapshot });
-  const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: {
-      createElement: mockElement,
-      createElementNS: mockElement,
-    },
-  });
-  t.after(() => {
-    if (oldDocument) Object.defineProperty(globalThis, 'document', oldDocument);
-    else delete globalThis.document;
-  });
-  const element = {
-    dataset: {},
-    style: {},
-    textContent: '',
-    replaceChildren(...children) {
-      this.textContent = children.map((child) => child.textContent).join('');
-    },
-  };
-  const controller = widgets.get('weather')(element, { weather: config });
-  await controller.ready;
-  assert.match(element.textContent, /72/);
-  assert.equal(timers.size, 0);
-  setWeatherSnapshots({});
-  assert.match(element.textContent, /72/);
-  controller.activate();
-  assert.match(element.textContent, /Waiting/);
-  assert.equal(timers.size, 1);
-  setWeatherSnapshots({ [weatherKey(config)]: snapshot });
-  assert.match(element.textContent, /72/);
-  controller.dispose();
-  assert.equal(timers.size, 0);
-  setWeatherSnapshots({});
-  assert.match(element.textContent, /72/);
-});
 
 void test('observations and forecasts fail independently, reject null readings and use a second station', async (t) => {
   let time = start,

@@ -151,3 +151,13 @@ changes session authorization only. Removing the uploaded-image megapixel cap
 keeps the 15 MB file limit and existing 1920-pixel WebP optimization, so the
 player media format and resolution bounds are unchanged. No player source, sync
 contract, frame count or timer changes are included in this revision.
+
+Server **0.29.9** and player **0.15.5** add optional weather
+`layout:"forecast-card"` using the existing weather layer, snapshots and schema 3
+(or schemas 4/5 when other content requires them). Update players before using
+the card layout; earlier players fall back to their Horizontal layout and retain
+weather data. Existing Horizontal and Vertical publications are unchanged, and
+the new player accepts them and older servers. Earlier servers reject the new
+layout on authoring writes, so select Horizontal or Vertical before saving to a
+downgraded server. The shared renderer adds no requests, timers or subscriptions
+and keeps the one-visible/one-prepared-frame budget.

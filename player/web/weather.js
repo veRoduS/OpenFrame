@@ -63,7 +63,9 @@ export function weatherView(config, snapshot, now = Date.now()) {
   const unit = config?.unit === 'C' ? 'C' : 'F';
   const base = {
     name,
-    layout: config?.layout === 'vertical' ? 'vertical' : 'horizontal',
+    layout: ['vertical', 'forecast-card'].includes(config?.layout)
+      ? config.layout
+      : 'horizontal',
     source: 'National Weather Service',
     cells: [],
     detail: '',
@@ -230,6 +232,70 @@ export function renderWeather(element, view) {
     }
     return svg;
   };
+  if (view.layout === 'forecast-card') {
+    element.dataset.weatherLayout = 'forecast-card';
+    element.style.textAlign = 'left';
+    const heading = span(view.name, {
+      fontSize: '0.6em',
+      fontWeight: '700',
+      textAlign: 'center',
+      marginBottom: '0.35em',
+    });
+    const rows = span('');
+    rows.dataset.weatherRows = '';
+    const compact =
+      element.parentElement &&
+      element.parentElement.clientWidth <
+        element.parentElement.clientHeight * 0.65;
+    for (const cell of view.cells) {
+      const row = span('', {
+        display: 'grid',
+        gridTemplateColumns: compact
+          ? 'minmax(0, 0.85fr) 1.2em minmax(0, 1.7fr)'
+          : 'minmax(0, 0.85fr) 1.2em minmax(0, 1fr) minmax(0, 1.65fr)',
+        alignItems: 'center',
+        columnGap: '0.25em',
+        padding: '0.32em 0',
+        borderTop: '1px solid #80808040',
+      });
+      row.dataset.weatherRow = '';
+      const time = span(cell.label || 'Now', {
+        fontSize: compact ? '0.42em' : '0.5em',
+        fontWeight: '700',
+        whiteSpace: 'nowrap',
+      });
+      const symbol = icon(cell.icon);
+      Object.assign(symbol.style, { width: '1.2em', height: '1.2em' });
+      const temperature = span(cell.temperature, {
+        fontSize: '0.92em',
+        fontWeight: '700',
+        whiteSpace: 'nowrap',
+        fontVariantNumeric: 'tabular-nums',
+      });
+      temperature.dataset.weatherTemperature = '';
+      const condition = span(cell.description, {
+        fontSize: '0.42em',
+        minWidth: '0',
+      });
+      if (compact) {
+        const reading = span('', { minWidth: '0' });
+        reading.append(temperature, condition);
+        row.append(time, symbol, reading);
+      } else row.append(time, symbol, temperature, condition);
+      rows.append(row);
+    }
+    element.replaceChildren(
+      heading,
+      rows,
+      span(view.detail, { fontSize: '0.25em', marginTop: '0.6em' }),
+      span(view.source, {
+        fontSize: '0.23em',
+        marginTop: '0.2em',
+        opacity: '0.65',
+      }),
+    );
+    return;
+  }
   const content = span('');
   const six = view.mode === 'six-hour';
   const vertical = view.layout === 'vertical';

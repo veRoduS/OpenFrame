@@ -2,7 +2,7 @@
 
 ## Add weather to a slide
 
-1. Open a slide and select **Add weather widget** (the sun/cloud icon).
+1. Open a slide and select **Weather** (the sun/cloud icon), or **Forecast card** for six hourly rows that fill a card.
 2. Enter a five-digit **US ZIP code** and select the search button, or press Enter. Pick a location if the ZIP has multiple places. The lookup fills the location name and coordinates. You can still enter latitude/longitude manually and customize the name.
 3. Choose **Current weather** or **Next 6 hours** under **Weather display**, then Fahrenheit or Celsius.
 4. Place the widget and resize with its corner handles. Typography, color, alignment, and auto-size work like other widgets. Save the slide and publish its playlist. Weather then updates without republishing.
@@ -16,6 +16,31 @@ No API key or subscription is needed. Weather coverage is limited to locations s
 - **Current weather** uses a nearby reporting station's latest temperature and condition, with its observation age. It is not necessarily a live measurement at the exact ZIP centroid. The server tries up to two NWS-listed stations when readings are missing or old. Null temperatures are not treated as zero. If there has never been a usable observation, an hourly forecast may be displayed instead, explicitly labeled as a forecast with its fetch age and an observation-unavailable note.
 - **Next 6 hours** shows the next six hourly forecast start times after now, through six hours ahead: time, temperature, condition, and icon for each. Times use the weather location's timezone, not the player's. The forecast's own offset is the fallback for older cached data. Missing hours produce a labeled partial forecast; hours outside that window are not substituted. Expired windows show unavailable.
 - Icons cover sun/clear skies, night, partly/scattered/few clouds, mostly cloudy/overcast, cloud, drizzle, rain, heavy rain, thunderstorms, snow, freezing/mixed precipitation/hail, fog/mist, haze/smoke/dust, wind, and tornado conditions. Similar conditions share an icon family. Text always accompanies the symbol. Icons use bundled Lucide vector geometry, not remote NWS image URLs. They remain sharp when resized and render offline without image downloads.
+
+## Forecast card layout
+
+In server **0.29.9**, select **Widgets → Forecast card** to insert a six-hour
+forecast with Auto-size enabled. Place it inside your existing card body and
+resize the widget to that area. It uses the slide's existing text color and
+transparent background, so the card border and header can stay in your template.
+
+Each hour fills a row with its time, icon, large temperature and condition.
+Narrow cards place the condition below the temperature. The location appears
+above the rows; forecast freshness and NWS attribution remain below. Partial,
+cached and unavailable forecasts keep their status labels. Auto-size fits the
+text to the available width and height; turn it off to use a fixed font size.
+
+Existing weather widgets can use this presentation by selecting
+**Weather layout → Forecast card**; this also selects **Next 6 hours**.
+Horizontal and Vertical remain available and existing slides are not converted.
+Current weather is also supported if selected after choosing the layout.
+**Fit right sidebar** still selects the existing Vertical layout.
+
+Update Android/Pi players to **0.15.5+** before using the new layout. Earlier
+players continue to render the weather using their Horizontal layout. This is
+an additional layout on the existing weather layer, not a new weather source:
+it adds no requests, subscriptions or timers. Publications use existing schema 3
+(or 4/5 when other layers require it), and the new player accepts older layouts.
 
 ## Shared requests
 

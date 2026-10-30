@@ -3104,13 +3104,22 @@ function Editor({
     });
   }
   function add(
-    type: Layer['type'],
+    type: Layer['type'] | 'forecast-card',
     assetId?: string,
     shapeKind?: 'circle' | 'rectangle',
     dataMode?: (typeof dataModes)[number]['mode'],
   ) {
     setArrangeMode(false);
-    const layer = newLayer(type, assetId);
+    const layer = newLayer(
+      type === 'forecast-card' ? 'weather' : type,
+      assetId,
+    );
+    if (type === 'forecast-card') {
+      layer.weather!.layout = 'forecast-card';
+      layer.weather!.mode = 'six-hour';
+      layer.width = 40;
+      layer.height = 70;
+    }
     if (type === 'data') {
       layer.data!.mode = dataMode === 'table' ? 'bar' : dataMode || 'metric';
       layer.data!.title =
@@ -3444,6 +3453,13 @@ function Editor({
                     label="Add weather widget"
                     caption="Weather"
                     onClick={() => add('weather')}
+                  >
+                    <CloudSun size={20} />
+                  </IconButton>
+                  <IconButton
+                    label="Add forecast card"
+                    caption="Forecast card"
+                    onClick={() => add('forecast-card')}
                   >
                     <CloudSun size={20} />
                   </IconButton>

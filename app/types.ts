@@ -97,7 +97,7 @@ export type Layer = {
     longitude: number | null;
     unit: 'F' | 'C';
     mode?: 'current' | 'six-hour';
-    layout?: 'horizontal' | 'vertical';
+    layout?: 'horizontal' | 'vertical' | 'forecast-card';
     zip?: string;
   };
   counter?: {

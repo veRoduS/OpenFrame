@@ -122,8 +122,19 @@ try {
   await page.locator('.layer-list button').first().click();
   await page.getByRole('button', { name: 'Delete layer', exact: true }).click();
   await page
-    .getByRole('button', { name: 'Add weather widget', exact: true })
+    .getByRole('button', { name: 'Add forecast card', exact: true })
     .click();
+  assert.equal(
+    await page.getByLabel('Weather layout', { exact: true }).inputValue(),
+    'forecast-card',
+  );
+  assert.equal(
+    await page.getByLabel('Weather display', { exact: true }).inputValue(),
+    'six-hour',
+  );
+  await page
+    .getByLabel('Weather display', { exact: true })
+    .selectOption('current');
   await page.route('**/api/weather/zip?zip=99999', (route) =>
     route.fulfill({ status: 404, json: { error: 'ZIP code not found' } }),
   );
@@ -314,7 +325,31 @@ try {
   assert.equal(slide.layers[0].weather.latitude, 41.8781);
   assert.equal(slide.layers[0].weather.zip, '60601');
   assert.equal(slide.layers[0].weather.mode, 'current');
-  assert.ok(slide.layers[0].width > 60);
+  assert.equal(slide.layers[0].weather.layout, 'forecast-card');
+  assert.ok(slide.layers[0].width > 40);
+  const createdPlaylist = await context.request.post(`${base}/api/playlists`, {
+    data: {
+      name: 'Forecast card publication',
+      items: [{ slideId: slide.id, duration: 10 }],
+    },
+  });
+  assert.equal(createdPlaylist.status(), 201);
+  const playlist = await createdPlaylist.json();
+  const publication = await context.request.post(
+    `${base}/api/playlists/${playlist.id}/publish`,
+  );
+  assert.equal(publication.status(), 200);
+  const published = await (
+    await context.request.get(
+      `${base}/api/preview/${playlist.id}?version=published`,
+    )
+  ).json();
+  assert.equal(published.schemaVersion, 3);
+  assert.equal(
+    published.items[0].slide.layers[0].weather.layout,
+    'forecast-card',
+  );
+
   const data = await (await context.request.get(endpoint)).json();
   assert.equal(calls, 4);
   await page.close();
@@ -326,8 +361,9 @@ try {
     let weather = data,
       connected = true,
       blank = false;
-    let displaySlide = slide,
+    let displaySlide = structuredClone(slide),
       revision = 'weather-fixture';
+    displaySlide.layers[0].weather.layout = 'horizontal';
     player.on('request', (request) =>
       assert.equal(
         new URL(request.url()).origin,
@@ -389,6 +425,7 @@ try {
     await player.screenshot({ path: `work/weather-player-${width}.png` });
     displaySlide = structuredClone(slide);
     displaySlide.layers[0].weather.mode = 'six-hour';
+    displaySlide.layers[0].weather.layout = 'horizontal';
     revision = 'weather-six-hour-fixture';
     weather = data;
     await player.clock.fastForward(3100);
@@ -416,15 +453,208 @@ try {
     await player.screenshot({
       path: `work/weather-six-hour-player-${width}.png`,
     });
+    displaySlide = structuredClone(slide);
+    displaySlide.layers[0].weather.mode = 'six-hour';
+    revision = 'weather-card-fixture';
+    await player.clock.fastForward(3100);
+    await visible.locator('[data-weather-layout="forecast-card"]').waitFor();
+    assert.equal(await visible.locator('[data-weather-row]').count(), 6);
+    const cardFrame = await visible.elementHandle();
+    weather = {
+      ...data,
+      periods: data.periods.map((period) => ({ ...period, temperatureF: 68 })),
+    };
+    await player.clock.fastForward(3100);
+    await visible
+      .locator('[data-weather-temperature]')
+      .filter({ hasText: '68°F' })
+      .first()
+      .waitFor();
+    assert.equal(
+      await visible
+        .locator('[data-weather-temperature]')
+        .filter({ hasText: '68°F' })
+        .count(),
+      6,
+    );
+    assert.ok(
+      await cardFrame.evaluate(
+        (element) =>
+          element.isConnected &&
+          element.getAttribute('aria-hidden') === 'false',
+      ),
+      'live card updates keep the visible frame',
+    );
+    assert.ok((await player.locator('.slide-frame').count()) <= 2);
+    await player.screenshot({ path: `work/weather-card-player-${width}.png` });
     blank = true;
     await player.clock.fastForward(3100);
     await player.locator('#stage').waitFor({ state: 'hidden' });
     assert.equal(await player.locator('.slide-frame').count(), 0);
     await player.close();
   }
+  // Match the photographed white card, then exercise narrow and landscape sizes.
+  const card = await context.newPage({
+    viewport: { width: 1000, height: 1000 },
+  });
+  card.on('pageerror', (error) => errors.push(error.message));
+  await card.goto(`${base}/player/weather.js`);
+  const now = Date.now();
+  const cardData = {
+    ...data,
+    timeZone: 'America/Chicago',
+    fetchedAt: new Date(now).toISOString(),
+    periods: Array.from({ length: 6 }, (_, i) => ({
+      startTime: new Date(now + (i + 1) * 3600000).toISOString(),
+      temperatureF: [46, 50, 52, 53, 53, 53][i],
+      shortForecast: [
+        'Partly Sunny',
+        'Partly Sunny',
+        'Partly Sunny',
+        'Partly Sunny',
+        'Mostly Cloudy',
+        'Mostly Sunny',
+      ][i],
+      isDaytime: true,
+    })),
+  };
+  for (const [width, height] of [
+    [760, 740],
+    [300, 850],
+    [1000, 400],
+  ]) {
+    await card.evaluate(
+      async ({ width, height, data, now }) => {
+        const { renderWeather, weatherView } =
+          await import('/player/weather.js');
+        const { layoutText } = await import('/player/text-layout.js');
+        document.body.replaceChildren();
+        document.body.style.cssText =
+          'margin:0;background:#e8edf5;padding:24px;';
+        const box = document.createElement('div');
+        box.id = 'forecast-fixture';
+        box.style.cssText = `width:${width}px;height:${height}px;color:#164a91;background:white;font-family:Arial,sans-serif;overflow:hidden;`;
+        const content = document.createElement('span');
+        box.append(content);
+        document.body.append(box);
+        renderWeather(
+          content,
+          weatherView(
+            {
+              latitude: 44.95,
+              longitude: -93.09,
+              name: 'Saint Paul, MN',
+              mode: 'six-hour',
+              layout: 'forecast-card',
+            },
+            data,
+            now,
+          ),
+        );
+        layoutText(box, content, { autoSize: true, fontSize: 48 }, 1);
+      },
+      { width, height, data: cardData, now },
+    );
+    const fixture = card.locator('#forecast-fixture');
+    const rows = fixture.locator('[data-weather-row]');
+    assert.equal(await rows.count(), 6);
+    assert.ok(
+      await fixture.evaluate(
+        (box) =>
+          box.scrollWidth <= box.clientWidth + 1 &&
+          box.scrollHeight <= box.clientHeight + 1,
+      ),
+    );
+    const bounds = await fixture.boundingBox();
+    const firstRow = await rows.first().boundingBox();
+    const lastRow = await rows.last().boundingBox();
+    assert.ok(
+      firstRow.width >= bounds.width * 0.95,
+      'hourly rows use the card width',
+    );
+    assert.ok(
+      lastRow.y + lastRow.height - firstRow.y >= bounds.height * 0.7,
+      'forecast fills the card height',
+    );
+    assert.ok(
+      (await fixture
+        .locator('[data-weather-temperature]')
+        .first()
+        .evaluate((el) => parseFloat(getComputedStyle(el).fontSize))) >=
+        (width === 760 ? 45 : 18),
+      'temperatures stay readable',
+    );
+    await fixture.screenshot({
+      path: `work/forecast-card-${width}x${height}.png`,
+    });
+  }
+  for (const status of ['partial', 'stale', 'unavailable']) {
+    await card.evaluate(
+      async ({ data, now, status }) => {
+        const { renderWeather, weatherView } =
+          await import('/player/weather.js');
+        const { layoutText } = await import('/player/text-layout.js');
+        const box = document.querySelector('#forecast-fixture');
+        box.style.width = '360px';
+        box.style.height = '740px';
+        const periods =
+          status === 'unavailable'
+            ? []
+            : data.periods.slice(0, 3).map((period) => ({
+                ...period,
+                temperatureF: -15,
+                shortForecast: 'Chance Light Snow And Freezing Rain',
+              }));
+        renderWeather(
+          box.firstElementChild,
+          weatherView(
+            {
+              latitude: 44.95,
+              longitude: -93.09,
+              name: 'Saint Paul, MN',
+              mode: 'six-hour',
+              layout: 'forecast-card',
+            },
+            {
+              ...data,
+              periods,
+              status: status === 'stale' ? 'stale' : 'ready',
+            },
+            now,
+          ),
+        );
+        layoutText(
+          box,
+          box.firstElementChild,
+          { autoSize: true, fontSize: 48 },
+          1,
+        );
+      },
+      { data: cardData, now, status },
+    );
+    const fixture = card.locator('#forecast-fixture');
+    assert.ok(
+      await fixture.evaluate(
+        (box) =>
+          box.scrollWidth <= box.clientWidth + 1 &&
+          box.scrollHeight <= box.clientHeight + 1,
+      ),
+      `${status} fits without clipping`,
+    );
+    await fixture
+      .getByText(
+        status === 'stale'
+          ? /Cached forecast/
+          : status === 'partial'
+            ? /partial forecast/
+            : /Six-hour forecast unavailable/,
+      )
+      .waitFor();
+  }
+  await card.close();
   assert.deepEqual(errors, []);
   console.log(
-    'Weather ZIP lookup/errors, current observations, six-hour forecast, local icons, resize, units, persistence, 1280/390/320px layouts and offline player updates without frame replacement passed. NWS/ZIP responses mocked.',
+    'Weather ZIP lookup/errors, current observations, six-hour forecast, forecast-card publication/rows, partial/stale/unavailable states, local icons, resize, units, persistence, 1280/390/320px layouts and offline player updates without frame replacement passed. NWS/ZIP responses mocked.',
   );
 } finally {
   close();
