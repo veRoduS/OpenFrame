@@ -271,7 +271,8 @@ players. Some management errors contain only `error`; check HTTP status first.
 - [ ] Verify rotation at the same application/site keeps the same feed ID;
   handle revoked/expired keys, archived sites, and 429 retry timing.
 - [ ] Have the admin assign screens to their sites and publish shared widgets
-  using **Use each screen’s site metrics**. Check each site's preview and screen.
+  with a source under **Follows each screen’s store**. Check each site's
+  preview and screen.
 - [ ] For an intentional method switch, update/re-publish affected bindings and
   verify them before disabling the old integration.
 
