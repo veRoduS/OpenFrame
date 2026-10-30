@@ -39,6 +39,10 @@ and feeds. Revoked membership removes access on the server immediately.
 
 To enable store staff to pair screens, an administrator selects the site's
 **Access group** and adds staff accounts to that group (or its subgroups).
+When creating a site, the form preselects the one group whose name contains the
+site number as a whole number (for example `Store 042` for site `042`). Matching
+is exact, so `Store 42` is not suggested for `042`; with no match or several
+matches nothing is preselected. Review the suggestion before creating the site.
 Members see their eligible pending screens even before the store has any feeds
 or approved screens. Member approval records the acting user in site history and
 shares the screen with the store access group, including subgroup members. The

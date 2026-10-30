@@ -2,9 +2,13 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
-## [0.29.7] - 2026-10-30
+## [0.29.8] - 2026-10-30
 
 - Data widgets list each store source once and follow each screen's store by default
+
+## [0.29.7] - 2026-10-30
+
+- Preselect the group named with a new site's number as its access group
 
 ## [0.29.6] - 2026-10-30
 

@@ -12,6 +12,8 @@ import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -98,7 +100,8 @@ public final class PlayerActivity extends Activity {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         int inset = (int) (36 * getResources().getDisplayMetrics().density);
-        layout.setPadding(inset, inset / 2, inset, inset / 2);
+        // TV keyboards float over the lower half of the screen, so leave room to scroll the focused control above them.
+        layout.setPadding(inset, inset / 2, inset, Math.max(inset / 2, getResources().getDisplayMetrics().heightPixels / 2));
         layout.setBackgroundColor(Color.rgb(22, 45, 39));
         layout.addView(text("OpenFrame Player", 28));
         layout.addView(text("Connect this TV to your OpenFrame server. Use Android settings to connect Wi-Fi first.", 18));
@@ -106,19 +109,21 @@ public final class PlayerActivity extends Activity {
         EditText server = new EditText(this);
         server.setSingleLine(true);
         server.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        server.setHint("Server URL or code 1962");
+        server.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        server.setHint("https://screens.example.com");
         server.setText(getPreferences(MODE_PRIVATE).getString("server", ""));
         layout.addView(server);
-        layout.addView(text("Enter 1962 to connect to openframe.blackfalcon.cloud.", 14));
         layout.addView(text("Screen name", 16));
         EditText name = new EditText(this);
         name.setSingleLine(true);
+        name.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         name.setText(getPreferences(MODE_PRIVATE).getString("name", "Android TV"));
         layout.addView(name);
         layout.addView(text("Site number (optional for existing single-site servers)", 16));
         EditText site = new EditText(this);
         site.setSingleLine(true);
         site.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        site.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         site.setText(getPreferences(MODE_PRIVATE).getString("siteNumber", ""));
         layout.addView(site);
         layout.addView(text("A user from your store or an administrator confirms the site during pairing. Changing this field does not move an already paired screen.", 14));
@@ -143,6 +148,19 @@ public final class PlayerActivity extends Activity {
             } catch (Exception ex) { error.setText(ex.getMessage()); }
         });
         layout.addView(connect);
+        View.OnFocusChangeListener lift = (view, focused) -> {
+            if (focused) scroll.post(() -> scroll.smoothScrollTo(0, Math.max(0, view.getTop() - inset * 2)));
+        };
+        server.setOnFocusChangeListener(lift);
+        name.setOnFocusChangeListener(lift);
+        site.setOnFocusChangeListener(lift);
+        connect.setOnFocusChangeListener(lift);
+        site.setOnEditorActionListener((view, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_DONE) return false;
+            ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(view.getWindowToken(), 0);
+            connect.requestFocus();
+            return true;
+        });
         layout.addView(error);
         layout.addView(text("During playback, press Back or Menu for settings. Approve the displayed code under Screens on your server.", 16));
         deviceSleepStatus = text(deviceSleepSummary(), 16);
