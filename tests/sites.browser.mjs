@@ -82,6 +82,43 @@ try {
     assert.equal(response.status(), 201);
     feeds.push((await response.json()).feedId);
   }
+  // Authors pick a store source once; no per-site feed or API choice needed.
+  const editor = await context.newPage();
+  editor.setDefaultTimeout(10000);
+  await editor.goto(`${base}/dashboard`);
+  await editor.getByRole('button', { name: /^Slides/ }).click();
+  await editor.getByRole('button', { name: 'New slide', exact: true }).click();
+  await editor
+    .getByRole('button', { name: 'Add metric widget', exact: true })
+    .click();
+  const feedPicker = editor.getByLabel('Data feed', { exact: true });
+  const storeOptions = feedPicker.locator(
+    'optgroup[label="Follows each screen’s store"] option',
+  );
+  assert.deepEqual(await storeOptions.allTextContents(), [
+    'Shared metrics · production',
+  ]);
+  assert.deepEqual(
+    await feedPicker
+      .locator('optgroup[label="One fixed feed"] option')
+      .allTextContents(),
+    ['Legacy manual feed'],
+  );
+  // A new widget already follows the store source.
+  assert.equal(
+    await feedPicker.locator('option:checked').textContent(),
+    'Shared metrics · production',
+  );
+  await feedPicker.selectOption({ label: 'Legacy manual feed' });
+  await feedPicker.selectOption({ label: 'Shared metrics · production' });
+  assert.equal(
+    await editor.getByLabel('Value field', { exact: true }).inputValue(),
+    'completed',
+  );
+  await editor
+    .getByText('Each screen shows this source from its own store.')
+    .waitFor();
+  await editor.close();
   const slide = await api('/api/slides', 'POST', {
     name: 'Shared slide',
     width: 1920,

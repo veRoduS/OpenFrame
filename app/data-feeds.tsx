@@ -908,6 +908,11 @@ export function DataFeeds({
   );
 }
 
+const storeSourceValue = (binding: {
+  applicationId: string;
+  sourceKey: string;
+}) => `store:${binding.applicationId}:${binding.sourceKey}`;
+
 export function DataWidgetOptions({
   layer,
   feeds,
@@ -929,6 +934,55 @@ export function DataWidgetOptions({
   const fields = feed?.fields.filter((f) => f.type === expected) || [];
   const patch = (value: Partial<typeof config>) =>
     onChange({ ...config, ...value });
+  // Site-bound application feeds share one (application, source) identity
+  // across stores, so offer each source once and let the server pick the
+  // screen's own store feed at delivery.
+  const storeSources = Object.values(
+    feeds.reduce<
+      Record<
+        string,
+        {
+          value: string;
+          applicationId: string;
+          sourceKey: string;
+          name: string;
+          example: DataFeed;
+        }
+      >
+    >((sources, f) => {
+      if (!f.siteId || !f.applicationId || !f.sourceKey) return sources;
+      const value = storeSourceValue({
+        applicationId: f.applicationId,
+        sourceKey: f.sourceKey,
+      });
+      const current = sources[value];
+      const score = (v: DataFeed) =>
+        v.fields.filter((field) => field.type === expected).length;
+      if (!current || score(f) > score(current.example))
+        sources[value] = {
+          value,
+          applicationId: f.applicationId,
+          sourceKey: f.sourceKey,
+          name: f.name,
+          example: f,
+        };
+      return sources;
+    }, {}),
+  ).sort((a, b) => a.name.localeCompare(b.name));
+  const fixedFeeds = feeds
+    .filter((f) => !storeSources.length || !f.siteId || !f.applicationId)
+    .concat(
+      // A widget saved with a fixed store feed keeps showing its choice.
+      feed && !config.siteBinding && feed.siteId && feed.applicationId
+        ? [feed]
+        : [],
+    )
+    .map((f) => (
+      <option key={f.id} value={f.id}>
+        {f.name}
+        {f.siteNumber ? ` · Site ${f.siteNumber}` : ''}
+      </option>
+    ));
   const valueFields = (
     <>
       <label>
@@ -1045,18 +1099,26 @@ export function DataWidgetOptions({
           Data feed
           <select
             aria-label="Data feed"
-            value={config.feedId || ''}
+            value={
+              config.siteBinding
+                ? storeSourceValue(config.siteBinding)
+                : config.feedId || ''
+            }
             onChange={(e) => {
-              const f = feeds.find((v) => v.id === e.target.value);
+              const source = storeSources.find(
+                (v) => v.value === e.target.value,
+              );
+              const f = source
+                ? source.example
+                : feeds.find((v) => v.id === e.target.value);
               patch({
                 feedId: f?.id || null,
-                siteBinding:
-                  config.siteBinding &&
-                  f?.applicationId &&
-                  f.sourceKey &&
-                  f.siteId
-                    ? { applicationId: f.applicationId, sourceKey: f.sourceKey }
-                    : undefined,
+                siteBinding: source
+                  ? {
+                      applicationId: source.applicationId,
+                      sourceKey: source.sourceKey,
+                    }
+                  : undefined,
                 field: f?.fields.find((v) => v.type === expected)?.key || '',
                 targetField: '',
                 ...(config.card
@@ -1073,38 +1135,27 @@ export function DataWidgetOptions({
             }}
           >
             <option value="">Choose a feed</option>
-            {feeds.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-                {f.siteNumber ? ` · Site ${f.siteNumber}` : ''}
-              </option>
-            ))}
+            {storeSources.length > 0 && (
+              <optgroup label="Follows each screen’s store">
+                {storeSources.map((source) => (
+                  <option key={source.value} value={source.value}>
+                    {source.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {storeSources.length > 0 ? (
+              <optgroup label="One fixed feed">{fixedFeeds}</optgroup>
+            ) : (
+              fixedFeeds
+            )}
           </select>
         </label>
-        {feed?.siteId && feed.applicationId && feed.sourceKey && (
-          <label className="data-feed-checkbox">
-            <input
-              type="checkbox"
-              checked={!!config.siteBinding}
-              onChange={(event) =>
-                patch({
-                  siteBinding: event.target.checked
-                    ? {
-                        applicationId: feed.applicationId!,
-                        sourceKey: feed.sourceKey!,
-                      }
-                    : undefined,
-                })
-              }
-            />
-            Use each screen’s site metrics
-          </label>
-        )}
         {config.siteBinding && (
           <p className="muted">
-            The selected feed supplies the example fields. Published screens use
-            their approved site’s matching source. Missing local metrics show as
-            unavailable.
+            Each screen shows this source from its own store. Fields come from{' '}
+            {feed?.siteNumber ? `Site ${feed.siteNumber}` : 'an example store'};
+            stores without matching metrics show as unavailable.
           </p>
         )}
         <label>

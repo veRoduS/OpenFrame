@@ -3140,8 +3140,19 @@ function Editor({
           : layer.data!.mode === 'bar'
             ? 'categories'
             : 'number';
-      const feed = feeds.find((f) => f.fields.some((v) => v.type === expected));
+      const matches = feeds.filter((f) =>
+        f.fields.some((v) => v.type === expected),
+      );
+      // New widgets follow each screen's store whenever a store source fits.
+      const feed =
+        matches.find((f) => f.siteId && f.applicationId && f.sourceKey) ||
+        matches[0];
       layer.data!.feedId = feed?.id || null;
+      if (feed?.siteId && feed.applicationId && feed.sourceKey)
+        layer.data!.siteBinding = {
+          applicationId: feed.applicationId,
+          sourceKey: feed.sourceKey,
+        };
       layer.data!.field =
         feed?.fields.find((v) => v.type === expected)?.key || '';
     }

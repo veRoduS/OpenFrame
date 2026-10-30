@@ -55,10 +55,13 @@ API keys, and screen revocation remain administrator operations.
 
 ## One layout, local values
 
-In a data widget's **Data source** section, select a site-bound application feed,
-then enable **Use each screen’s site metrics**. The selected feed defines the
-example fields. The saved binding identifies the application and source; the
-server selects the concrete feed using each screen's approved site.
+In a data widget's **Data source** section, choose a source listed under
+**Follows each screen’s store**. Each application source appears once, however
+many stores send it, and new data widgets pick one automatically when it has a
+suitable field. Authors do not handle API keys or per-store feeds: the server
+selects the concrete feed using each screen's approved site. One store's feed
+supplies the example fields in the editor. Feeds listed under **One fixed feed**
+always show the same values.
 
 Publish the shared playlist once and assign it to multiple sites. Goals, deltas,
 series, and category/table bindings must have compatible fields at each site.
