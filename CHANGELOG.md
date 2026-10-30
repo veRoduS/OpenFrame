@@ -2,6 +2,14 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.30.0] - 2026-10-30
+
+- Publish the accumulated multi-site, home workspace, API-key, playlist and weather improvements as the latest server milestone.
+- Include store-scoped metrics and screen enrollment, shared layouts that follow each screen's store, store-member approval, and reviewed site transfers.
+- Add non-expiring API keys, group filters, optional admin home workspaces, fork slide skipping, parent-group slide sharing and uploads without a megapixel cap.
+- Include 100-row SMCC tables and the Forecast card; update affected players to the already published 0.15.5 APK.
+- Publish verified AMD64/ARM64 images under `0.30.0` and `latest`, plus a latest GitHub release with a digest-pinned Compose bundle.
+
 ## [0.29.10] - 2026-10-30
 
 - Data widgets list each store source once and follow each screen's store by default
