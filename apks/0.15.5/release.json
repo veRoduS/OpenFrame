@@ -1,0 +1,64 @@
+{
+  "packageName": "org.openframe.player",
+  "versionName": "0.15.5",
+  "versionCode": 15005,
+  "minSdk": 28,
+  "size": 114315,
+  "sha256": "a841b6a8abe8663a2145e035d90d603fd4e3af802074f87c4740b7008d18ce66",
+  "apkUrl": "/downloads/android/openframe-player-0.15.5.apk",
+  "sourceCommit": "6b6de7502de786ffc80211a9ed4c45b6615607ee",
+  "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
+  "compatibility": {
+    "protocols": {
+      "playerSync": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "playlistManifest": {
+        "server": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "android": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pi": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "androidUpdate": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": []
+      }
+    },
+    "reviewedWith": {
+      "server": "0.29.9",
+      "player": "0.15.5"
+    },
+    "impact": "compatible",
+    "summary": "Merge preserves both local feature commits and concurrent main changes for site-group preselection and Android/Pi setup presentation. Server 0.29.9/player 0.15.5 retain existing sync and manifest contracts; new forecast cards require 0.15.5 for appearance, while older players fall back to Horizontal. Non-expiring keys, home groups, 100-row tables, fork skipping, parent slide grants and upload limits retain their prior reviewed semantics. Both parallel 0.29.7/0.15.4 changelog descriptions and engineering review records are preserved. All 267 Node, 101 Python and 38 Android JVM tests pass; SDK API-35 production compilation succeeds. Chromium verifies merged application/site creation, permanent keys, home modes/group filters and forecast publication/live rendering. Typecheck, lint and build pass. Local AMD64 container startup, SQLite/admin persistence, Sharp/WebP and FFmpeg pass. Signed APK publication and physical device acceptance are pending.",
+    "reviewedAt": "2026-10-30T16:12:25.090Z"
+  }
+}
