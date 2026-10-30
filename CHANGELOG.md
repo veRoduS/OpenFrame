@@ -13,6 +13,7 @@ Versions follow the project's [milestone policy](docs/releases.md), not feature-
 ## [0.29.7] - 2026-10-30
 
 - Add non-expiring API keys, visible group filters, optional admin home workspaces and 100-row SMCC tables
+- Preselect the group named with a new site's number as its access group
 
 ## [0.29.6] - 2026-10-30
 

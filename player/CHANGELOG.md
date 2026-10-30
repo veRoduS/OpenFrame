@@ -11,6 +11,7 @@ remains in that file.
 ## [0.15.4] - 2026-10-30
 
 - Render up to 100 SMCC/category rows and row ranges with matching deltas
+- Simplify the server address prompt and keep TV setup buttons above the on-screen keyboard
 
 ## [0.15.3] - 2026-10-30
 

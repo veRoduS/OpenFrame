@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Copy, KeyRound, Plus } from 'lucide-react';
 import { api, type Library } from './types';
 import { orderedTree, indentedName } from './hierarchy';
+import { suggestedSiteGroup } from './site-groups';
 import { Button } from './components/ui/button';
 import {
   Dialog,
@@ -53,6 +54,7 @@ export function DataFeedApplications({
   const [siteNumber, setSiteNumber] = useState('');
   const [siteName, setSiteName] = useState('');
   const [siteAccessGroup, setSiteAccessGroup] = useState('');
+  const [siteAccessGroupChosen, setSiteAccessGroupChosen] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -192,6 +194,8 @@ export function DataFeedApplications({
               setSiteId(site.id);
               setSiteNumber('');
               setSiteName('');
+              setSiteAccessGroup('');
+              setSiteAccessGroupChosen(false);
             });
           }}
         >
@@ -200,7 +204,13 @@ export function DataFeedApplications({
               Site number
               <input
                 value={siteNumber}
-                onChange={(event) => setSiteNumber(event.target.value)}
+                onChange={(event) => {
+                  setSiteNumber(event.target.value);
+                  if (!siteAccessGroupChosen)
+                    setSiteAccessGroup(
+                      suggestedSiteGroup(event.target.value, groups)?.id || '',
+                    );
+                }}
                 pattern="[0-9]{1,20}"
                 maxLength={20}
                 required
@@ -221,7 +231,10 @@ export function DataFeedApplications({
               <select
                 aria-label="New site access group"
                 value={siteAccessGroup}
-                onChange={(event) => setSiteAccessGroup(event.target.value)}
+                onChange={(event) => {
+                  setSiteAccessGroup(event.target.value);
+                  setSiteAccessGroupChosen(true);
+                }}
               >
                 <option value="">Resource sharing only</option>
                 {groups.map((group) => (
@@ -231,6 +244,11 @@ export function DataFeedApplications({
                 ))}
               </select>
             </label>
+            {!siteAccessGroupChosen && siteAccessGroup && (
+              <p className="muted">
+                Suggested because the group name includes this site number.
+              </p>
+            )}
             <p className="muted">
               An access group requires membership in that group or its
               descendants as well as resource access. Administrators retain
