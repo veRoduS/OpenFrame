@@ -1,0 +1,64 @@
+{
+  "packageName": "org.openframe.player",
+  "versionName": "0.15.4",
+  "versionCode": 15004,
+  "minSdk": 28,
+  "size": 113831,
+  "sha256": "04cbda236fe6ff074893841f48105556b369eefe208eccb7df721a703ae38d12",
+  "apkUrl": "/downloads/android/openframe-player-0.15.4.apk",
+  "sourceCommit": "2478c090dbf5fd6330bf938eccafcd1723345249",
+  "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
+  "compatibility": {
+    "protocols": {
+      "playerSync": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "playlistManifest": {
+        "server": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "android": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pi": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "androidUpdate": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": []
+      }
+    },
+    "reviewedWith": {
+      "server": "0.29.6",
+      "player": "0.15.4"
+    },
+    "impact": "compatible",
+    "summary": "Player 0.15.4 changes only Android setup-screen text, IME actions, and scroll placement; sync, playlist, and update contracts are unchanged. Android Gradle checks could not run here without an Android SDK; no physical TV validation.",
+    "reviewedAt": "2026-10-30T15:47:34.877Z"
+  }
+}

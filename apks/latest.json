@@ -1,12 +1,12 @@
 {
   "packageName": "org.openframe.player",
-  "versionName": "0.15.3",
-  "versionCode": 15003,
+  "versionName": "0.15.4",
+  "versionCode": 15004,
   "minSdk": 28,
-  "size": 111819,
-  "sha256": "e1d9d1f55fa82f04f8f053e5d4dc88557a7c1e31d3c704cd981a985b8f6902fb",
-  "apkUrl": "/downloads/android/openframe-player-0.15.3.apk",
-  "sourceCommit": "3d0cbc11eb3bb0e50e3ffd1802b524b0c49c26c9",
+  "size": 113831,
+  "sha256": "04cbda236fe6ff074893841f48105556b369eefe208eccb7df721a703ae38d12",
+  "apkUrl": "/downloads/android/openframe-player-0.15.4.apk",
+  "sourceCommit": "2478c090dbf5fd6330bf938eccafcd1723345249",
   "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
   "compatibility": {
     "protocols": {
@@ -54,11 +54,11 @@
       }
     },
     "reviewedWith": {
-      "server": "0.29.5",
-      "player": "0.15.3"
+      "server": "0.29.6",
+      "player": "0.15.4"
     },
     "impact": "compatible",
-    "summary": "Store access-group members and subgroup members can approve only pending screens requesting their active site; the existing pairing code is still required. Member-approved screens are shared with the store group without personal ownership, preserving metric delivery after the approving employee leaves. Library adds canApprove metadata and eligible requests; existing admin and legacy approval remain supported. Player sync, manifests, ingestion and transfer contracts are unchanged; Android 0.15.3 updates setup wording only. All 256 Node and 101 Python regressions, store-approval/browser isolation checks, typecheck, lint and build pass; physical TV/Pi and signed APK installation remain unverified.",
-    "reviewedAt": "2026-10-30T04:46:58.106Z"
+    "summary": "Player 0.15.4 changes only Android setup-screen text, IME actions, and scroll placement; sync, playlist, and update contracts are unchanged. Android Gradle checks could not run here without an Android SDK; no physical TV validation.",
+    "reviewedAt": "2026-10-30T15:47:34.877Z"
   }
 }
