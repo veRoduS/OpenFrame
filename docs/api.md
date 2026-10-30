@@ -219,6 +219,14 @@ images return 400 and oversized files return 413. Video limits are unchanged.
 
 ## Site assignment and shared metrics
 
+Server **0.30.1** corrects publication checks for data widgets with `siteBinding`.
+Recipients and publishers of saved slides need not view the example `feedId`;
+the server retains source/field validation and authoring access checks, then
+resolves and authorizes each actual local feed at preview/sync time. Fixed feeds
+still require viewing permission for every playlist recipient. Manifest schemas,
+bindings, ingestion methods and player requirements are unchanged.
+
+
 Server **0.29.7** adds optional [home workspaces](home-workspace.md) through
 `PATCH /api/account/home` and nullable `user.home` in `GET /api/auth`. This is a
 self-service preference for non-built-in admins; it does not alter their role or

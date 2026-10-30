@@ -2230,19 +2230,30 @@ void test('enrollment site is untrusted until pairing; first assignments require
 });
 
 void test('one shared publication resolves only the approved site with stable live revisions and matching previews', async (t) => {
-  const { admin, client, application, ingest } = await applicationFixture(t);
+  const { admin, client, user, db, application, ingest } =
+    await applicationFixture(t);
   const audience = (
     await admin('/api/groups', 'POST', { name: 'Shared layout screens' })
   ).data;
+  const groups = [];
   const sites = [];
   const keys = [];
   const feeds = [];
   for (let i = 0; i < 4; i++) {
+    groups.push(
+      (
+        await admin('/api/groups', 'POST', {
+          name: `Store ${i + 1}`,
+          parentId: audience.id,
+        })
+      ).data,
+    );
     sites.push(
       (
         await admin('/api/sites', 'POST', {
           siteNumber: `00${i + 1}`,
           name: `Site ${i + 1}`,
+          accessGroupId: groups[i].id,
         })
       ).data,
     );
@@ -2266,11 +2277,22 @@ void test('one shared publication resolves only the approved site with stable li
       );
       feeds.push(result.data.feedId);
       await admin(`/api/access/data-feed/${result.data.feedId}`, 'POST', {
-        groupId: audience.id,
+        groupId: groups[i].id,
       });
     }
   }
-  const input = slide(feeds[0]);
+  const southAuthor = await user('south-publisher');
+  assert.equal(
+    (
+      await admin(
+        `/api/groups/${groups[1].id}/members/${southAuthor.id}`,
+        'PUT',
+        { role: 'member' },
+      )
+    ).status,
+    200,
+  );
+  const input = { ...slide(feeds[0]), managingGroupId: audience.id };
   input.layers[0].data.siteBinding = {
     applicationId: application.id,
     sourceKey: 'production',
@@ -2280,12 +2302,55 @@ void test('one shared publication resolves only the approved site with stable li
   const playlist = (
     await admin('/api/playlists', 'POST', {
       name: 'One layout for every site',
+      managingGroupId: audience.id,
       items: [{ slideId: saved.data.id, duration: 30 }],
     })
   ).data;
   assert.equal(
+    (
+      await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+        userId: southAuthor.id,
+        permission: 'edit',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
     (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
     200,
+  );
+  assert.equal(
+    (await southAuthor.call(`/api/playlists/${playlist.id}/publish`, 'POST'))
+      .status,
+    200,
+  );
+  // Publishing a shared template does not grant access to its example store.
+  assert.equal(
+    (await southAuthor.call(`/api/data-feeds/${feeds[0]}/data`)).status,
+    404,
+  );
+  assert.ok(
+    !(await southAuthor.call('/api/library')).data.dataFeeds.some(
+      (feed) => feed.id === feeds[0],
+    ),
+  );
+  assert.equal(
+    db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM resource_grants WHERE kind='data-feed' AND id=? AND groupId=?",
+      )
+      .get(feeds[0], audience.id).n,
+    0,
+  );
+  // Creating a new widget still requires access to its actual example feed.
+  assert.equal(
+    (
+      await southAuthor.call('/api/slides', 'POST', {
+        ...input,
+        managingGroupId: undefined,
+      })
+    ).status,
+    403,
   );
   const players = [];
   for (let i = 0; i < sites.length; i++) {
@@ -2309,7 +2374,7 @@ void test('one shared publication resolves only the approved site with stable li
     assert.equal(
       (
         await admin(`/api/access/device/${credentials.id}`, 'POST', {
-          groupId: audience.id,
+          groupId: groups[i].id,
         })
       ).status,
       200,
@@ -2349,6 +2414,30 @@ void test('one shared publication resolves only the approved site with stable li
     assert.equal(snapshot.data, null);
     assert.ok(!Object.keys(unavailable.dataFeeds).includes(feeds[0]));
   }
+  const localPreview = (
+    await southAuthor.call(
+      `/api/preview/${playlist.id}?version=published&siteId=${sites[1].id}`,
+    )
+  ).data;
+  assert.deepEqual(Object.keys(localPreview.dataFeeds), [feeds[1]]);
+  assert.equal(localPreview.dataFeeds[feeds[1]].data.completed, 20);
+  const deniedPreview = (
+    await southAuthor.call(
+      `/api/preview/${playlist.id}?version=published&siteId=${sites[0].id}`,
+    )
+  ).data;
+  assert.equal(Object.values(deniedPreview.dataFeeds)[0].status, 'unavailable');
+  assert.ok(!Object.keys(deniedPreview.dataFeeds).includes(feeds[0]));
+  await admin(`/api/access/data-feed/${feeds[1]}`, 'POST', {
+    groupId: groups[1].id,
+    remove: true,
+  });
+  const revoked = (await players[1]()).data;
+  assert.equal(Object.values(revoked.dataFeeds)[0].status, 'unavailable');
+  assert.ok(!Object.keys(revoked.dataFeeds).includes(feeds[0]));
+  await admin(`/api/access/data-feed/${feeds[1]}`, 'POST', {
+    groupId: groups[1].id,
+  });
   const noSite = (await admin(`/api/preview/${playlist.id}?version=published`))
     .data;
   assert.equal(Object.values(noSite.dataFeeds)[0].status, 'unavailable');
@@ -2356,6 +2445,137 @@ void test('one shared publication resolves only the approved site with stable li
   const updated = (await players[0]()).data;
   assert.equal(updated.manifest.revision, north.manifest.revision);
   assert.equal(updated.dataFeeds[feeds[0]].data.completed, 11);
+  const fork = (
+    await southAuthor.call(`/api/playlists/${playlist.id}/fork`, 'POST', {
+      name: 'South fork',
+      managingGroupId: groups[1].id,
+    })
+  ).data;
+  assert.ok(fork.id);
+  assert.equal(
+    (await southAuthor.call(`/api/playlists/${fork.id}/publish`, 'POST'))
+      .status,
+    200,
+  );
+  assert.equal(
+    (
+      await admin(`/api/slides/${saved.data.id}`, 'PUT', {
+        ...saved.data,
+        name: 'Refreshed local metrics',
+      })
+    ).status,
+    200,
+  );
+  const refreshed = (
+    await admin(
+      `/api/preview/${playlist.id}?version=published&siteId=${sites[1].id}`,
+    )
+  ).data;
+  assert.equal(refreshed.items[0].slide.name, 'Refreshed local metrics');
+  assert.equal(
+    (
+      await admin(`/api/playlists/${playlist.id}`, 'PUT', {
+        ...playlist,
+        items: playlist.items.map((item) => ({ ...item, duration: 45 })),
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const savedFork = (await admin('/api/library')).data.playlists.find(
+    (p) => p.id === fork.id,
+  );
+  assert.equal(savedFork.forkSyncError, undefined);
+  const forkPreview = (
+    await southAuthor.call(
+      `/api/preview/${fork.id}?version=published&siteId=${sites[1].id}`,
+    )
+  ).data;
+  assert.equal(forkPreview.items[0].duration, 45);
+  assert.deepEqual(Object.keys(forkPreview.dataFeeds), [feeds[1]]);
+});
+
+void test('fixed feeds still require every playlist recipient even beside a store-relative widget', async (t) => {
+  const { admin, application, ingest, user } = await applicationFixture(t);
+  const north = (await admin('/api/groups', 'POST', { name: 'North audience' }))
+    .data;
+  const south = (await admin('/api/groups', 'POST', { name: 'South audience' }))
+    .data;
+  const person = await user('south-fixed-publisher');
+  await admin(`/api/groups/${south.id}/members/${person.id}`, 'PUT', {
+    role: 'member',
+  });
+  const site = (
+    await admin('/api/sites', 'POST', {
+      siteNumber: '101',
+      name: 'North',
+      accessGroupId: north.id,
+    })
+  ).data;
+  const key = (
+    await admin(
+      `/api/data-feeds/applications/${application.id}/tokens`,
+      'POST',
+      { name: 'North metrics', siteId: site.id },
+    )
+  ).data;
+  const feed = (await ingest({ completed: 10 }, 'production', key.token)).data
+    .feedId;
+  for (const mixed of [false, true]) {
+    const fixed = widget(feed);
+    const relative = widget(feed);
+    relative.data.siteBinding = {
+      applicationId: application.id,
+      sourceKey: 'production',
+    };
+    const saved = await admin('/api/slides', 'POST', {
+      ...slide(feed),
+      layers: mixed ? [relative, fixed] : [fixed],
+    });
+    assert.equal(saved.status, 201);
+    const playlist = (
+      await admin('/api/playlists', 'POST', {
+        name: mixed ? 'Mixed bindings' : 'Fixed binding',
+        items: [{ slideId: saved.data.id, duration: 10 }],
+      })
+    ).data;
+    const first = await admin(`/api/playlists/${playlist.id}/publish`, 'POST');
+    assert.equal(first.status, 200);
+    assert.equal(
+      (
+        await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+          groupId: south.id,
+          permission: 'edit',
+        })
+      ).status,
+      200,
+    );
+    // Sharing content never overrides the feed's store scope.
+    assert.equal(
+      (await person.call(`/api/data-feeds/${feed}/data`)).status,
+      404,
+    );
+    const rejected = await admin(
+      `/api/playlists/${playlist.id}/publish`,
+      'POST',
+    );
+    assert.equal(rejected.status, 409);
+    assert.match(rejected.data.error, /Viewing access to every data feed/);
+    assert.equal(
+      (await person.call(`/api/playlists/${playlist.id}/publish`, 'POST'))
+        .status,
+      403,
+    );
+    assert.equal(
+      (await admin('/api/library')).data.playlists.find(
+        (p) => p.id === playlist.id,
+      ).publishedRevision,
+      first.data.publishedRevision,
+    );
+  }
 });
 
 void test('assigning an existing integration preserves secrets and feeds and rolls back source conflicts', async (t) => {

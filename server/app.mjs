@@ -1440,7 +1440,13 @@ export function createApp({
         const slide =
           item.slide || allRecords('slide').find((s) => s.id === item.slideId);
         for (const layer of slide?.layers || [])
-          if (layer.type === 'data' && !visible('data-feed', layer.data.feedId))
+          // A relative source is authorized against each screen's resolved local
+          // feed at delivery, not against the editor's example store here.
+          if (
+            layer.type === 'data' &&
+            !layer.data.siteBinding &&
+            !visible('data-feed', layer.data.feedId)
+          )
             throw fail(
               409,
               'Viewing access to every data feed is required for every playlist recipient',
@@ -1594,7 +1600,11 @@ export function createApp({
       throw fail(400, 'A playlist can use at most 20 distinct data feeds');
     if (!previewing)
       for (const item of items)
-        dataFeeds.validateLayers(item.slide, accounts.context.getStore()?.user);
+        dataFeeds.validateLayers(
+          item.slide,
+          accounts.context.getStore()?.user,
+          { publishing },
+        );
     return {
       schemaVersion: items.some((i) =>
         i.slide.layers.some((l) => l.type === 'video'),

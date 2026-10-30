@@ -119,8 +119,12 @@ try {
     .getByText('Each screen shows this source from its own store.')
     .waitFor();
   await editor.close();
+  const templateGroup = await api('/api/groups', 'POST', {
+    name: 'Shared templates',
+  });
   const slide = await api('/api/slides', 'POST', {
     name: 'Shared slide',
+    managingGroupId: templateGroup.id,
     width: 1920,
     height: 1080,
     layers: [
@@ -145,9 +149,33 @@ try {
   });
   const playlist = await api('/api/playlists', 'POST', {
     name: 'Shared playlist',
+    managingGroupId: templateGroup.id,
     items: [{ slideId: slide.id, duration: 30 }],
   });
-  await api(`/api/playlists/${playlist.id}/publish`, 'POST');
+  // The playlist's group has no grant to the example feed. Publish through
+  // the same dialog that previously displayed the recipient-access error.
+  const publisher = await context.newPage();
+  await publisher.goto(base + '/dashboard/playlists');
+  await publisher
+    .getByRole('button', { name: 'Edit Shared playlist', exact: true })
+    .click();
+  const publishDialog = publisher.getByRole('dialog');
+  const publicationResponse = publisher.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/playlists/${playlist.id}/publish`) &&
+      response.request().method() === 'POST',
+  );
+  await publishDialog
+    .getByRole('button', { name: 'Publish playlist', exact: true })
+    .click();
+  assert.equal((await publicationResponse).status(), 200);
+  await publishDialog
+    .getByText(
+      'Published. Screens will download this version on their next sync.',
+      { exact: true },
+    )
+    .waitFor();
+  await publisher.close();
   const device = await api('/api/player/enroll', 'POST', {
     name: 'North lobby',
     siteNumber: '001',
@@ -398,14 +426,12 @@ try {
   await memberRow
     .getByRole('button', { name: 'Enter pairing code', exact: true })
     .click();
-  const memberPairing = otherPage
-    .getByRole('dialog')
-    .filter({
-      has: otherPage.getByRole('heading', {
-        name: 'Pair a screen',
-        exact: true,
-      }),
-    });
+  const memberPairing = otherPage.getByRole('dialog').filter({
+    has: otherPage.getByRole('heading', {
+      name: 'Pair a screen',
+      exact: true,
+    }),
+  });
   assert.equal(
     await memberPairing
       .getByLabel('Pairing code', { exact: true })

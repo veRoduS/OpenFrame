@@ -70,6 +70,17 @@ values never fall back to another location. A source first created later becomes
 available through normal sync without republishing the layout. Ordinary value
 updates do not change the effective playlist revision or restart slides.
 
+From server **0.30.1**, publishing a store-relative widget does not require every
+playlist recipient, or the publisher, to view the editor's example-store feed.
+This also applies to inherited fork publications and later master updates. The
+saved slide and master still require their normal access permissions, and
+creating or editing a widget still requires access to its chosen example feed.
+Every delivered local feed is checked against the screen's approved site and
+its audience; inaccessible sources show unavailable without falling back to the
+example store. **One fixed feed** keeps its recipient permission requirements,
+including when a slide also contains store-relative widgets. No new API-key or
+feed-sharing grants are created by publishing a relative source.
+
 Playlist previews have a **Preview site** selector and use the same resolver as
 player sync. Without a preview site, relative bindings are unavailable. Editor
 field selection uses the chosen example feed. Fixed-feed widgets retain their

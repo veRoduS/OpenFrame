@@ -161,3 +161,11 @@ the new player accepts them and older servers. Earlier servers reject the new
 layout on authoring writes, so select Horizontal or Vertical before saving to a
 downgraded server. The shared renderer adds no requests, timers or subscriptions
 and keeps the one-visible/one-prepared-frame budget.
+
+Server **0.30.1** fixes publication authorization for saved store-relative
+widgets, including shared store-group audiences, store-user publishers, slide
+refreshes and inherited fork updates. The example feed supplies source/field
+validation during publication, while actual local feed permissions remain
+enforced by preview/sync resolution. Fixed-feed checks and new/edited widget
+authorization are unchanged. No sync/manifest fields, player code, timers or
+resource budgets change; this correction needs only a server update and no APK.

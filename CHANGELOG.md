@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.30.1] - 2026-10-30
+
+- Fix shared store-relative playlist publishing without exposing example-store feeds
+
 ## [0.30.0] - 2026-10-30
 
 - Publish the accumulated multi-site, home workspace, API-key, playlist and weather improvements as the latest server milestone.

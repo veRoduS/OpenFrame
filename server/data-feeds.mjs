@@ -225,7 +225,7 @@ export function mountDataFeeds(
     allRecords('playlist').some((playlist) =>
       playlist.published?.items?.some((item) => references(item.slide, id)),
     );
-  function validateLayers(slide, user) {
+  function validateLayers(slide, user, { publishing = false } = {}) {
     for (const layer of slide.layers.filter((l) => l.type === 'data')) {
       const config = layer.data;
       if (!config?.feedId)
@@ -235,7 +235,14 @@ export function mountDataFeeds(
           'Choose a data feed for each data widget',
         );
       const feed = raw(config.feedId);
-      if (!feed || !accounts.can(user, 'data-feed', feed.id))
+      // Publication uses already-authorized, saved slides. A store-relative
+      // source's example feed supplies its schema, not its delivery permission.
+      // New/edited slides still require example-feed access; fixed feeds always do.
+      if (
+        !feed ||
+        (!(publishing && config.siteBinding) &&
+          !accounts.can(user, 'data-feed', feed.id))
+      )
         throw fail(
           403,
           'FEED_ACCESS_REQUIRED',
