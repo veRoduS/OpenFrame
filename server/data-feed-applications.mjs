@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
 
 const digest = (key) => createHash('sha256').update(key).digest('hex');
 const fail = (status, code, message) =>
@@ -13,12 +14,13 @@ const applicationSchema = z
 const keySchema = z
   .object({
     name: z.string().trim().min(1).max(80),
+    siteId: z.uuid().nullable().default(null),
     expiresInDays: z.number().int().min(1).max(365).default(90),
   })
   .strict();
 const sourceKey = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/);
 const keyFields =
-  'id,applicationId,name,createdAt,expiresAt,revokedAt,lastUsedAt';
+  'id,applicationId,name,createdAt,expiresAt,revokedAt,lastUsedAt,siteId';
 
 export function mountDataFeedApplications(
   app,
@@ -35,8 +37,43 @@ export function mountDataFeedApplications(
     CREATE TABLE IF NOT EXISTS data_feed_application_sources (
     applicationId TEXT NOT NULL, sourceKey TEXT NOT NULL, feedId TEXT NOT NULL UNIQUE,
     PRIMARY KEY(applicationId,sourceKey));`);
+  db.exec('SAVEPOINT site_source_migration');
+  try {
+    if (
+      !db
+        .prepare('PRAGMA table_info(data_feed_application_tokens)')
+        .all()
+        .some((column) => column.name === 'siteId')
+    )
+      db.exec(
+        'ALTER TABLE data_feed_application_tokens ADD COLUMN siteId TEXT',
+      );
+    if (
+      !db
+        .prepare('PRAGMA table_info(data_feed_application_sources)')
+        .all()
+        .some((column) => column.name === 'siteId')
+    ) {
+      db.exec(`ALTER TABLE data_feed_application_sources RENAME TO data_feed_application_sources_legacy;
+        CREATE TABLE data_feed_application_sources (
+          applicationId TEXT NOT NULL, sourceKey TEXT NOT NULL, feedId TEXT NOT NULL UNIQUE,
+          siteId TEXT NOT NULL DEFAULT '', PRIMARY KEY(applicationId,siteId,sourceKey));
+        INSERT INTO data_feed_application_sources(applicationId,sourceKey,feedId)
+          SELECT applicationId,sourceKey,feedId FROM data_feed_application_sources_legacy;
+        DROP TABLE data_feed_application_sources_legacy;`);
+    }
+    db.exec('RELEASE site_source_migration');
+  } catch (error) {
+    db.exec('ROLLBACK TO site_source_migration; RELEASE site_source_migration');
+    throw error;
+  }
   const metadata = (application) => ({
     ...application,
+    unassignedFeedCount: db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM data_feed_application_sources WHERE applicationId=? AND siteId=''",
+      )
+      .get(application.id).n,
     feedCount: db
       .prepare(
         'SELECT COUNT(*) AS n FROM data_feed_application_sources WHERE applicationId=?',
@@ -89,6 +126,77 @@ export function mountDataFeedApplications(
     );
     res.status(201).json(metadata(application));
   });
+  app.post(
+    '/api/data-feeds/applications/:id/assign-site',
+    administrator,
+    (req, res) => {
+      const application = applicationById(req.params.id);
+      const { siteId } = z
+        .object({ siteId: z.uuid() })
+        .strict()
+        .parse(req.body);
+      requireActiveSite(db, siteId);
+      db.exec('SAVEPOINT assign_legacy_site');
+      try {
+        const mappings = db
+          .prepare(
+            "SELECT * FROM data_feed_application_sources WHERE applicationId=? AND siteId='' ",
+          )
+          .all(application.id);
+        for (const mapping of mappings) {
+          if (
+            db
+              .prepare(
+                'SELECT feedId FROM data_feed_application_sources WHERE applicationId=? AND siteId=? AND sourceKey=?',
+              )
+              .get(application.id, siteId, mapping.sourceKey)
+          )
+            throw fail(
+              409,
+              'SITE_SOURCE_CONFLICT',
+              'The destination already has a feed with this source name; no assignments changed',
+            );
+          const feed = raw(mapping.feedId);
+          if (!feed || feed.siteId)
+            throw fail(
+              409,
+              'SITE_SOURCE_CONFLICT',
+              'The legacy feed assignment is inconsistent; no assignments changed',
+            );
+          db.prepare(
+            "UPDATE records SET body=json_set(body,'$.siteId',?) WHERE kind='data-feed' AND id=?",
+          ).run(siteId, feed.id);
+        }
+        db.prepare(
+          "UPDATE data_feed_application_sources SET siteId=? WHERE applicationId=? AND siteId='' ",
+        ).run(siteId, application.id);
+        const result = db
+          .prepare(
+            'UPDATE data_feed_application_tokens SET siteId=? WHERE applicationId=? AND siteId IS NULL',
+          )
+          .run(siteId, application.id);
+        if (mappings.length || result.changes)
+          auditSite(
+            db,
+            req.user,
+            'application-site-assigned',
+            'application',
+            application.id,
+            null,
+            siteId,
+          );
+        db.exec('RELEASE assign_legacy_site');
+        res.json({
+          ...metadata(application),
+          assignedFeeds: mappings.length,
+          assignedKeys: result.changes,
+        });
+      } catch (error) {
+        db.exec('ROLLBACK TO assign_legacy_site; RELEASE assign_legacy_site');
+        throw error;
+      }
+    },
+  );
   app.delete('/api/data-feeds/applications/:id', administrator, (req, res) => {
     const application = applicationById(req.params.id);
     if (metadata(application).feedCount)
@@ -132,6 +240,9 @@ export function mountDataFeedApplications(
     (req, res) => {
       applicationById(req.params.id);
       const input = keySchema.parse(req.body);
+      if (input.siteId) requireActiveSite(db, input.siteId);
+      else if (db.prepare('SELECT COUNT(*) AS n FROM sites').get().n)
+        throw fail(400, 'SITE_REQUIRED', 'Choose a site for this API key');
       const now = new Date().toISOString();
       if (
         db
@@ -150,17 +261,29 @@ export function mountDataFeedApplications(
       ).run(req.params.id, now);
       const token = `ofa_${randomBytes(32).toString('base64url')}`;
       const id = randomUUID();
-      db.prepare(
-        'INSERT INTO data_feed_application_tokens VALUES (?,?,?,?,?,?,?,NULL,NULL)',
-      ).run(
-        id,
-        req.params.id,
-        digest(token),
-        req.user.id,
-        input.name,
-        now,
-        new Date(Date.now() + input.expiresInDays * 86400000).toISOString(),
-      );
+      siteTransaction(db, () => {
+        db.prepare(
+          'INSERT INTO data_feed_application_tokens(id,applicationId,digest,creatorId,name,createdAt,expiresAt,siteId) VALUES (?,?,?,?,?,?,?,?)',
+        ).run(
+          id,
+          req.params.id,
+          digest(token),
+          req.user.id,
+          input.name,
+          now,
+          new Date(Date.now() + input.expiresInDays * 86400000).toISOString(),
+          input.siteId,
+        );
+        auditSite(
+          db,
+          req.user,
+          'application-key-created',
+          'application-key',
+          id,
+          null,
+          input.siteId,
+        );
+      });
       res.status(201).json({
         ...db
           .prepare(
@@ -176,15 +299,31 @@ export function mountDataFeedApplications(
     administrator,
     (req, res) => {
       applicationById(req.params.id);
-      if (
-        !db
-          .prepare(
-            'UPDATE data_feed_application_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE applicationId=? AND id=?',
-          )
-          .run(new Date().toISOString(), req.params.id, req.params.tokenId)
-          .changes
-      )
-        throw fail(404, 'NOT_FOUND', 'API key not found');
+      const scope = db
+        .prepare(
+          'SELECT siteId FROM data_feed_application_tokens WHERE applicationId=? AND id=?',
+        )
+        .get(req.params.id, req.params.tokenId);
+      siteTransaction(db, () => {
+        if (
+          !db
+            .prepare(
+              'UPDATE data_feed_application_tokens SET revokedAt=COALESCE(revokedAt,?) WHERE applicationId=? AND id=?',
+            )
+            .run(new Date().toISOString(), req.params.id, req.params.tokenId)
+            .changes
+        )
+          throw fail(404, 'NOT_FOUND', 'API key not found');
+        auditSite(
+          db,
+          req.user,
+          'application-key-revoked',
+          'application-key',
+          req.params.tokenId,
+          scope?.siteId || null,
+          scope?.siteId || null,
+        );
+      });
       res.json({ ok: true });
     },
   );
@@ -220,6 +359,7 @@ export function mountDataFeedApplications(
         'INVALID_TOKEN',
         'Invalid, expired, revoked, or unauthorized application key',
       );
+    if (key.siteId) requireActiveSite(db, key.siteId);
     if (
       application.managingGroupId &&
       !db
@@ -234,22 +374,29 @@ export function mountDataFeedApplications(
     const now = Date.now();
     for (const [id, bucket] of buckets)
       if (bucket.until <= now) buckets.delete(id);
-    const bucket = buckets.get(application.id) || {
-      until: now + 60000,
-      count: 0,
-    };
-    buckets.set(application.id, bucket);
-    if (++bucket.count > 60) {
+    const scopeKey = `site:${application.id}:${key.siteId || 'unassigned'}`;
+    const appKey = `application:${application.id}`;
+    const scoped = buckets.get(scopeKey) || { until: now + 60000, count: 0 };
+    const aggregate = buckets.get(appKey) || { until: now + 60000, count: 0 };
+    buckets.set(scopeKey, scoped);
+    buckets.set(appKey, aggregate);
+    const exceeded =
+      scoped.count >= 60 ? scoped : aggregate.count >= 600 ? aggregate : null;
+    if (exceeded) {
       res.set(
         'Retry-After',
-        String(Math.max(1, Math.ceil((bucket.until - now) / 1000))),
+        String(Math.max(1, Math.ceil((exceeded.until - now) / 1000))),
       );
       throw fail(
         429,
         'RATE_LIMITED',
-        'Maximum of 60 ingestion attempts per minute per application',
+        exceeded === scoped
+          ? 'Maximum of 60 ingestion attempts per minute per application and site'
+          : 'Maximum of 600 ingestion attempts per minute per application',
       );
     }
+    scoped.count++;
+    aggregate.count++;
     if (!req.is('application/json'))
       throw fail(
         415,
@@ -263,9 +410,9 @@ export function mountDataFeedApplications(
       throw fail(400, 'INVALID_PAYLOAD', 'Send 1–20 metric fields');
     const mapping = db
       .prepare(
-        'SELECT feedId FROM data_feed_application_sources WHERE applicationId=? AND sourceKey=?',
+        'SELECT feedId FROM data_feed_application_sources WHERE applicationId=? AND siteId=? AND sourceKey=?',
       )
-      .get(application.id, source);
+      .get(application.id, key.siteId || '', source);
     const existing = mapping && raw(mapping.feedId);
     if (mapping && !existing)
       throw fail(
@@ -323,6 +470,7 @@ export function mountDataFeedApplications(
         managingGroupId: application.managingGroupId,
         applicationId: application.id,
         sourceKey: source,
+        siteId: key.siteId,
       }),
       fields,
       data,
@@ -336,8 +484,8 @@ export function mountDataFeedApplications(
       );
       if (!mapping)
         db.prepare(
-          'INSERT INTO data_feed_application_sources VALUES (?,?,?)',
-        ).run(application.id, source, feed.id);
+          'INSERT INTO data_feed_application_sources(applicationId,sourceKey,feedId,siteId) VALUES (?,?,?,?)',
+        ).run(application.id, source, feed.id, key.siteId || '');
       db.prepare(
         'UPDATE data_feed_application_tokens SET lastUsedAt=? WHERE id=?',
       ).run(updatedAt, key.id);
@@ -349,6 +497,7 @@ export function mountDataFeedApplications(
     // Return this write's identifiers/schema, without exposing any existing snapshot values.
     res.status(existing ? 200 : 201).json({
       applicationId: application.id,
+      siteId: key.siteId,
       sourceKey: source,
       feedId: feed.id,
       fields: feed.fields,

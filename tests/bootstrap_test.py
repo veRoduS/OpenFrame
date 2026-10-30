@@ -38,6 +38,10 @@ class BootstrapTests(unittest.TestCase):
 
     def test_input_requires_https_and_validates_wifi_and_access(self):
         self.assertEqual(bootstrap.validate_input(FORM)['config']['server'], FORM['server'])
+        self.assertEqual(bootstrap.validate_input({**FORM, 'siteNumber': '001'})['config']['siteNumber'], '001')
+        for site in (12, 'abc', '1' * 21):
+            with self.assertRaises(ValueError):
+                bootstrap.validate_input({**FORM, 'siteNumber': site})
         for patch_value in ({'server': 'http://example.com'}, {'server': 'https://user:pass@example.com'}, {'server': 'https://example.com/path'}, {'ssid': ''}, {'ssid': '\u00e9' * 17}, {'name': ''}, {'password': 'x\x00y'}, {'country': 'USA'}, {'clientId': 'fake-id'}, {'clientId': 'id', 'clientSecret': 'bad\r\nheader'}):
             with self.subTest(value=patch_value), self.assertRaises(ValueError):
                 bootstrap.validate_input({**FORM, **patch_value})
@@ -104,7 +108,7 @@ class BootstrapTests(unittest.TestCase):
             (cache / 'identity.json').symlink_to(target)
             (cache / 'provisioned').symlink_to(target)
             with patch.dict(sys.modules, {'pwd': fake_pwd}), patch.object(bootstrap, 'CONFIG', config), patch.object(bootstrap, 'CACHE', cache), patch.object(bootstrap, 'GUARD', root / 'guard.json'), patch.object(bootstrap, 'guard'), patch.object(bootstrap, 'command', side_effect=command), patch.object(bootstrap.wireguard, 'install'), patch.object(bootstrap.wireguard, 'atomic_write'), patch.object(bootstrap.os, 'fchown', create=True) as chown, patch.object(bootstrap.os, 'chown', create=True) as path_chown, patch.object(bootstrap, 'request', return_value=dict(approved=True, wireguard=SETTINGS)):
-                bootstrap.install_private_connection(SETTINGS, PRIVATE, identity, 'Lobby')
+                bootstrap.install_private_connection(SETTINGS, PRIVATE, identity, 'Lobby', '001')
             self.assertEqual(target.read_text(), 'untouched fixture')
             self.assertFalse((cache / 'identity.json').is_symlink())
             self.assertFalse((cache / 'provisioned').is_symlink())
@@ -113,7 +117,7 @@ class BootstrapTests(unittest.TestCase):
             self.assertTrue(all(isinstance(call.args[0], int) for call in chown.call_args_list))
             self.assertEqual(config.stat().st_mode & 0o777, 0o640)
             self.assertEqual((cache / 'identity.json').stat().st_mode & 0o777, 0o600)
-            self.assertEqual(json.loads(config.read_text()), dict(name='Lobby', server=SETTINGS['server']))
+            self.assertEqual(json.loads(config.read_text()), dict(name='Lobby', server=SETTINGS['server'], siteNumber='001'))
             stored = json.loads((cache / 'identity.json').read_text())
             self.assertEqual(stored['token'], identity['token'])
             self.assertEqual(stored['server'], SETTINGS['server'])

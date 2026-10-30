@@ -7,6 +7,9 @@ const { chromium } = await import(
 );
 const browser = await chromium.launch({
   headless: true,
+  ...(process.env.OPENFRAME_BROWSER_EXECUTABLE
+    ? { executablePath: process.env.OPENFRAME_BROWSER_EXECUTABLE }
+    : {}),
   ...(process.env.OPENFRAME_BROWSER_CHANNEL
     ? { channel: process.env.OPENFRAME_BROWSER_CHANNEL }
     : {}),
@@ -48,6 +51,7 @@ try {
     });
     await page.goto('http://192.168.50.1/');
     await page.getByLabel('Screen name').fill('Off-site display');
+    await page.getByLabel('Site number').fill('001');
     await page.getByLabel('Wi-Fi network (SSID)').fill('Test Wi-Fi');
     await page.getByLabel('Wi-Fi password').fill('fake-password');
     await page
@@ -69,6 +73,7 @@ try {
     await page.getByText(/Connecting to Wi-Fi/).waitFor();
     assert.equal(submitted.server, 'https://openframe.example.com');
     assert.equal(submitted.ssid, 'Test Wi-Fi');
+    assert.equal(submitted.siteNumber, '001');
     assert.equal(submitted.clientSecret, 'fake-secret');
     assert.equal(await page.getByLabel('Wi-Fi password').inputValue(), '');
     assert.deepEqual(errors, []);

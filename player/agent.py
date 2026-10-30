@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = '0.15.0'
+VERSION = '0.15.3'
 JSON_LIMIT = 4 * 1024 * 1024
 MEDIA_LIMIT = 25 * 1024 * 1024
 CACHE_LIMIT = 256 * 1024 * 1024
@@ -130,6 +130,10 @@ def read_json(path, default):
 class Agent:
     def __init__(self, config, cache, allow_reboot=False):
         self.config = config
+        site = config.get('siteNumber', '')
+        if not isinstance(site, str) or (site.strip() and not re.fullmatch(r'[0-9]{1,20}', site.strip())):
+            raise ValueError('Site number must contain 1–20 digits')
+        self.site_number = site.strip()
         self.server, self.access_headers = connection_settings(config)
         self.opener = urllib.request.build_opener(SameOriginRedirects())
         self.cache = Path(cache)
@@ -151,6 +155,7 @@ class Agent:
         self.playback = None
         self.playback_at = 0
         self.lock = threading.Lock()
+        self.sync_lock = threading.Lock()
 
     def request(self, endpoint, body=None):
         headers = {'Content-Type': 'application/json', **self.access_headers}
@@ -224,8 +229,15 @@ class Agent:
             temporary.unlink(missing_ok=True)
 
     def sync(self):
+        with self.sync_lock:
+            return self._sync()
+
+    def _sync(self):
         if not self.credentials:
-            self.credentials = self.request('/api/player/enroll', {'name': self.config.get('name', socket.gethostname())})
+            enrollment = {'name': self.config.get('name', socket.gethostname())}
+            if self.site_number:
+                enrollment['siteNumber'] = self.site_number
+            self.credentials = self.request('/api/player/enroll', enrollment)
             self.credentials['server'] = self.server
             atomic_json(self.cache / 'identity.json', self.credentials)
         revision = self.state.get('manifest', {}).get('revision')
@@ -234,15 +246,50 @@ class Agent:
         if time.monotonic() - (self.playback_at or self.started) > 30:
             playback = {'phase': 'stalled', 'error': 'No recent status from the browser player'}
         response = self.request('/api/player/sync', {
-            'revision': revision, 'version': VERSION, 'uptime': time.monotonic() - self.started,
+            'revision': revision, 'siteAck': self.state.get('siteRevision', 0), 'version': VERSION, 'uptime': time.monotonic() - self.started,
             'error': self.error, 'commandAck': self.state.get('commandAck'),
             'playback': playback,
             'recovery': self.recovery_status(),
         })
+        incoming_revision = response.get('siteRevision', 0)
+        current_revision = self.state.get('siteRevision', 0)
+        if not isinstance(incoming_revision, int) or isinstance(incoming_revision, bool) or not 0 <= incoming_revision <= 9007199254740991:
+            raise ValueError('Invalid site assignment revision')
+        if incoming_revision < current_revision:
+            raise ValueError('Stale site assignment response')
+        if current_revision > 0 and incoming_revision == current_revision and response.get('siteId') != self.state.get('siteId'):
+            raise ValueError('Site changed without a new assignment revision')
         response['server'] = self.server
         with self.lock:
             self.connected = True
             self.last_contact = time.time()
+        if incoming_revision > current_revision or ('siteId' in response and response.get('siteId') != self.state.get('siteId')):
+            # Scope changes clear persisted metrics before new media can fail.
+            cleared = {'approved': response.get('approved', False), 'server': self.server,
+                       'siteId': response.get('siteId'), 'siteNumber': response.get('siteNumber'),
+                       'siteRevision': incoming_revision,
+                       'generation': self.state.get('generation', 0) + 1,
+                       'commandAck': self.state.get('commandAck'),
+                       'manifest': {'schemaVersion': 2, 'revision': 'site-pending', 'name': 'Waiting for site content', 'items': [], 'assets': []},
+                       'dataFeeds': {}}
+            atomic_json(self.cache / 'state.json', cleared)
+            with self.lock:
+                self.state = cleared
+            self.verified_revision = None
+        if response.get('approved') and 'dataFeeds' in response:
+            incoming_feeds = response['dataFeeds']
+            if not isinstance(incoming_feeds, dict):
+                raise ValueError('Invalid data feed snapshot map')
+            previous_feeds = self.state.get('dataFeeds', {})
+            revoked = [key for key, value in previous_feeds.items()
+                       if (key not in incoming_feeds or incoming_feeds[key].get('status') == 'unavailable')
+                       and (value.get('status') != 'unavailable' or value.get('data') is not None)]
+            if revoked:
+                unavailable = {'revision': None, 'updatedAt': None, 'data': None, 'status': 'unavailable'}
+                cleared = {**self.state, 'dataFeeds': {**previous_feeds, **{key: unavailable.copy() for key in revoked}}}
+                atomic_json(self.cache / 'state.json', cleared)
+                with self.lock:
+                    self.state = cleared
         response['generation'] = self.state.get('generation', 0)
         response['commandAck'] = self.state.get('commandAck')
         if response.get('approved'):

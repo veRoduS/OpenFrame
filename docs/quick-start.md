@@ -57,3 +57,16 @@ sudo reboot
 ```
 
 This changes the dedicated Pi into a kiosk and refuses an existing OpenFrame configuration or identity. Never clone a Pi after enrollment: it contains unique device/VPN credentials and saved Wi-Fi information.
+
+
+## Site numbers
+
+For multiple locations, enter the site's number during player setup or when
+creating the Pi configuration. Any signed-in member of that store's configured
+access group (or its subgroups) can confirm the pairing code and approve the
+screen; an administrator can also approve. Entering a number alone does not
+grant access. Preserve leading zeros. Sites without access groups and older
+enrollments without site numbers still require an administrator. See
+[site enrollment and shared metric layouts](sites.md).
+Existing approved screens need an upgraded player's heartbeat before their first
+site assignment. Changing local setup text does not move a paired screen.

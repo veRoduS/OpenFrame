@@ -1,3 +1,5 @@
+import { SiteTransfer } from './site-transfer';
+import { useSiteFilter, clearSiteFilters } from './hooks/use-site-filter';
 import { ANDROID_GITHUB_APK } from '../server/android-release-config.mjs';
 import { IconButton } from './components/ui/icon-button';
 import { SlideMetadata, SlideTagsDialog } from './slide-metadata';
@@ -382,6 +384,18 @@ export default function App() {
     dependencies?: Playlist[];
   } | null>(null);
   const [pairCode, setPairCode] = useState('');
+  const [pairSiteId, setPairSiteId] = useState('');
+  const [previewSiteId, setPreviewSiteId] = useSiteFilter(
+    'preview',
+    auth?.authenticated ? auth.user?.id : undefined,
+    libraryState === 'ready' ? library.sites : undefined,
+  );
+  const [screenSite, setScreenSite] = useSiteFilter(
+    'screens',
+    auth?.authenticated ? auth.user?.id : undefined,
+    libraryState === 'ready' ? library.sites : undefined,
+  );
+  const [transferDevice, setTransferDevice] = useState<Device | null>(null);
   const [pairOpen, setPairOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [addScreenOpen, setAddScreenOpen] = useState(false);
@@ -617,12 +631,26 @@ export default function App() {
       throw new Error(
         'No screen with that code. Check the player is connected to this server.',
       );
-    await api(`/api/devices/${d.id}/approve`, 'POST', { code: pairCode });
+    await api(`/api/devices/${d.id}/approve`, 'POST', {
+      code: pairCode,
+      siteId: pairSiteId || null,
+    });
     await refresh();
     setPairOpen(false);
     setPairCode('');
   }
   const groups = library.groups || [];
+  const pairingScreen = library.devices.find(
+    (device) => device.code === pairCode.trim().toUpperCase(),
+  );
+  const pairingSites = (library.sites || []).filter(
+    (site) =>
+      !site.archivedAt &&
+      (auth?.user?.role === 'admin' ||
+        (site.canApprove &&
+          (!pairingScreen ||
+            site.siteNumber === pairingScreen.requestedSiteNumber))),
+  );
   const screenStatus = connectionState;
   const liveSlides = new Set(
     library.playlists
@@ -690,6 +718,16 @@ export default function App() {
         (playlistSort === 'newest' ? -1 : 1),
   );
   const visibleDevices = library.devices
+    .filter(
+      (item) =>
+        !screenSite ||
+        (screenSite === 'unassigned'
+          ? !item.siteId
+          : (item.siteId ||
+              (library.sites || []).find(
+                (site) => site.siteNumber === item.requestedSiteNumber,
+              )?.id) === screenSite),
+    )
     .filter((item) =>
       matchesLibraryFilter(item, filters.devices, groups, screenStatus(item)),
     )
@@ -986,6 +1024,7 @@ export default function App() {
                     run(async () => {
                       await api('/api/logout', 'POST');
                       try {
+                        clearSiteFilters(auth.user?.id);
                         sessionStorage.removeItem('openframe.media.route');
                       } catch {
                         /* Storage is optional. */
@@ -1098,6 +1137,27 @@ export default function App() {
                       </button>
                     </>
                   )}
+                  {view === 'devices' && auth.user?.role !== 'admin' && (
+                    <>
+                      <IconButton
+                        label="Refresh screens"
+                        onClick={() => run(refresh)}
+                      >
+                        <RefreshCw size={18} />
+                      </IconButton>
+                      {(library.sites || []).some(
+                        (site) => site.canApprove,
+                      ) && (
+                        <button
+                          className="primary"
+                          onClick={() => setPairOpen(true)}
+                        >
+                          <Plus size={18} />
+                          Pair a screen
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
               {error && (
@@ -1156,6 +1216,8 @@ export default function App() {
                   {view === 'settings' && auth.user?.role === 'admin' && (
                     <div className="account-section workspace-settings">
                       <DataFeeds
+                        sites={library.sites || []}
+                        userId={auth.user?.id}
                         feeds={library.dataFeeds || []}
                         groups={library.groups}
                         isAdmin
@@ -1647,6 +1709,24 @@ export default function App() {
                   )}
                   {view === 'devices' && (
                     <>
+                      <label>
+                        Site
+                        <select
+                          aria-label="Filter screens by site"
+                          value={screenSite}
+                          onChange={(event) =>
+                            setScreenSite(event.target.value)
+                          }
+                        >
+                          <option value="">All sites</option>
+                          <option value="unassigned">Unassigned</option>
+                          {(library.sites || []).map((site) => (
+                            <option key={site.id} value={site.id}>
+                              {site.siteNumber} · {site.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       {filterBar(
                         'devices',
                         visibleDevices.length,
@@ -1728,7 +1808,20 @@ export default function App() {
                             <DeviceRow
                               key={d.id}
                               device={d}
+                              sites={library.sites || []}
+                              onTransfer={() => setTransferDevice(d)}
+                              onSiteAssign={(siteId) =>
+                                run(async () => {
+                                  await api(
+                                    `/api/devices/${d.id}/site`,
+                                    'POST',
+                                    { siteId },
+                                  );
+                                  await refresh();
+                                }, 'Site assigned. Waiting for the player to sync.')
+                              }
                               canManage={auth.user?.role === 'admin'}
+                              canApprove={!!d.canApprove}
                               playlists={library.playlists}
                               busy={busy}
                               onRename={async (name) => {
@@ -1752,7 +1845,15 @@ export default function App() {
                                 }, 'Screen settings saved. Waiting for the player to sync.')
                               }
                               onApprove={() => {
-                                setPairCode('');
+                                setPairCode(d.code);
+                                setPairSiteId(
+                                  (library.sites || []).find(
+                                    (site) =>
+                                      site.siteNumber ===
+                                        d.requestedSiteNumber &&
+                                      !site.archivedAt,
+                                  )?.id || '',
+                                );
                                 setPairOpen(true);
                               }}
                               onManageAccess={() =>
@@ -1800,10 +1901,18 @@ export default function App() {
                         <div className="empty-state">
                           <Monitor size={38} strokeWidth={1.4} />
                           <h2>Ready for your first screen.</h2>
-                          <button onClick={() => setPairOpen(true)}>
-                            <Plus size={18} />
-                            Pair a screen
-                          </button>
+                          {auth.user?.role === 'admin' ? (
+                            <button onClick={() => setPairOpen(true)}>
+                              <Plus size={18} />
+                              Pair a screen
+                            </button>
+                          ) : (
+                            <p>
+                              Enter the store&apos;s site number on the player.
+                              Pending screens appear here for members of its
+                              access group.
+                            </p>
+                          )}
                         </div>
                       )}
                     </>
@@ -2134,6 +2243,20 @@ export default function App() {
             onClose={() => setTaggedSlide(null)}
             onChanged={refresh}
           />
+          {transferDevice && (
+            <SiteTransfer
+              device={transferDevice}
+              sites={library.sites || []}
+              onClose={() => setTransferDevice(null)}
+              onTransferred={async () => {
+                await refresh();
+                setTransferDevice(null);
+                setNotice(
+                  'Transfer requested. Waiting for the player to confirm clearing its previous site.',
+                );
+              }}
+            />
+          )}
           <Modal
             title="Pair a screen"
             description="Enter the eight-character code shown on the player display."
@@ -2150,13 +2273,50 @@ export default function App() {
                 Pairing code
                 <input
                   value={pairCode}
-                  onChange={(e) => setPairCode(e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    const code = e.target.value.toUpperCase();
+                    setPairCode(code);
+                    const screen = library.devices.find(
+                      (device) => device.code === code,
+                    );
+                    setPairSiteId(
+                      (library.sites || []).find(
+                        (site) =>
+                          site.siteNumber === screen?.requestedSiteNumber &&
+                          !site.archivedAt,
+                      )?.id || '',
+                    );
+                  }}
                   placeholder="A1B2C3D4"
                   minLength={8}
                   maxLength={8}
                   required
                   className="pair-code"
                 />
+              </label>
+              <p className="muted">
+                Requested site:{' '}
+                {library.devices.find((device) => device.code === pairCode)
+                  ?.requestedSiteNumber || 'Not supplied'}
+                . Confirm the approved site below.
+              </p>
+              <label>
+                Approved site
+                <select
+                  aria-label="Approved site"
+                  value={pairSiteId}
+                  required={!!library.sites?.length}
+                  onChange={(event) => setPairSiteId(event.target.value)}
+                >
+                  <option value="">
+                    {library.sites?.length ? 'Choose a site' : 'Unassigned'}
+                  </option>
+                  {pairingSites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.siteNumber} · {site.name}
+                    </option>
+                  ))}
+                </select>
               </label>
               {error && (
                 <p role="alert" className="inline-error">
@@ -2235,10 +2395,29 @@ export default function App() {
             wide
           >
             {preview && (
+              <label>
+                Preview site
+                <select
+                  aria-label="Preview site"
+                  value={previewSiteId}
+                  onChange={(event) => setPreviewSiteId(event.target.value)}
+                >
+                  <option value="">Choose a site for shared metrics</option>
+                  {(library.sites || [])
+                    .filter((site) => !site.archivedAt)
+                    .map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.siteNumber} · {site.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            {preview && (
               <iframe
                 title="Playlist preview"
                 className="preview-frame"
-                src={`/player/?preview=${preview.id}&version=${preview.version}`}
+                src={`/player/?preview=${preview.id}&version=${preview.version}${previewSiteId ? `&siteId=${encodeURIComponent(previewSiteId)}` : ''}`}
                 allow="fullscreen"
               />
             )}
@@ -2258,6 +2437,9 @@ export default function App() {
 
 function DeviceRow({
   device,
+  sites,
+  onSiteAssign,
+  onTransfer,
   playlists,
   onRename,
   onSave,
@@ -2267,9 +2449,14 @@ function DeviceRow({
   onManageAccess,
   busy,
   canManage,
+  canApprove,
 }: {
   device: Device;
+  sites: NonNullable<Library['sites']>;
+  onSiteAssign: (siteId: string) => void;
+  onTransfer: () => void;
   canManage: boolean;
+  canApprove: boolean;
   playlists: Playlist[];
   onRename: (name: string) => Promise<void>;
   onSave: (d: Device) => void;
@@ -2279,6 +2466,7 @@ function DeviceRow({
   onManageAccess: () => void;
   busy: boolean;
 }) {
+  const [assignSite, setAssignSite] = useState('');
   const [name, setName] = useState(device.name);
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
@@ -2342,13 +2530,15 @@ function DeviceRow({
           ) : (
             <div className="screen-name-display">
               <strong>{device.name}</strong>
-              <button
-                type="button"
-                onClick={() => setEditingName(true)}
-                aria-label={`Rename ${device.name}`}
-              >
-                Rename
-              </button>
+              {(device.approved || canManage) && (
+                <button
+                  type="button"
+                  onClick={() => setEditingName(true)}
+                  aria-label={`Rename ${device.name}`}
+                >
+                  Rename
+                </button>
+              )}
             </div>
           )}
           {nameError && <p className="inline-error">{nameError}</p>}
@@ -2366,6 +2556,66 @@ function DeviceRow({
               : 'Offline'}
         </span>
       </div>
+      <span className="muted">
+        {device.siteId
+          ? (() => {
+              const site = sites.find((item) => item.id === device.siteId);
+              return site
+                ? `Site ${site.siteNumber} · ${site.name}`
+                : 'Site unavailable';
+            })()
+          : device.requestedSiteNumber
+            ? `Requested site ${device.requestedSiteNumber} · Not assigned`
+            : 'Site unassigned'}
+      </span>
+      {device.siteTransfer && (
+        <p className="muted">
+          {device.siteTransfer.clearedAt
+            ? 'Previous site cache cleared'
+            : 'Transfer pending · waiting for the player to clear its previous site'}
+        </p>
+      )}
+      {device.approved && device.siteId && canManage && (
+        <button
+          disabled={
+            busy || (!!device.siteTransfer && !device.siteTransfer.clearedAt)
+          }
+          onClick={onTransfer}
+        >
+          Transfer site
+        </button>
+      )}
+      {device.approved && !device.siteId && canManage && sites.length > 0 && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSiteAssign(assignSite);
+          }}
+        >
+          <label>
+            Assign site
+            <select
+              aria-label={`Assign site for ${device.name}`}
+              value={assignSite}
+              required
+              onChange={(event) => setAssignSite(event.target.value)}
+            >
+              <option value="">Choose a site</option>
+              {sites
+                .filter((site) => !site.archivedAt)
+                .map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.siteNumber} · {site.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button disabled={busy}>Assign site</button>
+          <p className="muted">
+            Requires player 0.15.1 or newer for the first site assignment.
+          </p>
+        </form>
+      )}
       {device.approved ? (
         <>
           <div className="device-controls">
@@ -2526,7 +2776,9 @@ function DeviceRow({
         </>
       ) : (
         <div className="device-controls">
-          {canManage && <button onClick={onApprove}>Enter pairing code</button>}
+          {canApprove && (
+            <button onClick={onApprove}>Enter pairing code</button>
+          )}
           {canManage && (
             <IconButton label="Remove pending screen" onClick={onDelete}>
               <Trash2 size={18} />

@@ -1,3 +1,13 @@
+import {
+  mountSites,
+  requireActiveSite,
+  siteByNumber,
+  siteMember,
+  siteNumberSchema,
+  siteTransaction,
+  auditSite,
+} from './sites.mjs';
+import { mountSiteTransfers, supportsSiteVersion } from './site-transfers.mjs';
 import { mountDataFeeds, feedMetadata, feedIds } from './data-feeds.mjs';
 import { composeFork, identifyEntries } from './playlist-forks.mjs';
 import { publicationState } from './publication-state.mjs';
@@ -343,6 +353,7 @@ export function createApp({
   };
   app.get('/api/health', (req, res) => res.json({ ok: true, version }));
   accounts.mount(app, rateLimit);
+  mountSites(app, { db, administrator, accounts });
   const vault = mountScreenSetup(app, {
     admin: administrator,
     db,
@@ -474,7 +485,7 @@ export function createApp({
       return item.layers.flatMap((l) =>
         ['image', 'video'].includes(l.type) && !l.removedMedia
           ? [['asset', l.assetId]]
-          : l.type === 'data' && l.data?.feedId
+          : l.type === 'data' && l.data?.feedId && !l.data.siteBinding
             ? [['data-feed', l.data.feedId]]
             : [],
       );
@@ -804,6 +815,28 @@ export function createApp({
         .filter(Boolean) || [],
   });
   app.get('/api/library', admin, (req, res) => {
+    const sites = db
+      .prepare('SELECT * FROM sites ORDER BY siteNumber,id')
+      .all();
+    const canApproveSite = (site) =>
+      !site.archivedAt &&
+      (req.user.role === 'admin' || siteMember(db, req.user, site));
+    const devices = db
+      .prepare(
+        "SELECT body FROM records WHERE kind='device' ORDER BY rowid DESC",
+      )
+      .all()
+      .map((row) => JSON.parse(row.body))
+      .filter(
+        (device) =>
+          accounts.can(req.user, 'device', device.id) ||
+          (!device.approved &&
+            sites.some(
+              (site) =>
+                site.siteNumber === device.requestedSiteNumber &&
+                canApproveSite(site),
+            )),
+      );
     const groups = db
       .prepare(
         'SELECT id,name,parentId FROM groups ORDER BY name COLLATE NOCASE',
@@ -887,10 +920,32 @@ export function createApp({
     };
     res.json({
       groups,
+      sites: sites
+        .filter(
+          (site) =>
+            req.user.role === 'admin' ||
+            canApproveSite(site) ||
+            list('device').some((device) => device.siteId === site.id) ||
+            list('data-feed').some((feed) => feed.siteId === site.id),
+        )
+        .map(({ id, siteNumber, name, archivedAt, ...site }) => ({
+          id,
+          siteNumber,
+          name,
+          archivedAt,
+          canApprove: canApproveSite({ ...site, archivedAt }),
+        })),
       dataFeeds: list('data-feed').map((feed) =>
         withGroups(
           'data-feed',
-          publicResource('data-feed', feedMetadata(feed)),
+          publicResource('data-feed', {
+            ...feedMetadata(feed),
+            siteNumber: feed.siteId
+              ? db
+                  .prepare('SELECT siteNumber FROM sites WHERE id=?')
+                  .get(feed.siteId)?.siteNumber || null
+              : null,
+          }),
         ),
       ),
       slides: list('slide').map((item) =>
@@ -923,9 +978,17 @@ export function createApp({
         parentId: item.parentId || null,
         readOnly: req.user.role !== 'admin',
       })),
-      devices: list('device').map((item) =>
-        withGroups('device', publicDevice(item)),
-      ),
+      devices: devices.map((item) => ({
+        ...withGroups('device', publicDevice(item)),
+        canApprove:
+          !item.approved &&
+          (req.user.role === 'admin' ||
+            sites.some(
+              (site) =>
+                site.siteNumber === item.requestedSiteNumber &&
+                canApproveSite(site),
+            )),
+      })),
     });
   });
   function checkImages(slide, user) {
@@ -1466,7 +1529,7 @@ export function createApp({
       ),
     };
   }
-  function snapshot(p, publishing = false) {
+  function snapshot(p, publishing = false, previewing = false) {
     if (p.fork) {
       requireRecord('playlist', p.fork.masterId);
       try {
@@ -1508,8 +1571,9 @@ export function createApp({
     }));
     if (feedIds({ items }).length > 20)
       throw fail(400, 'A playlist can use at most 20 distinct data feeds');
-    for (const item of items)
-      dataFeeds.validateLayers(item.slide, accounts.context.getStore()?.user);
+    if (!previewing)
+      for (const item of items)
+        dataFeeds.validateLayers(item.slide, accounts.context.getStore()?.user);
     return {
       schemaVersion: items.some((i) =>
         i.slide.layers.some((l) => l.type === 'video'),
@@ -1648,19 +1712,27 @@ export function createApp({
     const published = req.query.version === 'published';
     if (published && !playlist.published)
       throw fail(404, 'This playlist has not been published');
-    const manifest = published
+    let manifest = published
       ? structuredClone(playlist.published)
-      : snapshot(playlist);
+      : snapshot(playlist, false, true);
     manifest.revision = hash(
       JSON.stringify([manifest.items, manifest.assets, manifest.transition]),
     );
+    const previewSite = req.query.siteId
+      ? z.uuid().parse(req.query.siteId)
+      : null;
+    if (previewSite) requireActiveSite(db, previewSite);
+    const previewVisible = (id) =>
+      accounts.can(req.user, 'data-feed', id) &&
+      (!previewSite ||
+        (allRecords('data-feed').find((feed) => feed.id === id)?.siteId ||
+          null) === previewSite);
+    manifest = dataFeeds.resolveSites(manifest, previewSite, previewVisible);
     res.json({
       ...manifest,
       weather: weather.forManifest(manifest),
       stocks: stocks.forManifest(manifest),
-      dataFeeds: dataFeeds.snapshots(manifest, (id) =>
-        accounts.can(req.user, 'data-feed', id),
-      ),
+      dataFeeds: dataFeeds.snapshots(manifest, previewVisible),
     });
   });
   app.get('/api/weather/zip', admin, async (req, res) => {
@@ -2176,9 +2248,10 @@ export function createApp({
     },
   );
   app.post('/api/player/enroll', rateLimit, (req, res) => {
-    const { name, wireguardPublicKey, enrollmentToken } = z
+    const { name, siteNumber, wireguardPublicKey, enrollmentToken } = z
       .object({
         name: z.string().trim().min(1).max(100),
+        siteNumber: siteNumberSchema.optional(),
         wireguardPublicKey: z.string().max(44).optional(),
         enrollmentToken: z
           .string()
@@ -2202,6 +2275,7 @@ export function createApp({
           code: previous.code,
         });
     }
+    if (siteNumber) siteByNumber(db, siteNumber);
     managedVpn.validateEnrollment(wireguardPublicKey);
     for (const d of list('device'))
       if (!d.approved && Date.now() - Date.parse(d.createdAt) > 86400000)
@@ -2218,6 +2292,8 @@ export function createApp({
       code,
       tokenHash: hash(token),
       approved: false,
+      siteId: null,
+      requestedSiteNumber: siteNumber || null,
       playlistId: null,
       rotation: 0,
       blank: false,
@@ -2229,12 +2305,110 @@ export function createApp({
     });
     res.status(201).json({ id: device.id, token, code });
   });
-  app.post('/api/devices/:id/approve', administrator, (req, res) => {
-    const device = requireRecord('device', req.params.id);
-    const { code } = z.object({ code: z.string() }).parse(req.body);
+  app.post('/api/devices/:id/approve', admin, (req, res) => {
+    // Pending screens have no resource grants yet. Authorize this one operation
+    // against the requested site's membership, without granting pending edits.
+    const row = db
+      .prepare("SELECT body FROM records WHERE kind='device' AND id=?")
+      .get(req.params.id);
+    if (!row) throw fail(404, 'Not found');
+    const device = JSON.parse(row.body);
+    const { code, siteId } = z
+      .object({ code: z.string(), siteId: z.uuid().nullable().optional() })
+      .parse(req.body);
+    const administrator = req.user.role === 'admin';
+    const requestedSite = db
+      .prepare('SELECT * FROM sites WHERE siteNumber=?')
+      .get(device.requestedSiteNumber || '');
+    if (
+      !administrator &&
+      (!requestedSite ||
+        requestedSite.archivedAt ||
+        !siteMember(db, req.user, requestedSite))
+    )
+      throw fail(403, 'Store membership is required to approve this screen');
+    if (!administrator && device.approved)
+      throw fail(409, 'This screen is already approved');
+    const assigned =
+      siteId === undefined
+        ? device.siteId || (!administrator && requestedSite?.id) || null
+        : siteId;
+    if (!administrator && assigned !== requestedSite.id)
+      throw fail(403, 'Approve this screen only for its requested store');
     if (device.code !== code.trim().toUpperCase())
       throw fail(400, 'Pairing code does not match');
-    res.json(publicDevice(put('device', { ...device, approved: true })));
+    if (device.approved && assigned !== (device.siteId || null))
+      throw fail(409, 'An approved screen cannot be moved through pairing');
+    const site = assigned ? requireActiveSite(db, assigned) : null;
+    if (!assigned && db.prepare('SELECT COUNT(*) AS n FROM sites').get().n)
+      throw fail(400, 'Choose a site before approving this screen');
+    const saved = siteTransaction(db, () => {
+      const next = {
+        ...device,
+        siteId: assigned,
+        siteRevision: device.siteRevision || (assigned ? 1 : 0),
+        approved: true,
+      };
+      db.prepare("UPDATE records SET body=? WHERE kind='device' AND id=?").run(
+        JSON.stringify(next),
+        device.id,
+      );
+      if (!device.approved) {
+        if (!administrator) {
+          db.prepare(
+            "INSERT OR IGNORE INTO resource_grants(kind,id,userId,groupId) VALUES ('device',?,'',?)",
+          ).run(device.id, site.accessGroupId);
+        }
+        auditSite(
+          db,
+          req.user,
+          'screen-approved',
+          'device',
+          device.id,
+          null,
+          assigned,
+        );
+      }
+      return next;
+    });
+    res.json(publicDevice(saved));
+  });
+  app.post('/api/devices/:id/site', administrator, (req, res) => {
+    const device = requireRecord('device', req.params.id);
+    const { siteId } = z.object({ siteId: z.uuid() }).strict().parse(req.body);
+    requireActiveSite(db, siteId);
+    if (!device.approved) throw fail(400, 'Assign the site during pairing');
+    if (device.siteId && device.siteId !== siteId)
+      throw fail(
+        409,
+        'Site transfers are not available yet; reset and re-enroll the player',
+      );
+    if (!device.siteId && !supportsSiteVersion(device.status?.version))
+      throw fail(
+        409,
+        'Upgrade this player to 0.15.1 or newer and wait for its heartbeat before assigning a site',
+      );
+    const saved = siteTransaction(db, () => {
+      const next = put('device', {
+        ...device,
+        siteId,
+        siteRevision: device.siteId
+          ? device.siteRevision || 0
+          : (device.siteRevision || 0) + 1,
+      });
+      if (!device.siteId)
+        auditSite(
+          db,
+          req.user,
+          'screen-site-assigned',
+          'device',
+          device.id,
+          null,
+          siteId,
+        );
+      return next;
+    });
+    res.json(publicDevice(saved));
   });
   app.put('/api/devices/:id', admin, (req, res) => {
     const device = requireRecord('device', req.params.id);
@@ -2264,6 +2438,8 @@ export function createApp({
     res.json({ ok: true });
   });
   function feedVisibleToDevice(device, id) {
+    const feed = allRecords('data-feed').find((item) => item.id === id);
+    if ((feed?.siteId || null) !== (device.siteId || null)) return false;
     const audiences = grants('device', device.id);
     const owner = db
       .prepare('SELECT ownerId FROM resource_access WHERE kind=? AND id=?')
@@ -2282,10 +2458,25 @@ export function createApp({
       )
     );
   }
+  mountSiteTransfers(app, {
+    db,
+    administrator,
+    requireRecord,
+    put,
+    publicDevice,
+    allRecords,
+    dataFeeds,
+  });
   app.post('/api/player/sync', player, (req, res) => {
     const status = z
       .object({
         revision: z.string().nullable().optional(),
+        siteAck: z
+          .number()
+          .int()
+          .min(0)
+          .max(Number.MAX_SAFE_INTEGER)
+          .optional(),
         error: z.string().max(500).nullable().optional(),
         version: z.string().max(50).optional(),
         uptime: z.number().nonnegative().optional(),
@@ -2318,14 +2509,46 @@ export function createApp({
     device.status = status;
     device.lastSeen = new Date().toISOString();
     if (status.commandAck === device.command?.id) device.command = null;
-    put('device', device);
+    if ((status.siteAck || 0) > (device.siteRevision || 0))
+      throw fail(400, 'Site acknowledgement is ahead of the server assignment');
+    if (
+      device.siteTransfer &&
+      !device.siteTransfer.clearedAt &&
+      status.siteAck === device.siteRevision
+    ) {
+      siteTransaction(db, () => {
+        device.siteTransfer = {
+          ...device.siteTransfer,
+          clearedAt: new Date().toISOString(),
+        };
+        put('device', device);
+        auditSite(
+          db,
+          { ...device, kind: 'device' },
+          'screen-site-cleared',
+          'device',
+          device.id,
+          device.siteTransfer.fromSiteId,
+          device.siteId,
+        );
+      });
+    } else put('device', device);
     if (!device.approved)
       return res.json({ approved: false, code: device.code });
-    const published = device.playlistId
-      ? get('playlist', device.playlistId)?.published
-      : null;
+    const published = dataFeeds.resolveSites(
+      device.playlistId ? get('playlist', device.playlistId)?.published : null,
+      device.siteId,
+      (id) => feedVisibleToDevice(device, id),
+    );
     res.json({
       approved: true,
+      siteId: device.siteId || null,
+      siteRevision: device.siteRevision || 0,
+      siteNumber: device.siteId
+        ? db
+            .prepare('SELECT siteNumber FROM sites WHERE id=?')
+            .get(device.siteId)?.siteNumber || null
+        : null,
       blank: device.blank,
       rotation: device.rotation,
       command: device.command,

@@ -41,7 +41,7 @@ def command(*args, input=None, timeout=60):
 
 
 def validate_input(value):
-    if not isinstance(value, dict) or set(value) - {'name', 'ssid', 'password', 'country', 'server', 'clientId', 'clientSecret'}:
+    if not isinstance(value, dict) or set(value) - {'name', 'ssid', 'password', 'country', 'server', 'clientId', 'clientSecret', 'siteNumber'}:
         raise ValueError('Invalid setup fields')
     for field in ('name', 'ssid', 'password', 'country', 'server'):
         if not isinstance(value.get(field), str) or any(ord(c) < 32 for c in value[field]):
@@ -49,6 +49,11 @@ def validate_input(value):
     if not 1 <= len(value['name'].strip()) <= 100 or not 1 <= len(value['ssid'].encode()) <= 32 or len(value['password']) > 64 or not re.fullmatch('[A-Z]{2}', value['country']):
         raise ValueError('Check screen name, Wi-Fi details, and country code')
     config = {'name': value['name'].strip(), 'server': value['server'].strip()}
+    site = value.get('siteNumber', '')
+    if not isinstance(site, str) or (site.strip() and not re.fullmatch(r'[0-9]{1,20}', site.strip())):
+        raise ValueError('Site number must contain 1–20 digits')
+    if site.strip():
+        config['siteNumber'] = site.strip()
     if value.get('clientId') or value.get('clientSecret'):
         config['cloudflare_access'] = {'client_id': value.get('clientId'), 'client_secret': value.get('clientSecret')}
     server, _ = connection_settings(config)
@@ -95,7 +100,7 @@ def client_config(private_key, value):
     return wireguard.validate(text), str(host)
 
 
-def install_private_connection(settings, private_key, identity, name):
+def install_private_connection(settings, private_key, identity, name, site_number=None):
     text, host = client_config(private_key, settings)
     guard(host)
     wireguard.install(text)
@@ -130,7 +135,7 @@ After=openframe-managed-network.service
     user = pwd.getpwnam('openframe')
     atomic_json(CACHE / 'identity.json', {**identity, 'server': settings['server']},
                 owner=(user.pw_uid, user.pw_gid))
-    atomic_json(CONFIG, {'name': name, 'server': settings['server']},
+    atomic_json(CONFIG, {'name': name, 'server': settings['server'], **({'siteNumber': site_number} if site_number else {})},
                 mode=0o640, owner=(0, user.pw_gid))
     command('systemctl', 'daemon-reload')
     command('systemctl', 'enable', '--now', 'openframe-managed-network.service')
@@ -237,7 +242,7 @@ class Setup:
         if identity.get('server') != value['server']:
             identity = {'server': value['server'], 'token': secrets.token_hex(32)}
             atomic_json(identity_path, identity)
-        result = request(value['config'], '/api/player/enroll', {'name': value['name'], 'wireguardPublicKey': public_key, 'enrollmentToken': identity['token']})
+        result = request(value['config'], '/api/player/enroll', {'name': value['name'], 'wireguardPublicKey': public_key, 'enrollmentToken': identity['token'], **({'siteNumber': value['config']['siteNumber']} if value['config'].get('siteNumber') else {})})
         if result.get('token') != identity['token'] or not re.fullmatch('[A-F0-9]{8}', result.get('code', '')) or not isinstance(result.get('id'), str):
             raise ValueError('Invalid enrollment response')
         identity.update(result)
@@ -247,7 +252,7 @@ class Setup:
             result = request(value['config'], '/api/player/provision', {}, identity['token'])
             if result.get('approved') is True:
                 self.status.update(phase='Connecting WireGuard', code=None)
-                install_private_connection(result.get('wireguard'), private_key, identity, value['name'])
+                install_private_connection(result.get('wireguard'), private_key, identity, value['name'], value['config'].get('siteNumber'))
                 self.status.update(phase='Ready', error=None)
                 return
             time.sleep(5)

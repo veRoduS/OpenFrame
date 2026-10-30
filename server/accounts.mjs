@@ -41,6 +41,7 @@ function matches(value, saved) {
 const publicUser = ({ password: _password, ...user }) => user;
 
 export function createAccounts(db) {
+  let sitePolicy = { user: () => true, group: () => true, device: () => false };
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password TEXT, role TEXT NOT NULL DEFAULT 'user', disabled INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS user_sessions (token TEXT PRIMARY KEY, userId TEXT NOT NULL, expires INTEGER NOT NULL);
@@ -137,10 +138,14 @@ export function createAccounts(db) {
   function permission(user, kind, id) {
     if (!user || user.disabled) return null;
     if (user.role === 'admin') return 'edit';
+    if (!sitePolicy.user(user, kind, id)) return null;
     if (['folder', 'slide-folder', 'playlist-folder'].includes(kind))
       return 'view';
     if (!libraryKinds.has(kind))
-      return legacyCan(user, kind, id) ? 'edit' : null;
+      return legacyCan(user, kind, id) ||
+        (kind === 'device' && sitePolicy.device(user, id))
+        ? 'edit'
+        : null;
     const management = db
       .prepare('SELECT groupId FROM resource_management WHERE kind=? AND id=?')
       .get(kind, id)?.groupId;
@@ -180,6 +185,7 @@ export function createAccounts(db) {
   const can = (user, kind, id) => !!permission(user, kind, id);
   const canEdit = (user, kind, id) => permission(user, kind, id) === 'edit';
   function groupCan(groupId, kind, id) {
+    if (!sitePolicy.group(groupId, kind, id)) return false;
     if (!libraryKinds.has(kind)) return legacyGroupCan(groupId, kind, id);
     const audience = db
       .prepare('SELECT groupId FROM resource_management WHERE kind=? AND id=?')
@@ -827,6 +833,9 @@ export function createAccounts(db) {
     });
   }
   return {
+    configureSitePolicy: (policy) => {
+      sitePolicy = policy;
+    },
     allowed,
     canViewAsset,
     created,

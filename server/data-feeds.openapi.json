@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenFrame Data Feeds API",
     "version": "1.1.0",
-    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md."
+    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md. Application ingestion is namespaced by application, assigned site, and source name. Existing unassigned keys retain a separate legacy namespace."
   },
   "servers": [
     {
@@ -1833,7 +1833,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TokenRequest"
+                "$ref": "#/components/schemas/ApplicationTokenRequest"
               },
               "example": {
                 "name": "Production",
@@ -2055,7 +2055,7 @@
             }
           },
           "429": {
-            "description": "Shared application ingestion budget exceeded: RATE_LIMITED",
+            "description": "RATE_LIMITED: 60 attempts/minute per application/site across its keys and sources; 600/minute application ceiling. Retry-After is returned.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2082,6 +2082,364 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/sites": {
+      "get": {
+        "summary": "Admin lists sites",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Site"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid site input"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "409": {
+            "description": "Duplicate site number"
+          }
+        }
+      },
+      "post": {
+        "summary": "Admin creates a site",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid site input"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "409": {
+            "description": "Duplicate site number"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "siteNumber",
+                  "name"
+                ],
+                "properties": {
+                  "siteNumber": {
+                    "type": "string",
+                    "pattern": "^[0-9]{1,20}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "accessGroupId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "Optional membership gate in addition to resource permissions. Includes the group and descendants; administrators bypass it."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sites/{id}": {
+      "patch": {
+        "summary": "Admin renames, archives, or restores a site",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid site input"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "409": {
+            "description": "Duplicate site number"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "archived": {
+                    "type": "boolean"
+                  },
+                  "accessGroupId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid",
+                    "description": "Optional membership gate in addition to resource permissions. Includes the group and descendants; administrators bypass it."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/applications/{applicationId}/assign-site": {
+      "post": {
+        "summary": "Admin assigns all unassigned application keys and sources to their original site, preserving feed IDs",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "siteId"
+                ],
+                "properties": {
+                  "siteId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assigned; response includes assignedFeeds and assignedKeys counts. Repeated calls are harmless."
+          },
+          "400": {
+            "description": "Invalid site"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Application not found"
+          },
+          "409": {
+            "description": "Archived site or SITE_SOURCE_CONFLICT; no partial assignment"
+          }
+        }
+      }
+    },
+    "/api/data-feeds/{feedId}/assign-site": {
+      "post": {
+        "summary": "Admin assigns an unassigned manual feed once, preserving its ID, keys and values",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "feedId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "siteId"
+                ],
+                "properties": {
+                  "siteId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Assigned feed metadata; repeating the same assignment is harmless"
+          },
+          "400": {
+            "description": "Invalid site"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Administrator required"
+          },
+          "404": {
+            "description": "Feed not found"
+          },
+          "409": {
+            "description": "Archived site, application-managed feed, or immutable assigned site"
+          }
+        }
+      }
+    },
+    "/api/sites/audit": {
+      "get": {
+        "summary": "Administrator-only paginated site action history without credentials or metric payloads",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Unchanged nextCursor from the preceding response"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Site history page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteAuditEntry"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query"
+          },
+          "401": {
+            "description": "Session required"
+          },
+          "403": {
+            "description": "Administrator required"
           }
         }
       }
@@ -2159,6 +2517,14 @@
               "$ref": "#/components/schemas/Field"
             },
             "description": "Unique field keys. Definitions cannot be changed after creation."
+          },
+          "siteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Active site required for new manual feeds once any site exists. Updates cannot change an existing assignment."
           }
         }
       },
@@ -2227,7 +2593,21 @@
               },
               "sourceKey": {
                 "type": "string",
-                "description": "Application-supplied source name; namespaced by applicationId."
+                "description": "Application-supplied source name; namespaced by applicationId and assigned site."
+              },
+              "siteId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid",
+                "description": "Assigned site; null denotes the legacy unassigned namespace."
+              },
+              "siteNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             }
           }
@@ -2578,6 +2958,14 @@
           "applicationId": {
             "type": "string",
             "format": "uuid"
+          },
+          "siteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Assigned site; null denotes the legacy unassigned namespace."
           }
         }
       },
@@ -2711,6 +3099,133 @@
           },
           "created": {
             "type": "boolean"
+          },
+          "siteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Assigned site; null denotes the legacy unassigned namespace."
+          }
+        }
+      },
+      "ApplicationTokenRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "expiresInDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365,
+            "default": 90
+          },
+          "siteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Assigned site; null denotes the legacy unassigned namespace."
+          }
+        },
+        "description": "Site is required once any site has been configured."
+      },
+      "Site": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "siteNumber": {
+            "type": "string",
+            "pattern": "^[0-9]{1,20}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "accessGroupId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Optional membership gate in addition to resource permissions. Includes the group and descendants; administrators bypass it."
+          }
+        }
+      },
+      "SiteAuditEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actorKind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "device"
+            ]
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "actorName": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "resourceKind": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "resourceName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fromSiteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "toSiteId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       }

@@ -1711,3 +1711,533 @@ void test('unused applications can be deleted and recreated; feed removal clears
     404,
   );
 });
+
+void test('site-bound keys isolate identical sources and preserve identity during rotation', async (t) => {
+  const { admin, application, ingest, applicationKey, client } =
+    await applicationFixture(t);
+  const original = await ingest({ completed: 7 });
+  const siteA = (
+    await admin('/api/sites', 'POST', { siteNumber: ' 001 ', name: 'North' })
+  ).data;
+  const siteB = (
+    await admin('/api/sites', 'POST', { siteNumber: '002', name: 'South' })
+  ).data;
+  assert.equal(siteA.siteNumber, '001');
+  assert.equal(
+    (
+      await admin('/api/sites', 'POST', {
+        siteNumber: '001',
+        name: 'Duplicate',
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await admin('/api/sites', 'POST', { siteNumber: 'bad', name: 'Invalid' }))
+      .status,
+    400,
+  );
+  assert.equal((await client()('/api/sites')).status, 401);
+  assert.equal(
+    (await admin(`/api/sites/${siteA.id}`, 'PATCH', { siteNumber: '003' }))
+      .status,
+    400,
+  );
+  const issue = (siteId) =>
+    admin(`/api/data-feeds/applications/${application.id}/tokens`, 'POST', {
+      name: 'Integration',
+      siteId,
+    });
+  assert.equal((await issue(null)).data.code, 'SITE_REQUIRED');
+  assert.equal((await issue(randomUUID())).status, 400);
+  const keyA = (await issue(siteA.id)).data;
+  const keyB = (await issue(siteB.id)).data;
+  const a = await ingest({ completed: 10 }, 'production', keyA.token);
+  const b = await ingest({ completed: 20 }, 'production', keyB.token);
+  assert.equal(a.status, 201);
+  assert.equal(b.status, 201);
+  assert.equal(a.data.siteId, siteA.id);
+  assert.equal(b.data.siteId, siteB.id);
+  assert.notEqual(a.data.feedId, b.data.feedId);
+  assert.notEqual(a.data.feedId, original.data.feedId);
+  const rotated = (await issue(siteA.id)).data;
+  const again = await ingest({ completed: 11 }, 'production', rotated.token);
+  assert.equal(again.status, 200);
+  assert.equal(again.data.feedId, a.data.feedId);
+  assert.equal(
+    (await admin(`/api/data-feeds/${b.data.feedId}/data`)).data.data.completed,
+    20,
+  );
+  // A site claim inside the metric payload cannot change the authorized destination.
+  assert.equal(
+    (
+      await ingest(
+        { completed: 999, siteId: siteB.id },
+        'production',
+        keyA.token,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await admin(`/api/data-feeds/${a.data.feedId}/data`)).data.data.completed,
+    11,
+  );
+  assert.equal(
+    (await ingest({ completed: 8 }, 'production', applicationKey.token)).data
+      .feedId,
+    original.data.feedId,
+  );
+  const feedKey = (
+    await admin(`/api/data-feeds/${a.data.feedId}/tokens`, 'POST', {
+      name: 'Legacy protocol',
+    })
+  ).data;
+  const savedSlide = (await admin('/api/slides', 'POST', slide(a.data.feedId)))
+    .data;
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Scoped values',
+      items: [{ slideId: savedSlide.id, duration: 30 }],
+    })
+  ).data;
+  await admin(`/api/playlists/${playlist.id}/publish`, 'POST');
+  const player = client();
+  const device = (
+    await player('/api/player/enroll', 'POST', { name: 'Unassigned screen' })
+  ).data;
+  await admin(`/api/devices/${device.id}/approve`, 'POST', {
+    code: device.code,
+    siteId: siteB.id,
+  });
+  await admin(`/api/devices/${device.id}`, 'PUT', {
+    name: 'Unassigned screen',
+    playlistId: playlist.id,
+    blank: false,
+    rotation: 0,
+  });
+  const sync = await player(
+    '/api/player/sync',
+    'POST',
+    {},
+    { Authorization: `Bearer ${device.token}` },
+  );
+  assert.equal(sync.data.dataFeeds[a.data.feedId].status, 'unavailable');
+  assert.equal(sync.data.dataFeeds[a.data.feedId].data, null);
+  await admin(`/api/sites/${siteA.id}`, 'PATCH', { archived: true });
+  assert.equal(
+    (await ingest({ completed: 12 }, 'production', keyA.token)).data.code,
+    'SITE_ARCHIVED',
+  );
+  assert.equal((await issue(siteA.id)).status, 409);
+  assert.equal(
+    (
+      await client()(
+        `/api/data-feeds/${a.data.feedId}/data`,
+        'PUT',
+        { completed: 99 },
+        { Authorization: `Bearer ${feedKey.token}` },
+      )
+    ).data.code,
+    'SITE_ARCHIVED',
+  );
+  await admin(`/api/sites/${siteA.id}`, 'PATCH', { archived: false });
+  assert.equal(
+    (await ingest({ completed: 12 }, 'production', keyA.token)).data.feedId,
+    a.data.feedId,
+  );
+});
+
+void test('legacy source migration preserves key hashes and feed IDs and is repeatable', async (t) => {
+  const { admin, application, applicationKey, ingest, db } =
+    await applicationFixture(t);
+  const original = await ingest({ completed: 17 });
+  const before = db
+    .prepare('SELECT digest FROM data_feed_application_tokens WHERE id=?')
+    .get(applicationKey.id).digest;
+  db.exec(`ALTER TABLE data_feed_application_tokens DROP COLUMN siteId;
+    ALTER TABLE data_feed_application_sources RENAME TO scoped_sources;
+    CREATE TABLE data_feed_application_sources(applicationId TEXT NOT NULL,sourceKey TEXT NOT NULL,feedId TEXT NOT NULL UNIQUE,PRIMARY KEY(applicationId,sourceKey));
+    INSERT INTO data_feed_application_sources SELECT applicationId,sourceKey,feedId FROM scoped_sources;
+    DROP TABLE scoped_sources;`);
+  const dir = path.dirname(
+    db
+      .prepare('PRAGMA database_list')
+      .all()
+      .find((row) => row.name === 'main').file,
+  );
+  for (let iteration = 0; iteration < 2; iteration++) {
+    const reopened = createApp({ dataDir: dir });
+    try {
+      assert.equal(
+        reopened.db
+          .prepare(
+            'SELECT feedId FROM data_feed_application_sources WHERE applicationId=? AND siteId=?',
+          )
+          .get(application.id, '').feedId,
+        original.data.feedId,
+      );
+      const key = reopened.db
+        .prepare('SELECT * FROM data_feed_application_tokens WHERE id=?')
+        .get(applicationKey.id);
+      assert.equal(key.digest, before);
+      assert.equal(key.siteId, null);
+    } finally {
+      reopened.close();
+      reopened.db.close();
+    }
+  }
+  assert.equal(
+    (await ingest({ completed: 18 })).data.feedId,
+    original.data.feedId,
+  );
+  assert.equal(
+    (await admin(`/api/data-feeds/${original.data.feedId}/data`)).data.data
+      .completed,
+    18,
+  );
+});
+
+void test('enrollment site is untrusted until pairing; first assignments require cache-aware players', async (t) => {
+  const { admin, client, application, ingest, db } =
+    await applicationFixture(t);
+  const oldPlayer = client();
+  const old = (
+    await oldPlayer('/api/player/enroll', 'POST', { name: 'Existing screen' })
+  ).data;
+  await admin(`/api/devices/${old.id}/approve`, 'POST', { code: old.code });
+  const a = (
+    await admin('/api/sites', 'POST', { siteNumber: '001', name: 'North' })
+  ).data;
+  const b = (
+    await admin('/api/sites', 'POST', { siteNumber: '002', name: 'South' })
+  ).data;
+  const player = client();
+  for (const siteNumber of ['003', 'not-a-site', 1])
+    assert.equal(
+      (
+        await player('/api/player/enroll', 'POST', {
+          name: 'Bad site',
+          siteNumber,
+        })
+      ).status,
+      400,
+    );
+  const enrolled = (
+    await player('/api/player/enroll', 'POST', {
+      name: 'New screen',
+      siteNumber: '001',
+    })
+  ).data;
+  let row = (await admin('/api/library')).data.devices.find(
+    (item) => item.id === enrolled.id,
+  );
+  assert.equal(row.siteId, null);
+  assert.equal(row.requestedSiteNumber, '001');
+  const sync = (credentials, version = '0.15.1') =>
+    player(
+      '/api/player/sync',
+      'POST',
+      { version, siteId: b.id },
+      { Authorization: `Bearer ${credentials.token}` },
+    );
+  assert.equal((await sync(enrolled)).data.approved, false);
+  assert.equal(
+    (
+      await admin(`/api/devices/${enrolled.id}/approve`, 'POST', {
+        code: enrolled.code,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await admin(`/api/devices/${enrolled.id}/approve`, 'POST', {
+        code: 'BAD',
+        siteId: b.id,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await admin(`/api/devices/${enrolled.id}/approve`, 'POST', {
+        code: enrolled.code,
+        siteId: a.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await sync(enrolled)).data.siteId, a.id);
+  assert.equal((await sync(enrolled)).data.siteNumber, '001');
+  assert.equal(
+    (
+      await admin(`/api/devices/${enrolled.id}/approve`, 'POST', {
+        code: enrolled.code,
+        siteId: b.id,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await admin(`/api/devices/${enrolled.id}/site`, 'POST', { siteId: b.id }))
+      .status,
+    409,
+  );
+  await sync(old, '0.15.0');
+  assert.equal(
+    (await admin(`/api/devices/${old.id}/site`, 'POST', { siteId: a.id }))
+      .status,
+    409,
+  );
+  await sync(old);
+  assert.equal(
+    (await admin(`/api/devices/${old.id}/site`, 'POST', { siteId: a.id }))
+      .status,
+    200,
+  );
+  row = (await admin('/api/library')).data.devices.find(
+    (item) => item.id === old.id,
+  );
+  assert.equal(row.siteId, a.id);
+  // The matching approved site unlocks only that site's feed, without relaxing grants.
+  const key = (
+    await admin(
+      `/api/data-feeds/applications/${application.id}/tokens`,
+      'POST',
+      { name: 'North', siteId: a.id },
+    )
+  ).data;
+  const feed = await ingest({ completed: 42 }, 'production', key.token);
+  const saved = (await admin('/api/slides', 'POST', slide(feed.data.feedId)))
+    .data;
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'North data',
+      items: [{ slideId: saved.id, duration: 30 }],
+    })
+  ).data;
+  await admin(`/api/playlists/${playlist.id}/publish`, 'POST');
+  await admin(`/api/devices/${enrolled.id}`, 'PUT', {
+    name: 'North screen',
+    playlistId: playlist.id,
+    blank: false,
+    rotation: 0,
+  });
+  const audience = (
+    await admin('/api/groups', 'POST', { name: 'North screens' })
+  ).data;
+  await admin(`/api/access/data-feed/${feed.data.feedId}`, 'POST', {
+    groupId: audience.id,
+  });
+  await admin(`/api/access/device/${enrolled.id}`, 'POST', {
+    groupId: audience.id,
+  });
+  assert.equal(
+    (await sync(enrolled)).data.dataFeeds[feed.data.feedId].data.completed,
+    42,
+  );
+  const stored = JSON.parse(
+    db
+      .prepare("SELECT body FROM records WHERE kind='device' AND id=?")
+      .get(enrolled.id).body,
+  );
+  assert.equal(stored.siteId, a.id);
+});
+
+void test('one shared publication resolves only the approved site with stable live revisions and matching previews', async (t) => {
+  const { admin, client, application, ingest } = await applicationFixture(t);
+  const audience = (
+    await admin('/api/groups', 'POST', { name: 'Shared layout screens' })
+  ).data;
+  const sites = [];
+  const keys = [];
+  const feeds = [];
+  for (let i = 0; i < 4; i++) {
+    sites.push(
+      (
+        await admin('/api/sites', 'POST', {
+          siteNumber: `00${i + 1}`,
+          name: `Site ${i + 1}`,
+        })
+      ).data,
+    );
+    keys.push(
+      (
+        await admin(
+          `/api/data-feeds/applications/${application.id}/tokens`,
+          'POST',
+          { name: `Site ${i + 1}`, siteId: sites[i].id },
+        )
+      ).data,
+    );
+    if (i < 3) {
+      const result = await ingest(
+        {
+          completed:
+            i === 2 ? [{ label: 'wrong type', value: 5 }] : (i + 1) * 10,
+        },
+        'production',
+        keys[i].token,
+      );
+      feeds.push(result.data.feedId);
+      await admin(`/api/access/data-feed/${result.data.feedId}`, 'POST', {
+        groupId: audience.id,
+      });
+    }
+  }
+  const input = slide(feeds[0]);
+  input.layers[0].data.siteBinding = {
+    applicationId: application.id,
+    sourceKey: 'production',
+  };
+  const saved = await admin('/api/slides', 'POST', input);
+  assert.equal(saved.status, 201);
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'One layout for every site',
+      items: [{ slideId: saved.data.id, duration: 30 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const players = [];
+  for (let i = 0; i < sites.length; i++) {
+    const player = client();
+    const credentials = (
+      await player('/api/player/enroll', 'POST', {
+        name: `Screen ${i}`,
+        siteNumber: sites[i].siteNumber,
+      })
+    ).data;
+    await admin(`/api/devices/${credentials.id}/approve`, 'POST', {
+      code: credentials.code,
+      siteId: sites[i].id,
+    });
+    await admin(`/api/devices/${credentials.id}`, 'PUT', {
+      name: `Screen ${i}`,
+      playlistId: playlist.id,
+      blank: false,
+      rotation: 0,
+    });
+    assert.equal(
+      (
+        await admin(`/api/access/device/${credentials.id}`, 'POST', {
+          groupId: audience.id,
+        })
+      ).status,
+      200,
+    );
+    players.push(() =>
+      player(
+        '/api/player/sync',
+        'POST',
+        { version: '0.15.1' },
+        { Authorization: `Bearer ${credentials.token}` },
+      ),
+    );
+  }
+  const north = (await players[0]()).data;
+  const south = (await players[1]()).data;
+  assert.equal(north.dataFeeds[feeds[0]].data.completed, 10);
+  assert.equal(south.dataFeeds[feeds[1]].data.completed, 20);
+  assert.deepEqual(Object.keys(north.dataFeeds), [feeds[0]]);
+  assert.deepEqual(Object.keys(south.dataFeeds), [feeds[1]]);
+  assert.equal(south.manifest.items[0].slide.layers[0].data.feedId, feeds[1]);
+  assert.equal(
+    south.manifest.items[0].slide.layers[0].data.siteBinding,
+    undefined,
+  );
+  assert.notEqual(north.manifest.revision, south.manifest.revision);
+  const preview = (
+    await admin(
+      `/api/preview/${playlist.id}?version=published&siteId=${sites[1].id}`,
+    )
+  ).data;
+  assert.equal(preview.items[0].slide.layers[0].data.feedId, feeds[1]);
+  assert.equal(preview.dataFeeds[feeds[1]].data.completed, 20);
+  for (const index of [2, 3]) {
+    const unavailable = (await players[index]()).data;
+    const snapshot = Object.values(unavailable.dataFeeds)[0];
+    assert.equal(snapshot.status, 'unavailable');
+    assert.equal(snapshot.data, null);
+    assert.ok(!Object.keys(unavailable.dataFeeds).includes(feeds[0]));
+  }
+  const noSite = (await admin(`/api/preview/${playlist.id}?version=published`))
+    .data;
+  assert.equal(Object.values(noSite.dataFeeds)[0].status, 'unavailable');
+  await ingest({ completed: 11 }, 'production', keys[0].token);
+  const updated = (await players[0]()).data;
+  assert.equal(updated.manifest.revision, north.manifest.revision);
+  assert.equal(updated.dataFeeds[feeds[0]].data.completed, 11);
+});
+
+void test('assigning an existing integration preserves secrets and feeds and rolls back source conflicts', async (t) => {
+  const { admin, ingest, application, applicationKey, db } =
+    await applicationFixture(t);
+  const first = await ingest({ completed: 42 });
+  const extra = await ingest({ count: 1 }, 'aaa');
+  const a = (
+    await admin('/api/sites', 'POST', {
+      siteNumber: '001',
+      name: 'Original site',
+    })
+  ).data;
+  const b = (
+    await admin('/api/sites', 'POST', { siteNumber: '002', name: 'Other site' })
+  ).data;
+  const keyB = (
+    await admin(
+      `/api/data-feeds/applications/${application.id}/tokens`,
+      'POST',
+      { name: 'Other site', siteId: b.id },
+    )
+  ).data;
+  const other = await ingest({ completed: 99 }, 'production', keyB.token);
+  const digest = db
+    .prepare('SELECT digest FROM data_feed_application_tokens WHERE id=?')
+    .get(applicationKey.id).digest;
+  const assign = (siteId) =>
+    admin(
+      `/api/data-feeds/applications/${application.id}/assign-site`,
+      'POST',
+      { siteId },
+    );
+  assert.equal((await assign(b.id)).data.code, 'SITE_SOURCE_CONFLICT');
+  assert.equal(
+    (await admin(`/api/data-feeds/${extra.data.feedId}`)).data.siteId,
+    null,
+  );
+  assert.equal(
+    db
+      .prepare('SELECT siteId FROM data_feed_application_tokens WHERE id=?')
+      .get(applicationKey.id).siteId,
+    null,
+  );
+  const migrated = await assign(a.id);
+  assert.equal(migrated.status, 200);
+  assert.equal(migrated.data.assignedFeeds, 2);
+  assert.equal(migrated.data.assignedKeys, 1);
+  assert.equal(
+    (await admin(`/api/data-feeds/${first.data.feedId}`)).data.siteId,
+    a.id,
+  );
+  const update = await ingest({ completed: 43 });
+  assert.equal(update.data.feedId, first.data.feedId);
+  assert.equal(update.data.siteId, a.id);
+  assert.equal(
+    (await admin(`/api/data-feeds/${other.data.feedId}/data`)).data.data
+      .completed,
+    99,
+  );
+  assert.equal(
+    db
+      .prepare('SELECT digest FROM data_feed_application_tokens WHERE id=?')
+      .get(applicationKey.id).digest,
+    digest,
+  );
+  assert.equal((await assign(a.id)).data.assignedFeeds, 0);
+  assert.equal((await assign(a.id)).data.assignedKeys, 0);
+});

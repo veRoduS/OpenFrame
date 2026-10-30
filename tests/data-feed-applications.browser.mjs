@@ -252,10 +252,110 @@ try {
     ),
     false,
   );
+  await page.getByText('Sites (0)', { exact: true }).click();
+  await page.getByLabel('Site number', { exact: true }).fill('001');
+  await page.getByLabel('Site name', { exact: true }).fill('North');
+  await page.getByRole('button', { name: 'Create site', exact: true }).click();
+  await page.getByText('Sites (1)', { exact: true }).waitFor();
+  if (
+    !(await page
+      .locator('.data-feed-token > span')
+      .filter({ hasText: /^001 · North$/ })
+      .isVisible())
+  )
+    await page.getByText('Sites (1)', { exact: true }).click();
+  await page
+    .locator('.data-feed-token > span')
+    .filter({ hasText: /^001 · North$/ })
+    .waitFor();
+  const site = (await api('/api/sites'))[0];
+  const policyUpdate = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/sites/${site.id}`) &&
+      response.request().method() === 'PATCH',
+  );
+  await page
+    .getByLabel('Access group for site 001', { exact: true })
+    .selectOption(group.id);
+  assert.equal((await (await policyUpdate).json()).accessGroupId, group.id);
+
+  await page
+    .getByRole('button', {
+      name: 'Manage application keys for Sales dashboard',
+      exact: true,
+    })
+    .click();
+  await keysDialog.getByLabel('Site', { exact: true }).selectOption(site.id);
+  await keysDialog
+    .getByLabel('Key name', { exact: true })
+    .fill('North integration');
+  await keysDialog
+    .getByRole('button', { name: 'Generate application API key', exact: true })
+    .click();
+  const siteSecret = await secretDialog
+    .locator('.data-feed-secret code')
+    .textContent();
+  const siteWrite = await external.request.post(endpoint, {
+    headers: { Authorization: `Bearer ${siteSecret}` },
+    data: { completed: 55 },
+  });
+  assert.equal(siteWrite.status(), 201);
+  const siteReceipt = await siteWrite.json();
+  assert.equal(siteReceipt.siteId, site.id);
+  assert.notEqual(siteReceipt.feedId, receipt.feedId);
+  await secretDialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await secretDialog.waitFor({ state: 'hidden' });
+  await keysDialog.getByRole('button', { name: 'Done', exact: true }).click();
+  await keysDialog.waitFor({ state: 'hidden' });
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await fit();
+  }
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await page
+    .locator('.data-feed-token > span')
+    .filter({ hasText: /^001 · North · Archived$/ })
+    .waitFor();
+  assert.equal(
+    (
+      await external.request.post(endpoint, {
+        headers: { Authorization: `Bearer ${siteSecret}` },
+        data: { completed: 56 },
+      })
+    ).status(),
+    409,
+  );
+  const originalSite = await api('/api/sites', 'POST', {
+    siteNumber: '003',
+    name: 'Original location',
+  });
+  await page.reload();
+  await page.locator('.data-feed-application-list summary').click();
+  await page
+    .getByRole('button', {
+      name: 'Manage application keys for Sales dashboard',
+      exact: true,
+    })
+    .click();
+  await keysDialog
+    .getByLabel('Site for existing integration', { exact: true })
+    .selectOption(originalSite.id);
+  await keysDialog
+    .getByRole('button', { name: 'Assign existing integration', exact: true })
+    .click();
+  await keysDialog.getByText(/Existing keys and feeds assigned/).waitFor();
+  const migrated = await external.request.post(endpoint, {
+    headers: { Authorization: `Bearer ${replacement}` },
+    data: { completed: 46 },
+  });
+  assert.equal(migrated.status(), 200);
+  const migratedReceipt = await migrated.json();
+  assert.equal(migratedReceipt.feedId, receipt.feedId);
+  assert.equal(migratedReceipt.siteId, originalSite.id);
   assert.deepEqual(errors, []);
   await external.close();
   console.log(
-    'Application key browser checks passed: setup, one-time key, external first push, discovery, schema growth, key rotation/revocation, cleanup and desktop/mobile layouts.',
+    'Application key browser checks passed: setup, one-time key, external first push, discovery, schema growth, key rotation/revocation, cleanup, site creation/assignment/archival and desktop/mobile layouts.',
   );
 } finally {
   await browser?.close();

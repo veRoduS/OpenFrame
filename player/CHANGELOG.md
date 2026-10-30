@@ -4,6 +4,18 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.15.3] - 2026-10-30
+
+- Clarify store-member pairing approval in Android TV setup
+
+## [0.15.2] - 2026-10-30
+
+- Fence stale site responses, acknowledge persisted scope clearing, and clear revoked metrics before media updates complete
+
+## [0.15.1] - 2026-10-29
+
+- Carry requested site numbers through Pi and Android enrollment and clear cached site data before media updates
+
 ## [0.15.0] - 2026-10-20
 
 - Preserve configured blue/navy headers, title and spark colors, and outer borders while circle rings alone show red/yellow/green goal status.

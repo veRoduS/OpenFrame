@@ -463,3 +463,33 @@ void test(
     assert.equal(result.status, 0, result.stderr);
   },
 );
+
+void test('site numbers survive issued provisioning bundles and invalid sites are rejected', async (t) => {
+  const { request } = await fixture(t);
+  await request('/api/sites', 'POST', { siteNumber: '001', name: 'North' });
+  const input = {
+    name: 'North lobby',
+    server: 'https://screens.example.com',
+    siteNumber: '001',
+  };
+  const created = await request('/api/screen-setup/setups', 'POST', input);
+  assert.equal(created.status, 201);
+  assert.equal(created.data.siteNumber, '001');
+  const files = unpack(
+    await request(
+      `/api/screen-setup/setups/${created.data.id}/download`,
+      'POST',
+    ),
+  );
+  assert.equal(JSON.parse(files['openframe.json']).siteNumber, '001');
+  assert.equal(
+    (
+      await request('/api/screen-setup/setups', 'POST', {
+        ...input,
+        name: 'Bad site',
+        siteNumber: '002',
+      })
+    ).status,
+    400,
+  );
+});

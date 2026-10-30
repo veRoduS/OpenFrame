@@ -86,3 +86,49 @@ Server **0.24.1** emits schema **5** for publications containing video layers. U
 Video and poster assets use the existing authenticated media endpoint, checksums, and atomic publication handoff. Updated players support local MP4 byte ranges, a 25 MiB per-video limit, and a 256 MiB cache budget protecting both the current and incoming publication. An oversized update leaves current playback intact. The shared renderer uses one visible video, poster-only staging, and cuts around video. Server optimization requires FFmpeg and ffprobe; image-only use does not. See [video support and Onn acceptance](video-support.md). Automated browser/JVM tests do not establish physical Onn or Pi performance.
 
 Server **0.27.4** adds Ctrl/Command+click selection using existing layer coordinates and arrangement actions. Player **0.13.3** centers circle values by measured glyph bounds, including prefixes and units. No saved fields or manifest formats change; older players retain their prior centering.
+
+
+## Sites and shared layouts
+
+Server **0.29.2** / player **0.15.1** add optional enrollment `siteNumber` and sync
+`siteId`/`siteNumber`. Existing player identities remain valid. Initial pairing of
+older clients remains supported, with an administrator selecting the site. First
+assignment of an already approved screen requires a 0.15.1-or-newer heartbeat:
+these agents persist an empty state on a scope change before downloading new
+media, preventing old snapshots from returning after download failure or restart.
+Cross-site transfers require server 0.29.3 / player 0.15.2; see below.
+
+Server-only `layer.data.siteBinding` authoring is resolved to concrete feed IDs
+and removed before delivery. Manifest schemas remain unchanged. Older compatible
+data-widget players can render an initially paired site's resolved layout; new
+players also work with old servers, which ignore site numbers and provide no
+location isolation. Older servers reject the new authoring field. Preview-site
+selection uses an updated shared preview script; ordinary metric refreshes keep
+the effective manifest revision stable. Node, Python, Chromium, and host JVM
+checks do not establish physical device installation or playback acceptance.
+
+
+Server **0.29.3** / player **0.15.2** add `siteRevision` and `siteAck` for reviewed
+transfers. The player clears and persists the new scope before downloading media,
+then acknowledges that exact revision on a subsequent sync. Delayed responses,
+responses missing a previously established positive revision, and equal-revision
+responses naming another site are rejected. Revoked or omitted snapshots are
+cleared independently of replacement media; otherwise a failed update retains
+valid cached content as before. No manifest schema, frame count, timers, or media
+budget changes are introduced.
+
+Transfers require a 0.15.2-or-newer heartbeat. First assignments still accept
+0.15.1. Fresh 0.15.2 players accept earlier servers without revision metadata;
+a player that has persisted a positive revision must be reset/re-provisioned
+when deliberately restoring an older server/database at the same origin. Physical
+Pi/TV installation, panel clearing and long-running playback remain unverified.
+
+Server **0.29.5** lets any current member of a store's configured access group
+or its subgroups approve new screens requesting that store. The pairing code
+and an active site are still required; administrator approval remains available.
+This changes session authorization and library metadata only, with no player
+sync or manifest changes. Existing site-capable players can use the new approval
+policy without an upgrade. Player **0.15.3** updates Android setup wording to
+explain store-member approval; earlier setup wording still mentions an
+administrator. Sites without access groups and enrollments without site numbers
+retain administrator approval, and transfers remain administrator-only.

@@ -30,6 +30,7 @@
 - [Contributing](../CONTRIBUTING.md): toolchain, local development, testing, and change requirements.
 - [Architecture](architecture.md): components, pairing/synchronization, storage, and trust boundaries.
 - [API](api.md): authenticated management and player contracts.
+- [API update for existing integrations](api-update-multi-site.md): shareable developer migration bulletin covering site credentials, both ingestion methods, changed limits, and cutover checks.
 - [Widget development](widgets.md): configuration, readiness, activation, and disposal.
 - [Versioning and releases](releases.md): independent component versions, local source history, approved GitHub milestones, APK publication, and release checklist.
 - [Server/player compatibility](player-compatibility.md): protocol support, source-change review gates, and upgrade requirements.
@@ -40,3 +41,5 @@
 
 - [Application metrics API one-pager](data-feeds-api-one-pager.md) — request format, first push, later updates, examples, and limits.
 - [Data feeds API handoff](data-feeds-api.md) — external updates, scoped tokens, schemas, examples, and [OpenAPI contract](../server/data-feeds.openapi.json).
+
+- [Sites and shared metric layouts](sites.md)

@@ -160,3 +160,16 @@ Before unattended use, record the box model, Android firmware, and WebView versi
 - **Prevent device sleep** from setup and playback, readable/unreadable timer status, opening normal settings and returning without losing pairing/cache, and continuous playback beyond the stick's previous shutdown-warning interval.
 
 Host-side unit tests and APK validation do not establish physical TV compatibility or long-run performance. See the [validation record](validation.md).
+
+
+## Site numbers
+
+For multiple locations, enter the site's number during player setup or when
+creating the Pi configuration. Any signed-in member of that store's configured
+access group (or its subgroups) can confirm the pairing code and approve the
+screen; an administrator can also approve. Entering a number alone does not
+grant access. Preserve leading zeros. Sites without access groups and older
+enrollments without site numbers still require an administrator. See
+[site enrollment and shared metric layouts](sites.md).
+Existing approved screens need an upgraded player's heartbeat before their first
+site assignment. Changing local setup text does not move a paired screen.
