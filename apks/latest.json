@@ -1,12 +1,12 @@
 {
   "packageName": "org.openframe.player",
-  "versionName": "0.15.0",
-  "versionCode": 15000,
+  "versionName": "0.15.3",
+  "versionCode": 15003,
   "minSdk": 28,
-  "size": 109315,
-  "sha256": "22970ac0ccf0fa80b30de36487910888e720a244dd543470692b91bb3b462381",
-  "apkUrl": "/downloads/android/openframe-player-0.15.0.apk",
-  "sourceCommit": "58bbbd87262bf3300cdb9d45fa3281b1881f5e6a",
+  "size": 111819,
+  "sha256": "e1d9d1f55fa82f04f8f053e5d4dc88557a7c1e31d3c704cd981a985b8f6902fb",
+  "apkUrl": "/downloads/android/openframe-player-0.15.3.apk",
+  "sourceCommit": "3d0cbc11eb3bb0e50e3ffd1802b524b0c49c26c9",
   "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
   "compatibility": {
     "protocols": {
@@ -54,11 +54,11 @@
       }
     },
     "reviewedWith": {
-      "server": "0.29.0",
-      "player": "0.15.0"
+      "server": "0.29.5",
+      "player": "0.15.3"
     },
     "impact": "compatible",
-    "summary": "Release server 0.29.0/player 0.15.0 preserving configured card headers and borders while gauge rings show goal status. No contract or manifest changes. Node 240, Python 97, Android JVM 33, lint/typecheck/build pass; live threshold browser checks passed before version-only milestone bump.",
-    "reviewedAt": "2026-10-20T19:59:12.229Z"
+    "summary": "Store access-group members and subgroup members can approve only pending screens requesting their active site; the existing pairing code is still required. Member-approved screens are shared with the store group without personal ownership, preserving metric delivery after the approving employee leaves. Library adds canApprove metadata and eligible requests; existing admin and legacy approval remain supported. Player sync, manifests, ingestion and transfer contracts are unchanged; Android 0.15.3 updates setup wording only. All 256 Node and 101 Python regressions, store-approval/browser isolation checks, typecheck, lint and build pass; physical TV/Pi and signed APK installation remain unverified.",
+    "reviewedAt": "2026-10-30T04:46:58.106Z"
   }
 }
