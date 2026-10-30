@@ -2,6 +2,7 @@ import { KeyExpiryFields, KeyExpiryEditor } from './api-key-expiry';
 import { useSiteFilter } from './hooks/use-site-filter';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DataFeedApplications } from './data-feed-applications';
+import { DataFeedResetButton } from './data-feed-reset';
 import {
   DataCardOptions,
   DataCardStylePicker,
@@ -95,6 +96,7 @@ export function DataFeeds({
   onRefresh: () => Promise<void>;
   onAccess: (resource: SharedResource) => void;
 }) {
+  const [applicationRevision, setApplicationRevision] = useState(0);
   const [query, setQuery] = useState('');
   const [filterSite, setFilterSite] = useSiteFilter('metrics', userId, sites);
   const [createSite, setCreateSite] = useState('');
@@ -218,7 +220,23 @@ export function DataFeeds({
         Connect an application with an API key and send data to metrics,
         progress bars, graphs, and charts across your slides.
       </p>
-      {isAdmin && <DataFeedApplications groups={groups} />}
+      {isAdmin && (
+        <DataFeedApplications
+          key={applicationRevision}
+          groups={groups}
+          onRefresh={onRefresh}
+        />
+      )}
+      {isAdmin && (
+        <DataFeedResetButton
+          onComplete={async () => {
+            setSelected(null);
+            setSecret('');
+            setApplicationRevision((value) => value + 1);
+            await onRefresh();
+          }}
+        />
+      )}
       <div className="data-feed-toolbar">
         <label>
           Site
@@ -871,7 +889,13 @@ export function DataFeeds({
                 <div className="data-feed-actions">
                   {deleting ? (
                     <>
-                      <span>Delete feed and all its API keys?</span>
+                      <span>
+                        Delete this feed and its feed-specific API keys? Widgets
+                        keep their layout and settings and become disconnected.
+                        Application keys remain active and can recreate a feed
+                        on the next push; delete the application for a complete
+                        reset.
+                      </span>
                       <button
                         className="ghost"
                         disabled={busy}
@@ -883,10 +907,14 @@ export function DataFeeds({
                         disabled={busy}
                         onClick={() =>
                           void run(async () => {
-                            await api(base, 'DELETE');
+                            await api(
+                              `${base}?disconnectWidgets=true`,
+                              'DELETE',
+                            );
                             await onRefresh();
                             setSelected(null);
                             setSecret('');
+                            setApplicationRevision((value) => value + 1);
                           })
                         }
                       >
@@ -1111,23 +1139,41 @@ export function DataWidgetOptions({
               const f = source
                 ? source.example
                 : feeds.find((v) => v.id === e.target.value);
+              if (!f) {
+                patch({ feedId: null, siteBinding: undefined });
+                return;
+              }
+              const compatible = (key: string | undefined, type: string) =>
+                f.fields.some(
+                  (field) => field.key === key && field.type === type,
+                )
+                  ? key || ''
+                  : '';
               patch({
-                feedId: f?.id || null,
+                feedId: f.id,
                 siteBinding: source
                   ? {
                       applicationId: source.applicationId,
                       sourceKey: source.sourceKey,
                     }
                   : undefined,
-                field: f?.fields.find((v) => v.type === expected)?.key || '',
-                targetField: '',
+                field:
+                  compatible(config.field, expected) ||
+                  f.fields.find((value) => value.type === expected)?.key ||
+                  '',
+                targetField: compatible(config.targetField, 'number'),
                 ...(config.card
                   ? {
                       card: {
                         ...config.card,
-                        deltaField: '',
-                        rowDeltaField: '',
-                        rowOffset: 0,
+                        deltaField: compatible(
+                          config.card.deltaField,
+                          'number',
+                        ),
+                        rowDeltaField: compatible(
+                          config.card.rowDeltaField,
+                          'categories',
+                        ),
                       },
                     }
                   : {}),
@@ -1151,6 +1197,12 @@ export function DataWidgetOptions({
             )}
           </select>
         </label>
+        {!config.feedId && (
+          <p className="muted">
+            This widget is disconnected. Its layout and settings are saved.
+            Choose a replacement feed when your integration is ready.
+          </p>
+        )}
         {config.siteBinding && (
           <p className="muted">
             Each screen shows this source from its own store. Fields come from{' '}

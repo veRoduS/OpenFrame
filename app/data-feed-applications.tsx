@@ -45,8 +45,10 @@ const base = '/api/data-feeds/applications';
 
 export function DataFeedApplications({
   groups = [],
+  onRefresh,
 }: {
   groups?: Library['groups'];
+  onRefresh?: () => Promise<void>;
 }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [siteId, setSiteId] = useState('');
@@ -710,9 +712,10 @@ export function DataFeedApplications({
         <AlertDialogContent className="of-modal">
           <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the application and all its API keys. Only applications
-            with no feeds can be deleted. Remove unused feeds first; feeds
-            referenced by slides must be retained.
+            Delete this application, all its feeds, stored values and API keys.
+            Keep every widget’s position, size, formatting and settings. Widgets
+            using these connections become disconnected in drafts and published
+            playlists and can be connected to replacement feeds later.
           </AlertDialogDescription>
           {error && (
             <p className="inline-error" role="alert">
@@ -729,8 +732,12 @@ export function DataFeedApplications({
               onClick={() => {
                 if (!deleting) return;
                 void run(async () => {
-                  await api(`${base}/${deleting.id}`, 'DELETE');
+                  await api(
+                    `${base}/${deleting.id}?disconnectWidgets=true`,
+                    'DELETE',
+                  );
                   await reload();
+                  await onRefresh?.();
                   setDeleting(null);
                   setSelected(null);
                   setSecret('');

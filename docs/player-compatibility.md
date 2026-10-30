@@ -169,3 +169,14 @@ validation during publication, while actual local feed permissions remain
 enforced by preview/sync resolution. Fixed-feed checks and new/edited widget
 authorization are unchanged. No sync/manifest fields, player code, timers or
 resource budgets change; this correction needs only a server update and no APK.
+
+Server **0.30.2** adds explicit data-connection deletion/reset that preserves
+widgets as `feedId:null` without a site binding, including published snapshots.
+The existing data schema already permits null feed IDs; schema 4, sync and
+ingestion formats are unchanged. Existing renderers show Waiting for data.
+New publication revisions and empty feed snapshot maps clear old metric values
+on the next successful sync. No player code, timers or frame budgets change,
+and no APK update is required. Offline devices retain their existing content
+until they reconnect. Authoring validation permits intentionally unbound widgets
+while still rejecting invalid non-null feed IDs and relative bindings with no
+example feed.

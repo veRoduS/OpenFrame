@@ -1444,6 +1444,7 @@ export function createApp({
           // feed at delivery, not against the editor's example store here.
           if (
             layer.type === 'data' &&
+            layer.data.feedId &&
             !layer.data.siteBinding &&
             !visible('data-feed', layer.data.feedId)
           )

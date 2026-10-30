@@ -941,6 +941,418 @@ async function applicationFixture(t, options = {}) {
   return { ...fixtureData, application, applicationKey, ingest, external };
 }
 
+async function resetFixture(t) {
+  const f = await applicationFixture(t);
+  const site = (
+    await f.admin('/api/sites', 'POST', {
+      siteNumber: '2882',
+      name: 'Reset test store',
+    })
+  ).data;
+  assert.equal(
+    (
+      await f.admin(
+        `/api/data-feeds/applications/${f.application.id}/assign-site`,
+        'POST',
+        { siteId: site.id },
+      )
+    ).status,
+    200,
+  );
+  const feedId = (await f.ingest({ completed: 75, goal: 100 })).data.feedId;
+  const directKey = (
+    await f.admin(`/api/data-feeds/${feedId}/tokens`, 'POST', {
+      name: 'Direct feed key',
+    })
+  ).data;
+  const layer = widget(feedId);
+  Object.assign(layer, {
+    x: 12,
+    y: 18,
+    width: 42,
+    height: 61,
+    color: '#123456',
+    fontSize: 48,
+  });
+  layer.data = {
+    ...layer.data,
+    title: 'Keep this metric',
+    targetField: 'goal',
+    unit: '%',
+    siteBinding: { applicationId: f.application.id, sourceKey: 'production' },
+    card: {
+      style: 'split',
+      badge: 'delta',
+      deltaField: 'goal',
+      footer: 'Keep this footer',
+      paddingX: 24,
+      titleScale: 120,
+      thresholdMode: 'higher',
+    },
+  };
+  const saved = await f.admin('/api/slides', 'POST', {
+    ...slide(feedId),
+    layers: [
+      layer,
+      {
+        id: randomUUID(),
+        type: 'text',
+        x: 1,
+        y: 1,
+        width: 20,
+        height: 10,
+        text: 'Leave this text alone',
+      },
+    ],
+  });
+  assert.equal(saved.status, 201);
+  const playlist = (
+    await f.admin('/api/playlists', 'POST', {
+      name: 'Reset master',
+      items: [{ slideId: saved.data.id, duration: 30 }],
+    })
+  ).data;
+  assert.equal(
+    (await f.admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const fork = (
+    await f.admin(`/api/playlists/${playlist.id}/fork`, 'POST', {
+      name: 'Reset fork',
+    })
+  ).data;
+  assert.equal(
+    (await f.admin(`/api/playlists/${fork.id}/publish`, 'POST')).status,
+    200,
+  );
+  const player = f.client();
+  const credentials = (
+    await player('/api/player/enroll', 'POST', {
+      name: 'Reset screen',
+      siteNumber: '2882',
+    })
+  ).data;
+  assert.equal(
+    (
+      await f.admin(`/api/devices/${credentials.id}/approve`, 'POST', {
+        code: credentials.code,
+        siteId: site.id,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await f.admin(`/api/devices/${credentials.id}`, 'PUT', {
+        name: 'Reset screen',
+        playlistId: playlist.id,
+        rotation: 0,
+        blank: false,
+      })
+    ).status,
+    200,
+  );
+  const adminId = (await f.admin('/api/auth')).data.user.id;
+  assert.equal(
+    (
+      await f.admin(`/api/access/device/${credentials.id}`, 'POST', {
+        userId: adminId,
+      })
+    ).status,
+    200,
+  );
+  const sync = () =>
+    player(
+      '/api/player/sync',
+      'POST',
+      { version: '0.15.5' },
+      { Authorization: `Bearer ${credentials.token}` },
+    );
+  assert.equal((await sync()).data.dataFeeds[feedId].data.completed, 75);
+  return {
+    ...f,
+    site,
+    feedId,
+    directKey,
+    saved: saved.data,
+    playlist,
+    fork,
+    credentials,
+    sync,
+  };
+}
+
+function disconnectedLayers(saved) {
+  return saved.layers.map((layer) => {
+    if (layer.type !== 'data') return layer;
+    const { siteBinding: _binding, ...settings } = layer.data;
+    return { ...layer, data: { ...settings, feedId: null } };
+  });
+}
+
+void test('explicit feed deletion disconnects draft and published widgets, clears player data and allows reconnection', async (t) => {
+  const f = await resetFixture(t);
+  const before = (await f.sync()).data.manifest.revision;
+  assert.equal(
+    (await f.admin(`/api/data-feeds/${f.feedId}`, 'DELETE')).status,
+    409,
+  );
+  const removed = await f.admin(
+    `/api/data-feeds/${f.feedId}?disconnectWidgets=true`,
+    'DELETE',
+  );
+  assert.equal(removed.status, 200);
+  assert.equal(removed.data.widgets, 1);
+  assert.equal(removed.data.publishedPlaylists, 2);
+  const library = (await f.admin('/api/library')).data;
+  const saved = library.slides.find((s) => s.id === f.saved.id);
+  assert.deepEqual(saved.layers, disconnectedLayers(f.saved));
+  for (const playlist of [f.playlist, f.fork]) {
+    const preview = (
+      await f.admin(
+        `/api/preview/${playlist.id}?version=published&siteId=${f.site.id}`,
+      )
+    ).data;
+    assert.deepEqual(
+      preview.items[0].slide.layers,
+      disconnectedLayers(f.saved),
+    );
+    assert.deepEqual(preview.dataFeeds, {});
+  }
+  const cleared = (await f.sync()).data;
+  assert.notEqual(cleared.manifest.revision, before);
+  assert.deepEqual(cleared.dataFeeds, {});
+  assert.equal(cleared.manifest.items[0].slide.layers[0].data.feedId, null);
+  assert.equal(
+    (await f.write(payload, {}, false, f.feedId, f.directKey.token)).status,
+    401,
+  );
+  assert.ok(
+    library.dataFeeds.some((feed) => feed.id === f.feed.id),
+    'Unrelated manual feed remains',
+  );
+  const invalidRelative = structuredClone(saved);
+  invalidRelative.layers[0].data.siteBinding =
+    f.saved.layers[0].data.siteBinding;
+  assert.equal(
+    (await f.admin(`/api/slides/${saved.id}`, 'PUT', invalidRelative)).status,
+    400,
+    'A missing example feed must not retain a relative binding',
+  );
+  assert.equal(
+    (await f.admin(`/api/slides/${saved.id}`, 'PUT', saved)).status,
+    200,
+    'Disconnected widgets remain editable/saveable',
+  );
+  assert.equal(
+    (await f.admin(`/api/playlists/${f.playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  const recreated = await f.ingest({ completed: 88, goal: 100 });
+  assert.equal(
+    recreated.status,
+    201,
+    'Application keys survive individual feed deletion',
+  );
+  assert.notEqual(recreated.data.feedId, f.feedId);
+  assert.equal(
+    (await f.sync()).data.manifest.items[0].slide.layers[0].data.feedId,
+    null,
+    'New pushes do not silently reconnect a different feed ID',
+  );
+  const rewired = {
+    ...saved,
+    layers: f.saved.layers.map((layer) =>
+      layer.type === 'data'
+        ? { ...layer, data: { ...layer.data, feedId: recreated.data.feedId } }
+        : layer,
+    ),
+  };
+  assert.equal(
+    (await f.admin(`/api/slides/${saved.id}`, 'PUT', rewired)).status,
+    200,
+  );
+  assert.equal(
+    (await f.admin(`/api/playlists/${f.playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.equal(
+    (await f.sync()).data.dataFeeds[recreated.data.feedId].data.completed,
+    88,
+  );
+});
+
+void test('explicit application deletion removes used feeds and every associated key while preserving layouts and other connections', async (t) => {
+  const f = await resetFixture(t);
+  await f.ingest({ hours: 42 }, 'hours');
+  const ordinary = await f.user('reset-ordinary');
+  const url = `/api/data-feeds/applications/${f.application.id}`;
+  assert.equal(
+    (await ordinary.call(`${url}?disconnectWidgets=true`, 'DELETE')).status,
+    403,
+  );
+  assert.equal(
+    (await f.admin(url, 'DELETE')).status,
+    409,
+    'Legacy API behavior is preserved',
+  );
+  const removed = await f.admin(`${url}?disconnectWidgets=true`, 'DELETE');
+  assert.equal(removed.status, 200);
+  assert.equal(removed.data.feeds, 2);
+  assert.equal(removed.data.keys, 2);
+  assert.equal((await f.ingest({ completed: 99 })).status, 401);
+  assert.equal(
+    (await f.write(payload, {}, false, f.feedId, f.directKey.token)).status,
+    401,
+  );
+  assert.equal(
+    f.db
+      .prepare(
+        'SELECT COUNT(*) AS n FROM data_feed_application_sources WHERE applicationId=?',
+      )
+      .get(f.application.id).n,
+    0,
+  );
+  assert.equal(
+    f.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM resource_access WHERE kind='data-feed' AND id=?",
+      )
+      .get(f.feedId).n,
+    0,
+  );
+  const library = (await f.admin('/api/library')).data;
+  assert.deepEqual(
+    library.slides.find((s) => s.id === f.saved.id).layers,
+    disconnectedLayers(f.saved),
+  );
+  assert.ok(
+    library.devices.some(
+      (d) => d.id === f.credentials.id && d.playlistId === f.playlist.id,
+    ),
+  );
+  assert.ok(library.sites.some((s) => s.id === f.site.id));
+  assert.ok(library.dataFeeds.some((feed) => feed.id === f.feed.id));
+  assert.equal(
+    (await f.write()).status,
+    200,
+    'Unrelated integration key still works',
+  );
+  assert.deepEqual((await f.sync()).data.dataFeeds, {});
+});
+
+void test('full data-connection reset reviews its scope, refuses stale requests and rolls back all disconnections on failure', async (t) => {
+  const f = await resetFixture(t);
+  const ordinary = await f.user('reset-denied');
+  assert.equal(
+    (await ordinary.call('/api/data-feeds/reset/preview', 'POST')).status,
+    403,
+  );
+  assert.equal(
+    (
+      await ordinary.call('/api/data-feeds/reset', 'POST', {
+        confirmation: 'RESET',
+        revision: 'a'.repeat(64),
+      })
+    ).status,
+    403,
+  );
+  const review = (await f.admin('/api/data-feeds/reset/preview', 'POST')).data;
+  assert.deepEqual(review.counts, {
+    applications: 1,
+    feeds: 2,
+    keys: 3,
+    widgets: 1,
+    slides: 1,
+    publishedPlaylists: 2,
+  });
+  assert.equal(
+    (
+      await f.admin('/api/data-feeds/reset', 'POST', {
+        confirmation: 'DELETE',
+        revision: review.revision,
+      })
+    ).status,
+    400,
+  );
+  await f.admin('/api/data-feeds/applications', 'POST', {
+    name: 'Created after review',
+  });
+  assert.equal(
+    (
+      await f.admin('/api/data-feeds/reset', 'POST', {
+        confirmation: 'RESET',
+        revision: review.revision,
+      })
+    ).status,
+    409,
+  );
+  const latest = (await f.admin('/api/data-feeds/reset/preview', 'POST')).data;
+  const snapshot = () =>
+    JSON.stringify(
+      [
+        'records',
+        'resource_access',
+        'resource_grants',
+        'resource_management',
+        'resource_permissions',
+        'data_feed_tokens',
+        'data_feed_application_tokens',
+        'data_feed_application_sources',
+        'data_feed_applications',
+        'site_audit',
+      ].map((table) =>
+        f.db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
+      ),
+    );
+  const before = snapshot();
+  f.db.exec(
+    "CREATE TRIGGER reject_reset BEFORE DELETE ON data_feed_applications BEGIN SELECT RAISE(ABORT, 'fixture rejects reset'); END;",
+  );
+  assert.equal(
+    (
+      await f.admin('/api/data-feeds/reset', 'POST', {
+        confirmation: 'RESET',
+        revision: latest.revision,
+      })
+    ).status,
+    500,
+  );
+  assert.equal(
+    snapshot(),
+    before,
+    'Widgets, publications, keys, feeds, grants and audit all roll back',
+  );
+  f.db.exec('DROP TRIGGER reject_reset');
+  assert.equal(
+    (
+      await f.admin('/api/data-feeds/reset', 'POST', {
+        confirmation: 'RESET',
+        revision: latest.revision,
+      })
+    ).status,
+    200,
+  );
+  const library = (await f.admin('/api/library')).data;
+  assert.deepEqual(library.dataFeeds, []);
+  assert.deepEqual((await f.admin('/api/data-feeds/applications')).data, []);
+  assert.deepEqual(
+    library.slides.find((s) => s.id === f.saved.id).layers,
+    disconnectedLayers(f.saved),
+  );
+  assert.equal(library.playlists.length, 2);
+  assert.ok(library.sites.some((site) => site.id === f.site.id));
+  assert.ok(library.devices.some((screen) => screen.id === f.credentials.id));
+  assert.equal((await f.ingest({ completed: 99 })).status, 401);
+  assert.equal((await f.write()).status, 401);
+  assert.deepEqual((await f.sync()).data.dataFeeds, {});
+  assert.equal(
+    (await f.admin(`/api/playlists/${f.playlist.id}/publish`, 'POST')).status,
+    200,
+    'Disconnected master and fork stay publishable',
+  );
+});
+
 void test('both key types support non-expiring issuance, in-place expiry changes and irreversible revocation', async (t) => {
   const {
     admin,

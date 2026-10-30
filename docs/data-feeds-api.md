@@ -186,7 +186,7 @@ These endpoints are for the OpenFrame UI or a trusted operator session, **not** 
 | `GET /api/data-feeds/openapi.json` | Public machine-readable contract; no authentication. |
 | `GET /api/data-feeds/guide` | Public downloadable copy of this guide; no credentials. |
 | `GET / POST /api/data-feeds/applications` | Admin list/create `{name,managingGroupId?:UUID|null}`; metadata includes `id`, `createdAt`, and `feedCount`. |
-| `DELETE /api/data-feeds/applications/{id}` | Admin deletes an application with no feeds and its keys; 409 `APPLICATION_IN_USE` otherwise. |
+| `DELETE /api/data-feeds/applications/{id}` | Admin deletes an application with no feeds and its keys; 409 `APPLICATION_IN_USE` otherwise unless `disconnectWidgets=true` explicitly deletes its feeds and disconnects widgets too. |
 | `GET / POST /api/data-feeds/applications/{id}/tokens` | Admin lists key metadata or generates a key with `{name,expiresInDays?:90}`; POST returns one-time `token`. |
 | `DELETE /api/data-feeds/applications/{id}/tokens/{tokenId}` | Admin revokes an application key. |
 | `POST /api/data-feeds/ingest/{sourceKey}` | Application-key authentication; automatically creates/extends a scoped feed and merges named metric values. |
@@ -194,7 +194,7 @@ These endpoints are for the OpenFrame UI or a trusted operator session, **not** 
 | `POST /api/data-feeds` | Create `{name, managingGroupId: UUID or null, fields:[{key,type}]}`. Returns 201 metadata. |
 | `GET /api/data-feeds/{id}` | View feed metadata. |
 | `PUT /api/data-feeds/{id}` | Edit name/management using the same creation shape; fields must remain identical. Edit permission required. |
-| `DELETE /api/data-feeds/{id}` | Delete an unused feed and tokens. Refused with 409 `FEED_IN_USE` while referenced by drafts or published playlists. |
+| `DELETE /api/data-feeds/{id}` | Delete an unused feed and tokens. Refused with 409 `FEED_IN_USE` while referenced by drafts or published playlists unless an administrator explicitly supplies `disconnectWidgets=true`; see [widget-preserving deletion and reset](https://github.com/veRoduS/OpenFrame/blob/main/docs/data-connection-reset.md). |
 | `GET /api/data-feeds/{id}/data` | View `{revision,updatedAt,data,status}`. `status` is `empty` before the first write, otherwise `ready`. |
 | `GET /api/data-feeds/{id}/tokens` | Edit permission required. Metadata only; no token/hash. |
 | `POST /api/data-feeds/{id}/tokens` | Edit permission required. Body `{name,expiresInDays:90}`. Returns 201 metadata plus one-time `token`. |

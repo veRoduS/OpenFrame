@@ -544,7 +544,7 @@
       },
       "delete": {
         "operationId": "deleteFeed",
-        "summary": "Delete unused feed and its tokens; reject references in drafts or publications",
+        "summary": "Delete a feed and its keys; optionally disconnect used widgets and preserve their layouts",
         "security": [
           {
             "SessionCookie": []
@@ -556,7 +556,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DataConnectionResetResult"
+                    }
+                  ]
                 }
               }
             }
@@ -670,9 +677,19 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "disconnectWidgets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Explicitly disconnect referenced widgets while preserving layouts and settings. For an application, delete its feeds and keys too. Without this option the existing in-use protections apply."
           }
         ],
-        "description": "Admin session required."
+        "description": "Administrator session required. disconnectWidgets=true atomically disconnects affected widgets in drafts and published snapshots, removes this connection and its associated keys, and returns counts. Widget presentation and field names are preserved; players clear old values after successful sync. Application keys remain active for individual feed deletion."
       }
     },
     "/api/data-feeds/{feedId}/data": {
@@ -1752,7 +1769,7 @@
       ],
       "delete": {
         "operationId": "deleteApplication",
-        "summary": "Admin deletes an application only when it has no feeds; its keys are removed",
+        "summary": "Delete an application; optionally delete its feeds and disconnect widgets while preserving layouts",
         "security": [
           {
             "SessionCookie": []
@@ -1764,7 +1781,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DataConnectionResetResult"
+                    }
+                  ]
                 }
               }
             }
@@ -1819,7 +1843,20 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "disconnectWidgets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Explicitly disconnect referenced widgets while preserving layouts and settings. For an application, delete its feeds and keys too. Without this option the existing in-use protections apply."
+          }
+        ],
+        "description": "Administrator session required. disconnectWidgets=true atomically disconnects affected widgets in drafts and published snapshots, removes this connection and its associated keys, and returns counts. Widget presentation and field names are preserved; players clear old values after successful sync. Application keys remain active for individual feed deletion."
       }
     },
     "/api/data-feeds/applications/{applicationId}/tokens": {
@@ -2674,6 +2711,159 @@
           }
         }
       }
+    },
+    "/api/data-feeds/reset/preview": {
+      "post": {
+        "operationId": "reviewDataConnectionReset",
+        "summary": "Administrator reviews a full reset across all sites without deleting data",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counts and revision of the reviewed reset scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataConnectionResetReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrator required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; all deletes and disconnections roll back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/reset": {
+      "post": {
+        "operationId": "resetDataConnections",
+        "summary": "Delete all metric applications, feeds and keys while preserving widgets, sites, screens and layouts",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "confirmation",
+                  "revision"
+                ],
+                "properties": {
+                  "confirmation": {
+                    "type": "string",
+                    "enum": [
+                      "RESET"
+                    ]
+                  },
+                  "revision": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted connection counts and retained/disconnected widget counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataConnectionResetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid confirmation or schema: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrator required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RESET_CHANGED: connections or widgets changed since the review; nothing deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; all deletes and disconnections roll back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3491,6 +3681,106 @@
             "minimum": 1,
             "maximum": 365,
             "description": "Set null to never expire, or 1\u2013365 days from now. Revoked keys cannot be renewed."
+          }
+        }
+      },
+      "DataConnectionResetCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applications",
+          "feeds",
+          "keys",
+          "widgets",
+          "slides",
+          "publishedPlaylists"
+        ],
+        "properties": {
+          "applications": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feeds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keys": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "widgets": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slides": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "publishedPlaylists": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DataConnectionResetReview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revision",
+          "counts"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DataConnectionResetCounts"
+          }
+        }
+      },
+      "DataConnectionResetResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "applications",
+          "feeds",
+          "keys",
+          "widgets",
+          "slides",
+          "publishedPlaylists"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "applications": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feeds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keys": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "widgets": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slides": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "publishedPlaylists": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }

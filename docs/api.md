@@ -219,6 +219,15 @@ images return 400 and oversized files return 413. Video limits are unchanged.
 
 ## Site assignment and shared metrics
 
+Server **0.30.2** adds administrator [connection reset and widget-preserving
+delete](data-connection-reset.md) operations. Used feeds/applications can be
+deleted with `?disconnectWidgets=true`; the normal delete protections remain
+when that option is absent. A full reset requires a reviewed revision and typed
+confirmation. Disconnected data widgets use `feedId:null` without `siteBinding`,
+retain field/presentation settings, and may be saved or published. Published
+snapshots receive new revisions so players clear old values on their next sync.
+
+
 Server **0.30.1** corrects publication checks for data widgets with `siteBinding`.
 Recipients and publishers of saved slides need not view the example `feedId`;
 the server retains source/field validation and authoring access checks, then

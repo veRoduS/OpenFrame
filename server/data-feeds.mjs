@@ -5,6 +5,7 @@ import { z } from 'zod';
 import contract from './data-feeds.openapi.json' with { type: 'json' };
 import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
 import { mountDataFeedApplications } from './data-feed-applications.mjs';
+import { createDataFeedReset } from './data-feed-reset.mjs';
 
 export const fieldSchema = z
   .object({
@@ -198,6 +199,7 @@ export function mountDataFeeds(
             ?.siteNumber || null
         : null,
     });
+  const resetConnections = createDataFeedReset(db);
   mountDataFeedApplications(app, {
     db,
     accounts,
@@ -207,6 +209,7 @@ export function mountDataFeeds(
     raw,
     fieldSchema,
     values,
+    resetConnections,
   });
   const tokenFields = 'id,feedId,name,createdAt,expiresAt,revokedAt,lastUsedAt';
   const references = (slide, id) => {
@@ -228,12 +231,14 @@ export function mountDataFeeds(
   function validateLayers(slide, user, { publishing = false } = {}) {
     for (const layer of slide.layers.filter((l) => l.type === 'data')) {
       const config = layer.data;
-      if (!config?.feedId)
+      if (!config || (!config.feedId && config.siteBinding))
         throw fail(
           400,
           'INVALID_BINDING',
           'Choose a data feed for each data widget',
         );
+      // Unbound widgets remain saveable and render a waiting placeholder.
+      if (!config.feedId) continue;
       const feed = raw(config.feedId);
       // Publication uses already-authorized, saved slides. A store-relative
       // source's example feed supplies its schema, not its delivery permission.
@@ -477,8 +482,40 @@ export function mountDataFeeds(
       );
     res.json(publicFeed(put('data-feed', { ...feed, ...input })));
   });
+  app.post('/api/data-feeds/reset/preview', administrator, (_req, res) => {
+    res.json(resetConnections.preview({ all: true }));
+  });
+  app.post('/api/data-feeds/reset', administrator, (req, res) => {
+    const input = z
+      .object({
+        confirmation: z.literal('RESET'),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+      })
+      .strict()
+      .parse(req.body);
+    res.json(
+      resetConnections.remove(
+        { all: true },
+        { actor: req.user, expectedRevision: input.revision },
+      ),
+    );
+  });
   app.delete('/api/data-feeds/:id', administrator, (req, res) => {
     requireEditable('data-feed', req.params.id);
+    const disconnect =
+      z
+        .enum(['true', 'false'])
+        .default('false')
+        .parse(req.query.disconnectWidgets) === 'true';
+    if (disconnect) {
+      res.json(
+        resetConnections.remove(
+          { feedIds: [req.params.id] },
+          { actor: req.user },
+        ),
+      );
+      return;
+    }
     if (inUse(req.params.id))
       throw fail(
         409,

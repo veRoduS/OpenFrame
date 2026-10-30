@@ -25,7 +25,17 @@ const keyFields =
 
 export function mountDataFeedApplications(
   app,
-  { db, accounts, administrator, allRecords, put, raw, fieldSchema, values },
+  {
+    db,
+    accounts,
+    administrator,
+    allRecords,
+    put,
+    raw,
+    fieldSchema,
+    values,
+    resetConnections,
+  },
 ) {
   db.exec(`CREATE TABLE IF NOT EXISTS data_feed_applications (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, managingGroupId TEXT,
@@ -201,6 +211,20 @@ export function mountDataFeedApplications(
   );
   app.delete('/api/data-feeds/applications/:id', administrator, (req, res) => {
     const application = applicationById(req.params.id);
+    const disconnect =
+      z
+        .enum(['true', 'false'])
+        .default('false')
+        .parse(req.query.disconnectWidgets) === 'true';
+    if (disconnect) {
+      res.json(
+        resetConnections.remove(
+          { applicationIds: [application.id] },
+          { actor: req.user },
+        ),
+      );
+      return;
+    }
     if (metadata(application).feedCount)
       throw fail(
         409,
