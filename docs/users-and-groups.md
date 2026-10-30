@@ -54,6 +54,13 @@ On a slide, hover or focus **Tags** or **Access** for a preview of up to five en
 
 - Admins can assign screens and other resources to individual users or groups.
 - Personal owners and direct managing-group members can share with groups they belong to. Only global admins assign individual users.
+- For **slides**, those authorized sharers can also choose parent groups of
+  their own memberships. The slide keeps its original managing group. Sharing
+  with a parent makes it viewable by that group and its subgroups; View remains
+  the default, with Edit available when deliberately selected. This does not
+  permit sharing someone else's inherited/read-only slide, or sharing to an
+  unrelated sibling group or organization. Other resource types keep their
+  existing sharing rules.
 - New content is private to its creator until shared. Legacy content and newly enrolled screens are initially visible only to admins.
 - Sharing a screen also shares its current playlist and slides. Images attached to accessible slides or published playlists/screens appear as **Read-only** unless the recipient also has direct media access. Published images remain visible even after they are removed from the live draft. Recipients can view and pick those images, but cannot rename, retag, move, delete, or manage access to them. Sharing a folder includes direct access to its current images; sharing an individual image does not share its siblings.
 - Sharing is an explicit grant, not a live folder rule. Share newly referenced slides or playlists with the resource owner and the same recipients before adding them to a shared playlist or screen. The server rejects references whose owner or recipients cannot access them, including every descendant of a group audience. A slide shared only with subgroup B cannot be added to a Group A playlist visible to sibling C until its viewing access is expanded. Attached images receive derived read-only access without a separate grant.
@@ -86,3 +93,5 @@ Rolling back to a release without user management removes these access protectio
 The sidebar footer shows the signed-in name beside the version and sign-out control. Hover or focus a slide’s **Live** badge to see the published playlists assigned to online screens that make the slide live.
 
 Folders on Slides, Playlists, and Media are shared navigation metadata: all signed-in users can see every folder and its nesting, but only global admins can create, edit, reparent, delete, or manage access to folders. Legacy folder owners and Edit recipients no longer have folder management permission. Users can move their editable content into any existing folder; private and inherited read-only contents stay protected. No existing folder, content record, or grant is deleted by this policy change.
+
+Admins other than the built-in `admin` account can optionally choose a [home store/group](home-workspace.md) and switch between Home and Admin modes. Leaving the preference unset preserves the current workspace.

@@ -34,7 +34,7 @@ The shared `counter.js` module handles formatting and next-update boundaries. Th
 
 ## Weather configuration
 
-Weather layers accept `weather: { "name": "Chicago", "latitude": 41.8781, "longitude": -87.6298, "unit": "F", "mode": "current" }`. Mode is `current` or `six-hour`; optional `zip` records a five-digit US ZIP selected in the editor. Coordinates remain authoritative. `weather.js` supplies one view model and DOM renderer to both editor and player, with bundled, licensed `weather-icons.js` geometry. Current observations and forecast periods share one server cache by coordinates and survive offline restarts independently. See [weather setup, fallback labels, and request limits](weather.md).
+Weather layers accept `weather: { "name": "Chicago", "latitude": 41.8781, "longitude": -87.6298, "unit": "F", "mode": "current" }`. Mode is `current` or `six-hour`; optional `layout` is `horizontal` (default), `vertical`, or `forecast-card`. The forecast-card layout needs player **0.15.5+**, uses full-width hourly rows and keeps existing weather caching and widget lifecycle. Optional `zip` records a five-digit US ZIP selected in the editor. Coordinates remain authoritative. `weather.js` supplies one view model and DOM renderer to both editor and player, with bundled, licensed `weather-icons.js` geometry. Current observations and forecast periods share one server cache by coordinates and survive offline restarts independently. See [weather setup, fallback labels, and request limits](weather.md).
 
 ## Add a widget
 

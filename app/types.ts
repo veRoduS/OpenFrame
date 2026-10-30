@@ -97,7 +97,7 @@ export type Layer = {
     longitude: number | null;
     unit: 'F' | 'C';
     mode?: 'current' | 'six-hour';
-    layout?: 'horizontal' | 'vertical';
+    layout?: 'horizontal' | 'vertical' | 'forecast-card';
     zip?: string;
   };
   counter?: {
@@ -157,6 +157,7 @@ export type Playlist = LibraryOrganization & {
     sourceEntryId?: string;
     afterEntryId?: string | null;
     durationOverride?: boolean;
+    skipped?: boolean;
     masterDuration?: number;
     slideId: string;
     duration: number;
@@ -171,15 +172,16 @@ export type Playlist = LibraryOrganization & {
   updatedAt?: string;
 };
 export function playlistDuration(playlist: Playlist) {
+  const items = playlist.items.filter((item) => !item.skipped);
   const animation =
-    playlist.items.length > 1 &&
+    items.length > 1 &&
     playlist.transition &&
     playlist.transition.type !== 'cut'
-      ? (playlist.items.length * playlist.transition.durationMs) / 1000
+      ? (items.length * playlist.transition.durationMs) / 1000
       : 0;
   return (
     Math.round(
-      (playlist.items.reduce(
+      (items.reduce(
         (sum, item) =>
           sum +
           Math.max(

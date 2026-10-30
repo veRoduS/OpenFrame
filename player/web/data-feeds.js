@@ -136,7 +136,7 @@ export function renderDataWidget(
       description += `. ${format(value)} of ${format(target)}`;
     }
   } else {
-    const points = value.slice(0, config.mode === 'line' ? 240 : 40);
+    const points = value.slice(0, config.mode === 'line' ? 240 : 100);
     const left = 88,
       top = 75,
       right = 610,

@@ -585,7 +585,7 @@ export function DataCardOptions({
                 <input
                   type="number"
                   min={1}
-                  max={40}
+                  max={100}
                   step={1}
                   value={card.rowOffset + 1}
                   onChange={(event) =>
@@ -598,7 +598,7 @@ export function DataCardOptions({
                 <input
                   type="number"
                   min={1}
-                  max={40}
+                  max={100}
                   step={1}
                   value={card.maxRows}
                   onChange={(event) =>

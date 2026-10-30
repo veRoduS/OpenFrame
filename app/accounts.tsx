@@ -37,6 +37,7 @@ import {
 } from './components/ui/alert-dialog';
 
 export type User = {
+  home?: { siteId: string | null; groupId: string; label: string } | null;
   id: string;
   username: string;
   name: string;

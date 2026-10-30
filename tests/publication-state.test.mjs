@@ -69,6 +69,36 @@ void test('fork comparison uses effective timing and retains repeated entry orde
   );
 });
 
+void test('skipped fork entries are compared by what plays and restore as publication changes', () => {
+  const fork = {
+    ...playlist,
+    fork: { speed: 1 },
+    items: [item, { slideId: 'slide-2', duration: 30, skipped: true }],
+  };
+  assert.equal(publicationState(fork), 'published');
+  assert.equal(
+    publicationState({
+      ...fork,
+      items: [item, { ...fork.items[1], duration: 60 }],
+    }),
+    'published',
+  );
+  assert.equal(
+    publicationState({
+      ...fork,
+      items: fork.items.map((entry) => ({ ...entry, skipped: false })),
+    }),
+    'changes',
+  );
+  assert.equal(
+    publicationState({
+      ...fork,
+      items: fork.items.map((entry) => ({ ...entry, skipped: true })),
+    }),
+    'changes',
+  );
+});
+
 void test('heartbeat, playback, blanking, failures and unsynced revisions remain distinct', () => {
   const now = Date.parse('2026-10-07T12:00:00Z');
   const device = {

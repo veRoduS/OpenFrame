@@ -79,7 +79,7 @@ try {
     return response.json();
   }
   const metricFeed = await ingest('production', { freight: 7 });
-  const rows = Array.from({ length: 40 }, (_, index) => ({
+  const rows = Array.from({ length: 100 }, (_, index) => ({
     label: `Metric ${String(index + 1).padStart(2, '0')}`,
     value: index + 1.5,
   }));
@@ -109,7 +109,7 @@ try {
   await page.getByLabel('Value field', { exact: true }).selectOption('freight');
   await page.getByLabel('Title', { exact: true }).fill('SMCC metric table');
   await page.getByLabel('Decimal places', { exact: true }).fill('1');
-  await page.getByLabel('First row', { exact: true }).fill('21');
+  await page.getByLabel('First row', { exact: true }).fill('81');
   await page.getByLabel('Visible rows', { exact: true }).fill('20');
   await page.getByText('Footer and freshness', { exact: true }).click();
   await page.getByLabel('Show update time', { exact: true }).uncheck();
@@ -122,16 +122,16 @@ try {
       .locator('.slide-canvas.editable [data-card-part="row-label"]')
       .first()
       .textContent(),
-    'Metric 21',
+    'Metric 81',
   );
   assert.match(
     await page.locator('.slide-canvas.editable').textContent(),
-    /Rows 21–40 of 40/,
+    /Rows 81–100 of 100/,
   );
   await page.getByLabel('Show row range', { exact: true }).uncheck();
   assert.doesNotMatch(
     await page.locator('.slide-canvas.editable').textContent(),
-    /Rows 21–40 of 40/,
+    /Rows 81–100 of 100/,
   );
   await page.getByRole('button', { name: 'Save slide', exact: true }).click();
   await page.getByText('All changes saved', { exact: true }).waitFor();
@@ -141,7 +141,7 @@ try {
   const config = slide.layers[0].data;
   assert.equal(config.mode, 'bar');
   assert.equal(config.card.rows, 'table');
-  assert.equal(config.card.rowOffset, 20);
+  assert.equal(config.card.rowOffset, 80);
   assert.equal(config.card.maxRows, 20);
   assert.equal(config.card.showRowRange, false);
   await page
@@ -153,7 +153,7 @@ try {
   await page.locator('.layer-list button').first().click();
   assert.equal(
     await page.getByLabel('First row', { exact: true }).inputValue(),
-    '21',
+    '81',
   );
   assert.equal(
     await page.getByLabel('Visible rows', { exact: true }).inputValue(),
@@ -194,18 +194,18 @@ try {
       .locator(`${active} [data-card-part="row-label"]`)
       .first()
       .textContent(),
-    'Metric 21',
+    'Metric 81',
   );
   assert.equal(
     await playback
       .locator(`${active} [data-card-part="row-label"]`)
       .last()
       .textContent(),
-    'Metric 40',
+    'Metric 100',
   );
   assert.doesNotMatch(
     await playback.locator(active).textContent(),
-    /Rows 21–40 of 40/,
+    /Rows 81–100 of 100/,
   );
   await playback.screenshot({ path: path.join(output, 'player.png') });
   await playback.evaluate(() => {
@@ -220,7 +220,7 @@ try {
     () =>
       document.querySelector(
         '.slide-frame[aria-hidden="false"] [data-card-part="row-value"]',
-      )?.textContent === '121.5',
+      )?.textContent === '181.5',
     undefined,
     { timeout: 22000 },
   );
@@ -236,7 +236,7 @@ try {
     { freight: 7 },
   );
 
-  // A full 40-row view remains bounded and fits a tall sign. No paging timer is needed.
+  // A full 100-row view remains bounded and fits a tall sign. No paging timer is needed.
   const full = await context.newPage();
   await full.setViewportSize({ width: 640, height: 1080 });
   await full.goto(`${base}/table-harness`);
@@ -252,12 +252,46 @@ try {
       document.body.append(host);
       renderDataWidget(
         host,
-        { ...config, card: { ...config.card, rowOffset: 0, maxRows: 40 } },
+        { ...config, card: { ...config.card, rowOffset: 0, maxRows: 100 } },
         { status: 'ready', data: { freight: rows } },
       );
       const svg = host.querySelector('svg');
       const bounds = svg.getBoundingClientRect();
+      const range = document.createElement('div');
+      Object.assign(range.style, {
+        position: 'absolute',
+        left: '-10000px',
+        width: '600px',
+        height: '1040px',
+      });
+      document.body.append(range);
+      renderDataWidget(
+        range,
+        {
+          ...config,
+          card: {
+            ...config.card,
+            rowOffset: 80,
+            maxRows: 20,
+            rowDeltaField: 'changes',
+          },
+        },
+        {
+          status: 'ready',
+          data: {
+            freight: rows,
+            changes: rows.map((row) => ({ label: row.label, value: 1 })),
+          },
+        },
+      );
+      const extended = {
+        deltas: range.querySelectorAll('[data-card-part="row-delta"]').length,
+        lastLabel: range.querySelectorAll('[data-card-part="row-label"]')[19]
+          ?.textContent,
+      };
+      range.remove();
       return {
+        extended,
         rows: host.querySelectorAll('[data-card-part="row"]').length,
         nodes: host.querySelectorAll('*').length,
         invalid: /NaN|Infinity/.test(svg.innerHTML),
@@ -276,11 +310,12 @@ try {
     },
     { config, rows },
   );
-  assert.equal(geometry.rows, 40);
-  assert.ok(geometry.nodes < 250);
+  assert.equal(geometry.rows, 100);
+  assert.deepEqual(geometry.extended, { deltas: 20, lastLabel: 'Metric 100' });
+  assert.ok(geometry.nodes < 600);
   assert.equal(geometry.invalid, false);
   assert.deepEqual(geometry.outside, []);
-  await full.screenshot({ path: path.join(output, 'forty-rows.png') });
+  await full.screenshot({ path: path.join(output, 'hundred-rows.png') });
 
   await ingest('production-tables', { freight: rows.slice(0, 3) });
   await playback.waitForFunction(
@@ -301,7 +336,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    'SMCC tables passed: application-key ingestion, separate metrics/tables sources, Table preset, saved row ranges, 320px controls, 40-row fitting, live refresh and shrinking snapshots.',
+    'SMCC tables passed: application-key ingestion, separate metrics/tables sources, Table preset, saved row ranges, 320px controls, 100-row fitting, live refresh and shrinking snapshots.',
   );
 } finally {
   await browser?.close();

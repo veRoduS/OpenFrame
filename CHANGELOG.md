@@ -2,12 +2,21 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
-## [0.29.8] - 2026-10-30
+## [0.29.10] - 2026-10-30
 
 - Data widgets list each store source once and follow each screen's store by default
 
+## [0.29.9] - 2026-10-30
+
+- Add a forecast card preset with full-width hourly weather rows
+
+## [0.29.8] - 2026-10-30
+
+- Add fork slide skipping and parent-group slide sharing; remove image megapixel cap while preserving file-size limits
+
 ## [0.29.7] - 2026-10-30
 
+- Add non-expiring API keys, visible group filters, optional admin home workspaces and 100-row SMCC tables
 - Preselect the group named with a new site's number as its access group
 
 ## [0.29.6] - 2026-10-30

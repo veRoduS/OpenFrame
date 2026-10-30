@@ -710,9 +710,21 @@ export function createApp({
       (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
         (!target.remove &&
           req.user.role !== 'admin' &&
-          !accounts.member(req.user, target.groupId)))
+          !accounts.member(req.user, target.groupId) &&
+          !(
+            kind === 'slide' &&
+            db
+              .prepare('SELECT groupId FROM memberships WHERE userId=?')
+              .all(req.user.id)
+              .some((membership) =>
+                accounts.related(target.groupId, membership.groupId),
+              )
+          )))
     )
-      throw fail(403, 'Join the group before sharing');
+      throw fail(
+        403,
+        'Share with your groups or their descendants; slides may also be shared with parent groups',
+      );
     db.exec('BEGIN IMMEDIATE');
     try {
       if (target.remove) {
@@ -933,6 +945,7 @@ export function createApp({
           siteNumber,
           name,
           archivedAt,
+          accessGroupId: site.accessGroupId || null,
           canApprove: canApproveSite({ ...site, archivedAt }),
         })),
       dataFeeds: list('data-feed').map((feed) =>
@@ -1132,8 +1145,8 @@ export function createApp({
       } catch (error) {
         throw fail(400, error.message);
       }
-    } else if (p.items.some((i) => i.sourceEntryId))
-      throw fail(400, 'Only forks can contain inherited entries');
+    } else if (p.items.some((i) => i.sourceEntryId || i.skipped))
+      throw fail(400, 'Only forks can contain inherited or skipped entries');
     p.items.forEach((i) => requireRecord('slide', i.slideId));
     return p;
   }
@@ -1390,7 +1403,10 @@ export function createApp({
     });
     res.status(201).json(publicResource('playlist', fork));
   });
-  function checkPublicationRecipients(playlist, items = playlist.items) {
+  function checkPublicationRecipients(
+    playlist,
+    items = playlist.items.filter((item) => !item.skipped),
+  ) {
     const recipients = grants('playlist', playlist.id);
     const management = db
       .prepare('SELECT groupId FROM resource_management WHERE kind=? AND id=?')
@@ -1453,16 +1469,18 @@ export function createApp({
           snapshot(candidate, true),
         );
         fork.published = published;
-        fork.publishedEntries = candidate.items.map((i) => ({
-          ...i,
-          duration: Math.max(
-            2,
-            Math.min(
-              3600,
-              Math.round(i.duration / (candidate.fork.speed || 1)),
+        fork.publishedEntries = candidate.items
+          .filter((item) => !item.skipped)
+          .map((i) => ({
+            ...i,
+            duration: Math.max(
+              2,
+              Math.min(
+                3600,
+                Math.round(i.duration / (candidate.fork.speed || 1)),
+              ),
             ),
-          ),
-        }));
+          }));
         delete fork.forkSyncError;
         db.prepare(
           "UPDATE records SET body=? WHERE kind='playlist' AND id=?",
@@ -1550,25 +1568,28 @@ export function createApp({
       : null;
     const contentSlide = (slide) =>
       manifestSlide(publishing ? removeUntouchedStarter(slide) : slide);
-    const items = p.items.map((item) => ({
-      duration: Math.max(
-        2,
-        Math.min(3600, Math.round(item.duration / (p.fork?.speed || 1))),
-      ),
-      startsAt: item.scheduleEnabled === false ? null : (item.startsAt ?? null),
-      scheduleEnabled: item.scheduleEnabled,
-      expiresAt:
-        item.scheduleEnabled === false ? null : (item.expiresAt ?? null),
-      slide: contentSlide(
-        item.sourceEntryId
-          ? master.published.items[
-              master.publishedEntries.findIndex(
-                (e) => e.id === item.sourceEntryId,
-              )
-            ].slide
-          : requireRecord('slide', item.slideId),
-      ),
-    }));
+    const items = p.items
+      .filter((item) => !item.skipped)
+      .map((item) => ({
+        duration: Math.max(
+          2,
+          Math.min(3600, Math.round(item.duration / (p.fork?.speed || 1))),
+        ),
+        startsAt:
+          item.scheduleEnabled === false ? null : (item.startsAt ?? null),
+        scheduleEnabled: item.scheduleEnabled,
+        expiresAt:
+          item.scheduleEnabled === false ? null : (item.expiresAt ?? null),
+        slide: contentSlide(
+          item.sourceEntryId
+            ? master.published.items[
+                master.publishedEntries.findIndex(
+                  (e) => e.id === item.sourceEntryId,
+                )
+              ].slide
+            : requireRecord('slide', item.slideId),
+        ),
+      }));
     if (feedIds({ items }).length > 20)
       throw fail(400, 'A playlist can use at most 20 distinct data feeds');
     if (!previewing)
@@ -1586,7 +1607,9 @@ export function createApp({
                   (layer) =>
                     ['shape', 'stocks'].includes(layer.type) ||
                     (layer.type === 'weather' &&
-                      layer.weather?.layout === 'vertical'),
+                      ['vertical', 'forecast-card'].includes(
+                        layer.weather?.layout,
+                      )),
                 ),
               )
             ? 3
@@ -1657,18 +1680,20 @@ export function createApp({
   app.post('/api/playlists/:id/publish', admin, (req, res) => {
     const p = requireEditable('playlist', req.params.id);
     p.items = resolvedPlaylist(p).items;
-    if (!p.items.length)
-      throw fail(400, 'Add at least one slide before publishing');
+    if (!p.items.some((item) => !item.skipped))
+      throw fail(400, 'Include at least one slide before publishing');
     p.published = snapshot(p, true);
     checkPublicationRecipients(p, p.published.items);
     delete p.forkSyncError;
-    p.publishedEntries = p.items.map((i) => ({
-      ...i,
-      duration: Math.max(
-        2,
-        Math.min(3600, Math.round(i.duration / (p.fork?.speed || 1))),
-      ),
-    }));
+    p.publishedEntries = p.items
+      .filter((item) => !item.skipped)
+      .map((i) => ({
+        ...i,
+        duration: Math.max(
+          2,
+          Math.min(3600, Math.round(i.duration / (p.fork?.speed || 1))),
+        ),
+      }));
     if (p.fork)
       p.publishedForkState = {
         name: p.name,
@@ -1961,7 +1986,7 @@ export function createApp({
     let buffer, info;
     try {
       const source = sharp(req.file.buffer, {
-        limitInputPixels: 25000000,
+        limitInputPixels: false,
         animated: true,
       });
       const metadata = await source.metadata();
@@ -1983,7 +2008,7 @@ export function createApp({
       buffer = result.data;
       info = result.info;
     } catch {
-      throw fail(400, 'Use a valid image under 25 megapixels and 15 MB');
+      throw fail(400, 'Use a valid image under 15 MB');
     }
     const id = randomUUID();
     const filename = `${id}.webp`;

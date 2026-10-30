@@ -1636,6 +1636,15 @@ input[type='color'] {
   padding: 16px 0;
   border-bottom: 1px solid #e3e8e4;
 }
+.sequence-row.is-skipped {
+  background: #f5f7f6;
+}
+.sequence-row.is-skipped .sequence-thumb {
+  opacity: 0.45;
+}
+.sequence-status.skipped {
+  color: #63736a;
+}
 .sequence-number {
   font-size: 11px;
   color: var(--of-text-muted);

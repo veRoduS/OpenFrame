@@ -20,6 +20,7 @@ export function composeFork(playlist, master) {
         : source.duration,
       durationOverride: !!override?.durationOverride,
       masterDuration: source.duration,
+      skipped: !!override?.skipped,
     };
   });
   const local = playlist.items.filter((i) => !i.sourceEntryId);

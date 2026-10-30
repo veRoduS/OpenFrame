@@ -96,6 +96,7 @@ try {
     }),
   });
   await keysDialog.getByLabel('Key name', { exact: true }).fill('Production');
+  await keysDialog.getByLabel('Never expires', { exact: true }).check();
   await keysDialog
     .getByRole('button', { name: 'Generate application API key', exact: true })
     .click();
@@ -123,6 +124,31 @@ try {
   }
   await secretDialog.getByRole('button', { name: 'Done', exact: true }).click();
   await page.locator('.data-feed-secret').waitFor({ state: 'detached' });
+  await keysDialog
+    .getByText('Never expires · Not used yet', { exact: true })
+    .waitFor();
+  await keysDialog
+    .getByRole('button', {
+      name: 'Change expiration for Production',
+      exact: true,
+    })
+    .click();
+  const expiryForm = keysDialog.getByRole('form', {
+    name: 'Expiration for Production',
+    exact: true,
+  });
+  await expiryForm.getByLabel('Never expires', { exact: true }).uncheck();
+  await expiryForm.getByLabel('Expires in days', { exact: true }).fill('7');
+  await expiryForm
+    .getByRole('button', { name: 'Save expiration', exact: true })
+    .click();
+  await expiryForm.waitFor({ state: 'hidden' });
+  assert.equal(
+    await keysDialog
+      .getByText('Never expires · Not used yet', { exact: true })
+      .count(),
+    0,
+  );
   await keysDialog.getByRole('button', { name: 'Done', exact: true }).click();
   const first = await external.request.post(endpoint, {
     headers: { Authorization: `Bearer ${secret}` },

@@ -44,11 +44,33 @@ A later push such as `{"completed":43,"orders":12}` updates `completed`, creates
 
 Feed names are case-sensitive, 1–80 characters, starting with a letter or number and containing only letters, numbers, underscores or hyphens. Metric keys use the existing 1–40 character field-key rules below. Each request has 1–20 metrics; each feed may accumulate at most 20 fields. Use another feed name for an additional set of metrics. Payloads remain limited to **32 KiB**. The **60 ingestion calls per minute per application/site** budget is shared by its keys and feed names, including parsed requests with invalid metric values. An application also has a **600/minute aggregate ceiling**. Saturated-site rejections do not consume other sites’ aggregate allowance. Unassigned keys share a separate 60/minute scope. Writes validate the entire request before committing feed creation, fields, values, ownership, source mapping and key usage together. Invalid requests retain the previous data and schema.
 
-The server supports up to 50 registered applications, 20 active keys per application and 200 total feeds across both modes. Expired/revoked key metadata is pruned when generating another key. Application keys expire in 1–365 days and can be revoked under **Manage keys**. The issuing account must remain an active admin: disabling, deleting or demoting it stops writes. User deletion also explicitly revokes its application keys. Rotating a key within the same application preserves its feed names and IDs.
+The server supports up to 50 registered applications, 20 active keys per application and 200 total feeds across both modes. Expired/revoked key metadata is pruned when generating another key. Application keys can expire in 1–365 days (90 by default) or **Never expires**. Change an existing key’s expiration without rotating its secret, or revoke it under **Manage keys**. The issuing account must remain an active admin: disabling, deleting or demoting it stops writes. User deletion also explicitly revokes its application keys. Rotating a key within the same application preserves its feed names and IDs.
 
 Automatically created feeds use the application's configured managing group and the first writer's personal ownership. They appear in the existing feed list and widget selectors. The Settings feed list refreshes about every 15 seconds while open. Select the feed/metric in a slide and publish its layout once; subsequent data updates use normal preview/player sync without republishing. Existing sharing and schema 4 rules still apply. Revoking a key preserves feeds, last values and slide bindings. Admins can delete an application only after removing all its unused feeds; normal feed deletion protection prevents removing feeds referenced by drafts or publications. Deleting an unused feed clears that name's mapping, so another push recreates it; revoke the application's keys first to stop recreation.
 
 Additional ingestion failures include **409 `FIELD_LIMIT`**, **409 `FEED_LIMIT`**, and **429 `RATE_LIMITED`** with `Retry-After`. Invalid fields/types use **400 `INVALID_PAYLOAD`**; rejected keys use **401 `INVALID_TOKEN`**. A missing configured managing group uses **409 `INVALID_GROUP`** and prevents creation. The legacy per-feed PUT endpoint below retains complete-snapshot behavior and fixed field definitions.
+
+## API key expiration
+
+Application and feed-key creation accept `expiresInDays: null` for **Never
+expires**. Omitting it keeps the 90-day default; finite values remain 1–365.
+Public key metadata returns `expiresAt: null` for non-expiring keys. Admins can
+also change an existing key without rotating its secret:
+
+```http
+PATCH /api/data-feeds/applications/APPLICATION_UUID/tokens/KEY_UUID
+Content-Type: application/json
+Cookie: openframe_session=ADMIN_SESSION
+
+{"expiresInDays":null}
+```
+
+For feed-specific keys, use `PATCH /api/data-feeds/FEED_UUID/tokens/KEY_UUID`
+with the same body. A finite day count sets a new expiry relative to now. These
+are session-authenticated management endpoints; ingestion keys cannot call them.
+Revoked keys cannot be renewed. Non-expiring keys count toward the same 20-active-
+key limit, and issuer authorization, site restrictions and revocation still apply.
+Existing expiry dates are preserved during the database migration.
 
 ## SMCC and other numeric tables
 
@@ -64,14 +86,14 @@ Content-Type: application/json
 
 The first push creates each table field as `categories`. Later pushes replace each included table's complete row array. Omitted table fields retain their previous rows. Keep metric and table sources separate when their field keys overlap: field types remain immutable within one feed. An empty array clears an existing table; skip the field entirely to keep its previous rows. The first push for a new table must be nonempty.
 
-In the editor choose **Widgets → Table**, select the resulting feed and table field, and set its unit/precision. Each table has one label column and one numeric value column, with one display unit per card. SMCC's decision to skip mixed-unit tables is consistent with this presentation. Row order is preserved. Use **First row** and **Visible rows** to divide larger tables across cards. These controls need server **0.26.1** and player **0.12.1**; the ingestion format is already supported by earlier application-key servers.
+In the editor choose **Widgets → Table**, select the resulting feed and table field, and set its unit/precision. Each table has one label column and one numeric value column, with one display unit per card. SMCC's decision to skip mixed-unit tables is consistent with this presentation. Row order is preserved. Use **First row** and **Visible rows** to divide larger tables across cards. For views and ranges through row 40, these controls need server **0.26.1** and player **0.12.1**. Rows 41–100 require server **0.29.7** and player **0.15.4**; the ingestion method and numeric-row format are unchanged.
 
-Limits remain **40 rows per field**, unique trimmed labels of **1–60 characters**, finite values within **±1 trillion**, and **32 KiB per request**. A request can include up to 20 table fields subject to that total byte limit. The table source shares the application's existing rate budget. Update timestamps describe the feed's receipt time, not an observation timestamp for each row. Text cells, multiple value columns, mixed units, and collector datasets require a separately agreed payload; they are not inferred from this numeric-row format.
+Limits remain **100 rows per field**, unique trimmed labels of **1–60 characters**, finite values within **±1 trillion**, and **32 KiB per request**. A request can include up to 20 table fields subject to that total byte limit. The table source shares the application's existing rate budget. Update timestamps describe the feed's receipt time, not an observation timestamp for each row. Text cells, multiple value columns, mixed units, and collector datasets require a separately agreed payload; they are not inferred from this numeric-row format.
 
 ## Feed-specific keys: existing quick start
 
 1. As an OpenFrame admin, open **Settings → Data feeds → New feed**. Give it a name and a managing group. Add field keys and types. For the example below use `completed` (number), `goal` (number), `hourly` (time series), and `departments` (categories).
-2. Open that feed, enter an application name, select **Generate API key**, and copy the key from the one-time pop-up. The pop-up also provides the exact update URL. Choose an expiry, 1–365 days (90 by default). The token is shown once; OpenFrame stores only its SHA-256 hash. If lost, create a replacement and revoke the old token.
+2. Open that feed, enter an application name, select **Generate API key**, and copy the key from the one-time pop-up. The pop-up also provides the exact update URL. Choose an expiry, 1–365 days (90 by default), or **Never expires**. Existing keys have a **Change expiration** control; changing the expiry preserves the secret. The token is shown once; OpenFrame stores only its SHA-256 hash. If lost, create a replacement and revoke the old token.
 3. Use **Copy integration details** in the feed dialog to copy its base URL, feed ID, exact field definitions, update URL, and documentation links. Give the integration this handoff and provide the token separately through a secret store. Tokens are feed-specific and write-only. They cannot read data, manage feeds, edit slides, or access other feeds. Do not include a token in slides, public code, browser JavaScript, or logs.
 4. Send a snapshot using the request below.
 5. In a slide's **Widgets** section add a Metric, Progress bar, Line graph, or Bar chart. Select this feed and a compatible field. For a progress bar select `completed` and target field `goal`, or set a positive fixed target. Publish the playlist layout once and assign it to your screens.

@@ -144,10 +144,10 @@ export function renderDataCard(
         ? 'end'
         : 'start';
   const categoryLimit = Number.isInteger(card.maxRows)
-    ? clamp(card.maxRows, 1, 40)
+    ? clamp(card.maxRows, 1, 100)
     : 4;
   const categoryOffset = Number.isInteger(card.rowOffset)
-    ? clamp(card.rowOffset, 0, 39)
+    ? clamp(card.rowOffset, 0, 99)
     : 0;
   const rawRows = snapshot?.data?.[config.field];
   const rowCount =
@@ -309,7 +309,7 @@ export function renderDataCard(
   const rawValue = snapshot?.data?.[config.field];
   const points = Array.isArray(rawValue)
     ? rawValue
-        .slice(0, config.mode === 'line' ? 240 : 40)
+        .slice(0, config.mode === 'line' ? 240 : 100)
         .filter(
           (point) =>
             point &&
@@ -911,7 +911,7 @@ export function renderDataCard(
       !bars &&
       card.rowDeltaField &&
       Array.isArray(snapshot.data[card.rowDeltaField])
-        ? snapshot.data[card.rowDeltaField].slice(0, 40)
+        ? snapshot.data[card.rowDeltaField].slice(0, 100)
         : [];
     const deltas = new Map(
       deltaValues

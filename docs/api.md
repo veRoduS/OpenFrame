@@ -43,7 +43,7 @@ The array order also governs background promotion from an active backup network.
 
 ## Home server
 
-`GET /api/weather?latitude=41.8781&longitude=-87.6298` requires an administrator session and returns the shared weather snapshot immediately, scheduling refresh if needed. Coordinates must be finite and within geographic bounds. Weather layers accept `weather:{name,latitude,longitude,unit,mode,layout?,zip?}`; name is at most 80 characters, coordinates may be null while editing, unit is `F` or `C`, mode is `current` (default) or `six-hour`, layout is `horizontal` (default) or `vertical`, and optional zip is a five-digit string. Published player sync responses add `weather:{"latitude,longitude":snapshot}` only for approved players' assigned published locations; previews include the same map. Keys use four decimal places. A snapshot has `status`, optional ISO forecast `fetchedAt`, optional IANA `timeZone`, and `periods:[{startTime,endTime,temperatureF,shortForecast,isDaytime?}]`. Optional `observation:{timestamp,temperatureF,shortForecast,station,isDaytime?}` and `observationStatus` (`ready` or `unavailable`) are independent of forecast freshness. Status is `loading`, `ready`, `stale`, `unavailable`, `unsupported`, or `capacity`. Live snapshots are not accepted from slide writes and do not change publication revisions. See [weather caching and lifecycle](weather.md).
+`GET /api/weather?latitude=41.8781&longitude=-87.6298` requires an administrator session and returns the shared weather snapshot immediately, scheduling refresh if needed. Coordinates must be finite and within geographic bounds. Weather layers accept `weather:{name,latitude,longitude,unit,mode,layout?,zip?}`; name is at most 80 characters, coordinates may be null while editing, unit is `F` or `C`, mode is `current` (default) or `six-hour`, layout is `horizontal` (default), `vertical`, or `forecast-card` (server 0.29.9 / player 0.15.5+), and optional zip is a five-digit string. Published player sync responses add `weather:{"latitude,longitude":snapshot}` only for approved players' assigned published locations; previews include the same map. Keys use four decimal places. A snapshot has `status`, optional ISO forecast `fetchedAt`, optional IANA `timeZone`, and `periods:[{startTime,endTime,temperatureF,shortForecast,isDaytime?}]`. Optional `observation:{timestamp,temperatureF,shortForecast,station,isDaytime?}` and `observationStatus` (`ready` or `unavailable`) are independent of forecast freshness. Status is `loading`, `ready`, `stale`, `unavailable`, `unsupported`, or `capacity`. Live snapshots are not accepted from slide writes and do not change publication revisions. See [weather caching and lifecycle](weather.md).
 
 `GET /api/weather/zip?zip=02108` is administrator-only and returns `{zip,places:[{name,latitude,longitude}]}` from the fixed US Zippopotam.us endpoint. Keep ZIP codes as strings, including leading zeros. Multiple places require a selection in the editor. Errors use the normal JSON error shape: 400 invalid input, 404 unknown ZIP, 429 local lookup throttle, or 502 upstream failure. Lookups are cached/deduplicated; this endpoint does not save a slide or change a player location.
 
@@ -195,7 +195,47 @@ Library and playlist responses include `publicationState: "draft" | "published" 
 Generated text layers may carry `starterText:true` only for the exact initial string `Something worth\nsharing.`. Editing the text or omitting its marker permanently removes the marker for that existing layer. Publishing removes untouched marked layers from the snapshot and from source slides the publisher can edit, in one transaction; source slides with only View access are retained. Draft previews never trigger cleanup. The marker is not sent to players. Existing unmarked layers are never inferred to be starters.
 
 
+## Forks, sharing and image uploads
+
+Server **0.29.8** adds optional `items[].skipped` to linked-fork authoring.
+Set it to true to omit an entry, or false to restore it. Keep this field when
+round-tripping fork items through custom management clients. Entry IDs keep
+repeated slides independent. Skipped entries remain in the draft for restoration
+but are omitted from previews, published snapshots and published entry mappings;
+the server also excludes them from playback duration and publication comparisons.
+Only forks can contain skipped entries, and publishing requires at least one
+included slide. Sync/manifest schemas are unchanged.
+
+Authorized slide sharers can target an ancestor of their own group membership
+through `POST /api/access/slide/:id`. This creates a normal View/Edit grant and
+does not transfer management or membership. Other resource types retain their
+existing target restrictions; unrelated groups and unauthorized resharing remain
+forbidden.
+
+Image uploads through `POST /api/assets` retain the **15 MB file-size limit**
+but no longer enforce an input megapixel limit. Images are still decoded,
+rotated, resized to at most 1920 pixels per dimension and stored as WebP. Invalid
+images return 400 and oversized files return 413. Video limits are unchanged.
+
 ## Site assignment and shared metrics
+
+Server **0.29.7** adds optional [home workspaces](home-workspace.md) through
+`PATCH /api/account/home` and nullable `user.home` in `GET /api/auth`. This is a
+self-service preference for non-built-in admins; it does not alter their role or
+API permissions. The normal `admin` account and users without a home retain
+their existing workspace.
+
+Both API-key creation endpoints accept `expiresInDays: null` for no expiration.
+The default remains 90 days; a finite value must be 1–365. Key metadata now has
+nullable `expiresAt`. An admin can `PATCH` either existing key-management URL
+with `{expiresInDays: null}` or a day count, retaining the key's secret and ID.
+Revoked keys return 409; non-expiring keys count toward the existing active-key
+cap. See the [data-feed API](data-feeds-api.md) and OpenAPI for exact paths.
+
+SMCC/category fields now accept up to 100 rows, with the existing 32 KiB body,
+label and numeric limits. `card.maxRows` accepts 1–100 and `card.rowOffset` accepts
+0–99. Player **0.15.4** is required for ranges or views beyond 40 rows; existing
+smaller views remain supported. See [widget cards](widget-cards.md).
 
 See [Sites](sites.md) and the [data-feed API](data-feeds-api.md#sites-initial-storage-support).
 `POST /api/devices/:id/site` accepts `{siteId}` for an approved Unassigned screen

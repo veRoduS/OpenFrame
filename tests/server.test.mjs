@@ -70,6 +70,30 @@ void test('image and font multipart uploads bound text fields and reject invalid
   assert.equal((await request('/api/fonts', 'POST', font)).status, 201);
 });
 
+void test('large-resolution images are accepted below the existing file-size limit and still optimized', async (t) => {
+  const { request } = await fixture(t);
+  const png = await sharp({
+    create: { width: 5001, height: 5001, channels: 3, background: '#447755' },
+  })
+    .png()
+    .toBuffer();
+  assert.ok(png.byteLength < 15 * 1024 * 1024);
+  const form = new FormData();
+  form.append('file', new Blob([png]), 'large-resolution.png');
+  const uploaded = await request('/api/assets', 'POST', form);
+  assert.equal(uploaded.status, 201);
+  assert.equal(uploaded.data.width, 1920);
+  assert.equal(uploaded.data.height, 1920);
+  const tooLarge = new FormData();
+  tooLarge.append(
+    'file',
+    new Blob([png, Buffer.alloc(15 * 1024 * 1024 + 1)]),
+    'over-file-limit.png',
+  );
+  assert.equal((await request('/api/assets', 'POST', tooLarge)).status, 413);
+  assert.equal((await request('/api/library')).data.assets.length, 1);
+});
+
 void test('image save failures roll back metadata and grants and remove the new file', async (t) => {
   const { request, db, dir } = await fixture(t);
   t.mock.method(console, 'error', () => {});
