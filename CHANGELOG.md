@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.31.0] - 2026-10-30
+
+- Release central SMCC store ingestion, safe data-connection resets and shared metric publication fixes
+
 ## [0.30.3] - 2026-10-30
 
 - Add central application keys and atomic multi-store metric/table ingestion, grouped store feeds, and an SMCC integration handoff

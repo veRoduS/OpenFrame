@@ -1,6 +1,6 @@
 # SMCC → OpenFrame: multi-store API update
 
-Requires **OpenFrame server 0.30.3+**. Deploy that server update before changing SMCC; this document describes the new contract, not the server currently running at your location.
+First published in **OpenFrame server 0.31.0** (implemented in local revision 0.30.3). Deploy that server update before changing SMCC; the running server must support the new endpoint.
 
 ## Setup
 
