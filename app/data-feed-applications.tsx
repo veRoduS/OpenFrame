@@ -34,6 +34,7 @@ type Site = {
   archivedAt: string | null;
 };
 type ApplicationToken = {
+  siteIds?: string[] | null;
   siteId: string | null;
   id: string;
   name: string;
@@ -52,6 +53,10 @@ export function DataFeedApplications({
 }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [siteId, setSiteId] = useState('');
+  const [central, setCentral] = useState(false);
+  const [centralSites, setCentralSites] = useState<string[]>([]);
+  const [secretCentral, setSecretCentral] = useState(false);
+  const [secretSites, setSecretSites] = useState<string[]>([]);
   const [legacySiteId, setLegacySiteId] = useState('');
   const [siteNumber, setSiteNumber] = useState('');
   const [siteName, setSiteName] = useState('');
@@ -116,12 +121,22 @@ export function DataFeedApplications({
       setError('Clipboard unavailable. Select and copy the text.');
     }
   }
-  const endpoint = `${location.origin}/api/data-feeds/ingest/production`;
+  const endpoint = `${location.origin}/api/data-feeds/${secretCentral ? 'ingest-stores' : 'ingest'}/production`;
+  const examplePayload = secretCentral
+    ? {
+        stores: secretSites.slice(0, 2).map((id) => ({
+          siteNumber:
+            sites.find((site) => site.id === id)?.siteNumber || '2882',
+          metrics: { completed: 42, goal: 100 },
+          tables: { training: [{ label: 'Safety', value: 98 }] },
+        })),
+      }
+    : { completed: 42, goal: 100 };
   const requestExample = [
     `curl --request POST '${endpoint}'`,
     "  --header 'Authorization: Bearer YOUR_API_KEY'",
     "  --header 'Content-Type: application/json'",
-    `  --data '{"completed":42,"goal":100}'`,
+    `  --data '${JSON.stringify(examplePayload)}'`,
   ].join(' \\' + '\n');
   return (
     <section
@@ -265,7 +280,7 @@ export function DataFeedApplications({
         <div>
           <h3 id="data-feed-applications-heading">Application API keys</h3>
           <p className="muted">
-            Give an application a key for each site. Its first push creates its
+            Use one application for each integration. Its first push creates its
             feeds and metrics automatically.
           </p>
         </div>
@@ -313,6 +328,8 @@ export function DataFeedApplications({
                       ),
                     );
                     setKeyName('');
+                    setCentral(false);
+                    setCentralSites([]);
                     setLegacySiteId('');
                     setExpires(90);
                     setSecret('');
@@ -333,8 +350,9 @@ export function DataFeedApplications({
         <DialogContent className="of-modal data-feed-modal" size="standard">
           <DialogTitle>New application</DialogTitle>
           <DialogDescription>
-            Choose who can use this application’s data. The application defines
-            feeds and metrics when it pushes JSON.
+            Choose a default managing group. For central keys, each store’s
+            access group takes precedence when creating its feeds. The
+            application creates feeds and metrics when it pushes JSON.
           </DialogDescription>
           <form
             onSubmit={(event) => {
@@ -347,6 +365,8 @@ export function DataFeedApplications({
                 await reload();
                 setCreating(false);
                 setKeys([]);
+                setCentral(false);
+                setCentralSites([]);
                 setKeyName('');
                 setExpires(90);
                 setSelected(application);
@@ -401,9 +421,9 @@ export function DataFeedApplications({
         <DialogContent className="of-modal data-feed-modal" size="standard">
           <DialogTitle>Application keys: {selected?.name}</DialogTitle>
           <DialogDescription>
-            Each key can create and update this application’s feeds at its
-            assigned site. The same key works with any feed name supplied by the
-            application.
+            Use one application for an integration such as SMCC. Issue a key for
+            one store, or a central key for multiple selected stores. Data stays
+            separate for each screen’s store.
           </DialogDescription>
           {error && (
             <p className="inline-error" role="alert">
@@ -417,16 +437,18 @@ export function DataFeedApplications({
                 <div>
                   <strong>{key.name}</strong>
                   <small>
-                    {key.siteId
-                      ? (() => {
-                          const site = sites.find(
-                            (item) => item.id === key.siteId,
-                          );
-                          return site
-                            ? `${site.siteNumber} · ${site.name}`
-                            : 'Site unavailable';
-                        })()
-                      : 'Unassigned · legacy feeds'}
+                    {key.siteIds
+                      ? `Central · ${key.siteIds.map((id) => sites.find((site) => site.id === id)?.siteNumber || 'Unavailable').join(', ')}`
+                      : key.siteId
+                        ? (() => {
+                            const site = sites.find(
+                              (item) => item.id === key.siteId,
+                            );
+                            return site
+                              ? `${site.siteNumber} · ${site.name}`
+                              : 'Site unavailable';
+                          })()
+                        : 'Unassigned · legacy feeds'}
                   </small>
                   <small>
                     {key.revokedAt
@@ -473,7 +495,7 @@ export function DataFeedApplications({
             ))}
           </div>
           {!!sites.length &&
-            (keys.some((key) => !key.siteId) ||
+            (keys.some((key) => !key.siteId && !key.siteIds) ||
               !!selected?.unassignedFeedCount) && (
               <form
                 onSubmit={(event) => {
@@ -538,9 +560,13 @@ export function DataFeedApplications({
                   {
                     name: keyName,
                     expiresInDays: expires,
-                    siteId: siteId || null,
+                    ...(central
+                      ? { siteIds: centralSites }
+                      : { siteId: siteId || null }),
                   },
                 );
+                setSecretCentral(!!result.siteIds);
+                setSecretSites(result.siteIds || []);
                 setSecret(result.token);
                 setKeyName('');
                 setKeys(
@@ -553,27 +579,71 @@ export function DataFeedApplications({
           >
             <fieldset disabled={busy}>
               <label>
-                Site
+                Key scope
                 <select
-                  aria-label="Site"
-                  value={siteId}
-                  required={sites.length > 0}
-                  onChange={(event) => setSiteId(event.target.value)}
+                  aria-label="Key scope"
+                  value={central ? 'central' : 'site'}
+                  onChange={(event) =>
+                    setCentral(event.target.value === 'central')
+                  }
                 >
-                  <option value="">
-                    {sites.length
-                      ? 'Choose a site'
-                      : 'Unassigned · legacy feeds'}
-                  </option>
+                  <option value="site">One store</option>
+                  <option value="central">Multiple stores (central)</option>
+                </select>
+              </label>
+              {central ? (
+                <fieldset className="central-store-picker">
+                  <legend>Authorized stores</legend>
+                  <p className="muted">
+                    Select the stores this key can update. New stores are not
+                    added automatically.
+                  </p>
                   {sites
                     .filter((site) => !site.archivedAt)
                     .map((site) => (
-                      <option key={site.id} value={site.id}>
+                      <label key={site.id}>
+                        <input
+                          type="checkbox"
+                          checked={centralSites.includes(site.id)}
+                          onChange={(event) =>
+                            setCentralSites((current) =>
+                              event.target.checked
+                                ? [...current, site.id]
+                                : current.filter((id) => id !== site.id),
+                            )
+                          }
+                        />
                         {site.siteNumber} · {site.name}
-                      </option>
+                      </label>
                     ))}
-                </select>
-              </label>
+                  {!sites.some((site) => !site.archivedAt) && (
+                    <p>Create an active site first.</p>
+                  )}
+                </fieldset>
+              ) : (
+                <label>
+                  Site
+                  <select
+                    aria-label="Site"
+                    value={siteId}
+                    required={sites.length > 0}
+                    onChange={(event) => setSiteId(event.target.value)}
+                  >
+                    <option value="">
+                      {sites.length
+                        ? 'Choose a site'
+                        : 'Unassigned · legacy feeds'}
+                    </option>
+                    {sites
+                      .filter((site) => !site.archivedAt)
+                      .map((site) => (
+                        <option key={site.id} value={site.id}>
+                          {site.siteNumber} · {site.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
               <label>
                 Key name
                 <input
@@ -585,7 +655,9 @@ export function DataFeedApplications({
                 />
               </label>
               <KeyExpiryFields value={expires} onChange={setExpires} />
-              <Button type="submit">Generate application API key</Button>
+              <Button type="submit" disabled={central && !centralSites.length}>
+                Generate application API key
+              </Button>
             </fieldset>
           </form>
           <p className="muted">
@@ -642,7 +714,7 @@ export function DataFeedApplications({
               <button
                 onClick={() =>
                   void copy(
-                    `Application: ${selected?.name}\nIngest URL: ${endpoint}\nMethod: POST\nAuthorization: Bearer YOUR_API_KEY\nContent-Type: application/json\nExample payload: {"completed":42,"goal":100}\nUse a stable feed name in place of production; metrics are created on first push.\nGuide: ${location.origin}/api/data-feeds/guide`,
+                    `Application: ${selected?.name}\nIngest URL: ${endpoint}\nMethod: POST\nAuthorization: Bearer YOUR_API_KEY\nContent-Type: application/json\nExample payload: ${JSON.stringify(examplePayload)}\nUse a stable feed name in place of production; metrics are created on first push.\nGuide: ${location.origin}/api/data-feeds/guide`,
                   )
                 }
               >

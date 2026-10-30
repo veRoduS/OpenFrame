@@ -1,6 +1,11 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
+import {
+  requireActiveSite,
+  auditSite,
+  siteTransaction,
+  siteNumberSchema,
+} from './sites.mjs';
 import { expiryDays, keyExpiry, migrateKeyExpiry } from './api-key-expiry.mjs';
 
 const digest = (key) => createHash('sha256').update(key).digest('hex');
@@ -16,12 +21,17 @@ const keySchema = z
   .object({
     name: z.string().trim().min(1).max(80),
     siteId: z.uuid().nullable().default(null),
+    siteIds: z.array(z.uuid()).min(1).max(200).optional(),
     expiresInDays: expiryDays.default(90),
   })
   .strict();
 const sourceKey = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/);
 const keyFields =
-  'id,applicationId,name,createdAt,expiresAt,revokedAt,lastUsedAt,siteId';
+  'id,applicationId,name,createdAt,expiresAt,revokedAt,lastUsedAt,siteId,siteIds';
+const publicKey = (key) => ({
+  ...key,
+  siteIds: key.siteIds ? JSON.parse(key.siteIds) : null,
+});
 
 export function mountDataFeedApplications(
   app,
@@ -79,6 +89,13 @@ export function mountDataFeedApplications(
     throw error;
   }
   migrateKeyExpiry(db, 'data_feed_application_tokens');
+  if (
+    !db
+      .prepare('PRAGMA table_info(data_feed_application_tokens)')
+      .all()
+      .some((column) => column.name === 'siteIds')
+  )
+    db.exec('ALTER TABLE data_feed_application_tokens ADD COLUMN siteIds TEXT');
   const metadata = (application) => ({
     ...application,
     unassignedFeedCount: db
@@ -184,7 +201,7 @@ export function mountDataFeedApplications(
         ).run(siteId, application.id);
         const result = db
           .prepare(
-            'UPDATE data_feed_application_tokens SET siteId=? WHERE applicationId=? AND siteId IS NULL',
+            'UPDATE data_feed_application_tokens SET siteId=? WHERE applicationId=? AND siteId IS NULL AND siteIds IS NULL',
           )
           .run(siteId, application.id);
         if (mappings.length || result.changes)
@@ -256,7 +273,8 @@ export function mountDataFeedApplications(
           .prepare(
             `SELECT ${keyFields} FROM data_feed_application_tokens WHERE applicationId=? ORDER BY createdAt DESC,id`,
           )
-          .all(req.params.id),
+          .all(req.params.id)
+          .map(publicKey),
       );
     },
   );
@@ -266,7 +284,18 @@ export function mountDataFeedApplications(
     (req, res) => {
       applicationById(req.params.id);
       const input = keySchema.parse(req.body);
-      if (input.siteId) requireActiveSite(db, input.siteId);
+      if (input.siteIds) {
+        if (
+          input.siteId ||
+          new Set(input.siteIds).size !== input.siteIds.length
+        )
+          throw fail(
+            400,
+            'INVALID_SCOPE',
+            'Choose distinct stores and do not combine siteId with siteIds',
+          );
+        for (const id of input.siteIds) requireActiveSite(db, id);
+      } else if (input.siteId) requireActiveSite(db, input.siteId);
       else if (db.prepare('SELECT COUNT(*) AS n FROM sites').get().n)
         throw fail(400, 'SITE_REQUIRED', 'Choose a site for this API key');
       const now = new Date().toISOString();
@@ -289,7 +318,7 @@ export function mountDataFeedApplications(
       const id = randomUUID();
       siteTransaction(db, () => {
         db.prepare(
-          'INSERT INTO data_feed_application_tokens(id,applicationId,digest,creatorId,name,createdAt,expiresAt,siteId) VALUES (?,?,?,?,?,?,?,?)',
+          'INSERT INTO data_feed_application_tokens(id,applicationId,digest,creatorId,name,createdAt,expiresAt,siteId,siteIds) VALUES (?,?,?,?,?,?,?,?,?)',
         ).run(
           id,
           req.params.id,
@@ -299,6 +328,7 @@ export function mountDataFeedApplications(
           now,
           keyExpiry(input.expiresInDays),
           input.siteId,
+          input.siteIds ? JSON.stringify(input.siteIds) : null,
         );
         auditSite(
           db,
@@ -311,11 +341,13 @@ export function mountDataFeedApplications(
         );
       });
       res.status(201).json({
-        ...db
-          .prepare(
-            `SELECT ${keyFields} FROM data_feed_application_tokens WHERE id=?`,
-          )
-          .get(id),
+        ...publicKey(
+          db
+            .prepare(
+              `SELECT ${keyFields} FROM data_feed_application_tokens WHERE id=?`,
+            )
+            .get(id),
+        ),
         token,
       });
     },
@@ -338,6 +370,8 @@ export function mountDataFeedApplications(
       if (key.revokedAt)
         throw fail(409, 'TOKEN_REVOKED', 'Revoked keys cannot be renewed');
       if (key.siteId) requireActiveSite(db, key.siteId);
+      if (key.siteIds)
+        for (const id of JSON.parse(key.siteIds)) requireActiveSite(db, id);
       if (
         db
           .prepare(
@@ -365,11 +399,13 @@ export function mountDataFeedApplications(
         );
       });
       res.json(
-        db
-          .prepare(
-            `SELECT ${keyFields} FROM data_feed_application_tokens WHERE id=?`,
-          )
-          .get(key.id),
+        publicKey(
+          db
+            .prepare(
+              `SELECT ${keyFields} FROM data_feed_application_tokens WHERE id=?`,
+            )
+            .get(key.id),
+        ),
       );
     },
   );
@@ -407,8 +443,7 @@ export function mountDataFeedApplications(
     },
   );
   const buckets = new Map();
-  // Application keys only authenticate ingestion; session-based management remains admin-only.
-  app.post('/api/data-feeds/ingest/:sourceKey', (req, res) => {
+  const authenticate = (req) => {
     const token = /^Bearer (ofa_[A-Za-z0-9_-]{43})$/.exec(
       req.headers.authorization || '',
     )?.[1];
@@ -438,7 +473,6 @@ export function mountDataFeedApplications(
         'INVALID_TOKEN',
         'Invalid, expired, revoked, or unauthorized application key',
       );
-    if (key.siteId) requireActiveSite(db, key.siteId);
     if (
       application.managingGroupId &&
       !db
@@ -450,48 +484,70 @@ export function mountDataFeedApplications(
         'INVALID_GROUP',
         'The application’s managing group no longer exists',
       );
+    return { key, creator, application };
+  };
+  const charge = (applicationId, siteIds, res, cost = siteIds.length) => {
     const now = Date.now();
     for (const [id, bucket] of buckets)
       if (bucket.until <= now) buckets.delete(id);
-    const scopeKey = `site:${application.id}:${key.siteId || 'unassigned'}`;
-    const appKey = `application:${application.id}`;
-    const scoped = buckets.get(scopeKey) || { until: now + 60000, count: 0 };
-    const aggregate = buckets.get(appKey) || { until: now + 60000, count: 0 };
-    buckets.set(scopeKey, scoped);
-    buckets.set(appKey, aggregate);
-    const exceeded =
-      scoped.count >= 60 ? scoped : aggregate.count >= 600 ? aggregate : null;
+    const charges = [
+      [`application:${applicationId}`, 600, cost],
+      ...siteIds.map((id) => [
+        `site:${applicationId}:${id || 'unassigned'}`,
+        60,
+        1,
+      ]),
+    ];
+    const pending = charges.map(([id, limit, amount]) => ({
+      id,
+      limit,
+      amount,
+      bucket: buckets.get(id) || { until: now + 60000, count: 0 },
+    }));
+    const exceeded = pending.find(
+      (item) => item.bucket.count + item.amount > item.limit,
+    );
     if (exceeded) {
       res.set(
         'Retry-After',
-        String(Math.max(1, Math.ceil((exceeded.until - now) / 1000))),
+        String(Math.max(1, Math.ceil((exceeded.bucket.until - now) / 1000))),
       );
       throw fail(
         429,
         'RATE_LIMITED',
-        exceeded === scoped
-          ? 'Maximum of 60 ingestion attempts per minute per application and site'
-          : 'Maximum of 600 ingestion attempts per minute per application',
+        exceeded.limit === 600
+          ? 'Maximum of 600 ingestion attempts per minute per application'
+          : 'Maximum of 60 ingestion attempts per minute per application and site',
       );
     }
-    scoped.count++;
-    aggregate.count++;
-    if (!req.is('application/json'))
-      throw fail(
-        415,
-        'UNSUPPORTED_MEDIA_TYPE',
-        'Send Content-Type: application/json',
-      );
-    const source = sourceKey.parse(req.params.sourceKey);
-    z.record(z.string(), z.unknown()).parse(req.body);
-    const entries = Object.entries(req.body);
+    for (const { id, amount, bucket } of pending) {
+      bucket.count += amount;
+      buckets.set(id, bucket);
+    }
+  };
+  const prepare = (
+    application,
+    siteId,
+    source,
+    body,
+    managingGroupId = application.managingGroupId,
+    forcedType = null,
+  ) => {
+    z.record(z.string(), z.unknown()).parse(body);
+    const entries = Object.entries(body);
     if (!entries.length || entries.length > 20)
-      throw fail(400, 'INVALID_PAYLOAD', 'Send 1–20 metric fields');
+      throw fail(400, 'INVALID_PAYLOAD', 'Send 1–20 fields per section');
+    if (Buffer.byteLength(JSON.stringify(body)) > 32768)
+      throw fail(
+        413,
+        'PAYLOAD_TOO_LARGE',
+        'Each metrics or tables section must be at most 32 KiB',
+      );
     const mapping = db
       .prepare(
         'SELECT feedId FROM data_feed_application_sources WHERE applicationId=? AND siteId=? AND sourceKey=?',
       )
-      .get(application.id, key.siteId || '', source);
+      .get(application.id, siteId || '', source);
     const existing = mapping && raw(mapping.feedId);
     if (mapping && !existing)
       throw fail(
@@ -499,16 +555,16 @@ export function mountDataFeedApplications(
         'FEED_NOT_FOUND',
         'The application feed was removed; use a new feed name',
       );
-    if (!existing && allRecords('data-feed').length >= 200)
-      throw fail(409, 'FEED_LIMIT', 'Maximum of 200 feeds reached');
     const fields = [...(existing?.fields || [])];
     const data = Object.fromEntries(Object.entries(existing?.data || {}));
     for (const [name, value] of entries) {
       let field = fields.find((item) => item.key === name);
       if (!field) {
-        let type;
-        if (value === null || typeof value === 'number') type = 'number';
+        let type = forcedType;
+        if (!type && (value === null || typeof value === 'number'))
+          type = 'number';
         else if (
+          !type &&
           Array.isArray(value) &&
           value.length &&
           value[0] &&
@@ -526,6 +582,12 @@ export function mountDataFeedApplications(
         field = fieldSchema.parse({ key: name, type });
         fields.push(field);
       }
+      if (forcedType && field.type !== forcedType)
+        throw fail(
+          409,
+          'SOURCE_SCHEMA_CONFLICT',
+          `${name}: table fields must use categories`,
+        );
       // Metric names remain data properties, including names such as constructor.
       Object.defineProperty(data, name, {
         value: values[field.type].parse(value),
@@ -546,34 +608,70 @@ export function mountDataFeedApplications(
         id: randomUUID(),
         name: `${application.name} · ${source}`.slice(0, 100),
         createdAt: updatedAt,
-        managingGroupId: application.managingGroupId,
+        managingGroupId,
         applicationId: application.id,
         sourceKey: source,
-        siteId: key.siteId,
+        siteId,
       }),
       fields,
       data,
       revision: randomUUID(),
       updatedAt,
     };
+    return { feed, mapping, existing };
+  };
+  const save = ({ key, creator, application }, plans) => {
+    if (
+      allRecords('data-feed').length +
+        plans.filter((plan) => !plan.existing).length >
+      200
+    )
+      throw fail(409, 'FEED_LIMIT', 'Maximum of 200 feeds reached');
     db.exec('SAVEPOINT application_ingest');
     try {
-      accounts.context.run({ user: creator, groupId: null }, () =>
-        put('data-feed', feed),
-      );
-      if (!mapping)
-        db.prepare(
-          'INSERT INTO data_feed_application_sources(applicationId,sourceKey,feedId,siteId) VALUES (?,?,?,?)',
-        ).run(application.id, source, feed.id, key.siteId || '');
+      for (const { feed, mapping } of plans) {
+        accounts.context.run({ user: creator, groupId: null }, () =>
+          put('data-feed', feed),
+        );
+        if (!mapping)
+          db.prepare(
+            'INSERT INTO data_feed_application_sources(applicationId,sourceKey,feedId,siteId) VALUES (?,?,?,?)',
+          ).run(application.id, feed.sourceKey, feed.id, feed.siteId || '');
+      }
       db.prepare(
         'UPDATE data_feed_application_tokens SET lastUsedAt=? WHERE id=?',
-      ).run(updatedAt, key.id);
+      ).run(new Date().toISOString(), key.id);
       db.exec('RELEASE application_ingest');
     } catch (error) {
       db.exec('ROLLBACK TO application_ingest; RELEASE application_ingest');
       throw error;
     }
-    // Return this write's identifiers/schema, without exposing any existing snapshot values.
+  };
+  const jsonOnly = (req) => {
+    if (!req.is('application/json'))
+      throw fail(
+        415,
+        'UNSUPPORTED_MEDIA_TYPE',
+        'Send Content-Type: application/json',
+      );
+  };
+  // Application keys only authenticate ingestion; session-based management remains admin-only.
+  app.post('/api/data-feeds/ingest/:sourceKey', (req, res) => {
+    const auth = authenticate(req);
+    const { key, application } = auth;
+    if (key.siteIds)
+      throw fail(
+        403,
+        'KEY_SCOPE',
+        'Use the multi-store endpoint with a central key',
+      );
+    if (key.siteId) requireActiveSite(db, key.siteId);
+    charge(application.id, [key.siteId], res);
+    jsonOnly(req);
+    const source = sourceKey.parse(req.params.sourceKey);
+    const plan = prepare(application, key.siteId, source, req.body);
+    save(auth, [plan]);
+    const { feed, existing } = plan;
     res.status(existing ? 200 : 201).json({
       applicationId: application.id,
       siteId: key.siteId,
@@ -581,8 +679,115 @@ export function mountDataFeedApplications(
       feedId: feed.id,
       fields: feed.fields,
       revision: feed.revision,
-      updatedAt,
+      updatedAt: feed.updatedAt,
       created: !existing,
+    });
+  });
+  const storeBatch = z
+    .object({
+      stores: z
+        .array(
+          z
+            .object({
+              siteNumber: siteNumberSchema,
+              metrics: z.record(z.string(), z.unknown()).optional(),
+              tables: z.record(z.string(), z.unknown()).optional(),
+            })
+            .strict()
+            .refine(
+              (store) =>
+                store.metrics !== undefined || store.tables !== undefined,
+              'Include metrics or tables',
+            ),
+        )
+        .min(1)
+        .max(50),
+    })
+    .strict();
+  app.post('/api/data-feeds/ingest-stores/:sourceKey', (req, res) => {
+    const auth = authenticate(req);
+    const { key, application } = auth;
+    if (!key.siteIds)
+      throw fail(
+        403,
+        'KEY_SCOPE',
+        'A central key with selected stores is required',
+      );
+    charge(application.id, [], res, 1);
+    jsonOnly(req);
+    const source = sourceKey.parse(req.params.sourceKey);
+    const { stores } = storeBatch.parse(req.body);
+    if (new Set(stores.map((store) => store.siteNumber)).size !== stores.length)
+      throw fail(400, 'DUPLICATE_SITE', 'Include each store number once');
+    const allowed = new Set(JSON.parse(key.siteIds));
+    const sites = stores.map((store) => {
+      const site = db
+        .prepare('SELECT * FROM sites WHERE siteNumber=?')
+        .get(store.siteNumber);
+      // Avoid disclosing store configuration to a key outside its authorized scope.
+      if (!site || !allowed.has(site.id))
+        throw fail(
+          403,
+          'SITE_NOT_AUTHORIZED',
+          'A store is outside this key’s scope',
+        );
+      return requireActiveSite(db, site.id);
+    });
+    charge(
+      application.id,
+      sites.map((site) => site.id),
+      res,
+      stores.length - 1,
+    );
+    const plans = [];
+    for (let index = 0; index < stores.length; index++) {
+      const store = stores[index],
+        site = sites[index];
+      const owner = site.accessGroupId || application.managingGroupId;
+      if (store.metrics !== undefined)
+        plans.push(prepare(application, site.id, source, store.metrics, owner));
+      if (store.tables !== undefined)
+        plans.push(
+          prepare(
+            application,
+            site.id,
+            sourceKey.parse(`${source}-tables`),
+            store.tables,
+            owner,
+            'categories',
+          ),
+        );
+    }
+    // A logical source uses one field type across stores, including existing snapshots.
+    const schemas = new Map();
+    for (const feed of [
+      ...allRecords('data-feed').filter(
+        (feed) => feed.applicationId === application.id,
+      ),
+      ...plans.map((plan) => plan.feed),
+    ]) {
+      if (!plans.some((plan) => plan.feed.sourceKey === feed.sourceKey))
+        continue;
+      for (const field of feed.fields) {
+        const id = JSON.stringify([feed.sourceKey, field.key]);
+        if (schemas.has(id) && schemas.get(id) !== field.type)
+          throw fail(
+            409,
+            'SOURCE_SCHEMA_CONFLICT',
+            `${feed.sourceKey}.${field.key}: field types must match across stores`,
+          );
+        schemas.set(id, field.type);
+      }
+    }
+    save(auth, plans);
+    res.json({
+      ok: true,
+      applicationId: application.id,
+      sourceKey: source,
+      storesAccepted: stores.length,
+      feedsCreated: plans.filter((plan) => !plan.existing).length,
+      feedsUpdated: plans.filter((plan) => plan.existing).length,
+      updatedAt: new Date().toISOString(),
     });
   });
 }

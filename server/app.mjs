@@ -309,6 +309,10 @@ export function createApp({
     '/api/data-feeds/ingest',
     express.json({ limit: '32kb', strict: true }),
   );
+  app.use(
+    '/api/data-feeds/ingest-stores',
+    express.json({ limit: '256kb', strict: true }),
+  );
   app.use(express.json({ limit: '1mb' }));
   mountAndroidReleases(app, {
     source: androidReleaseSource,
@@ -953,6 +957,11 @@ export function createApp({
           'data-feed',
           publicResource('data-feed', {
             ...feedMetadata(feed),
+            applicationName: feed.applicationId
+              ? db
+                  .prepare('SELECT name FROM data_feed_applications WHERE id=?')
+                  .get(feed.applicationId)?.name || null
+              : null,
             siteNumber: feed.siteId
               ? db
                   .prepare('SELECT siteNumber FROM sites WHERE id=?')

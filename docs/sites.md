@@ -10,9 +10,12 @@ separately published.
 
 1. In **Settings → Data feeds → Sites**, create a site number and name. Numbers
    are strings of 1–20 digits: `001` and `1` identify different sites.
-2. Create or select an application and generate an application API key for that
-   site. Configure the external application with that key. Use the same source
-   name at every site, for example `production`; each site's values are separate.
+2. Create or select one application for your integration. Generate a key for
+   that site, or (server 0.30.3+) choose **Multiple stores (central)** and select
+   the sites it may update. The central endpoint accepts one structured batch
+   across stores; see [SMCC integration update](smcc-integration-update.md).
+   Use the same source name, for example `production`; each site's values remain
+   separate. Future sites require a replacement key with an updated selection.
 3. Enter the site number in Android setup, Pi first-boot setup, or **Screen
    setup** when generating the Pi configuration. Older players may omit it.
 4. Under **Screens**, enter the pairing code and confirm the approved site. The

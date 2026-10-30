@@ -213,6 +213,62 @@ export function DataFeeds({
       setError('Clipboard unavailable. Select and copy the text.');
     }
   }
+  const visibleFeeds = feeds.filter(
+    (feed) =>
+      (!filterSite ||
+        (filterSite === 'unassigned'
+          ? !feed.siteId
+          : feed.siteId === filterSite)) &&
+      `${feed.name} ${feed.applicationName || ''} ${feed.siteNumber || ''} ${sites.find((site) => site.id === feed.siteId)?.name || ''}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  );
+  const integrations = new Map<string, DataFeed[]>();
+  for (const feed of visibleFeeds) {
+    if (!feed.applicationId) continue;
+    integrations.set(feed.applicationId, [
+      ...(integrations.get(feed.applicationId) || []),
+      feed,
+    ]);
+  }
+  const feedRow = (feed: DataFeed) => (
+    <article key={feed.id}>
+      <button
+        className="data-feed-open"
+        onClick={() => {
+          setSecret('');
+          setLegacySite('');
+          setSelected(feed);
+        }}
+      >
+        <Database size={22} />
+        <span>
+          <strong>
+            {feed.name}
+            {feed.siteNumber ? ` · Site ${feed.siteNumber}` : ''}
+          </strong>
+          <small>
+            {feed.fields.length} {feed.fields.length === 1 ? 'field' : 'fields'}{' '}
+            · {feed.readOnly ? 'View only' : 'Can edit'}
+            {feed.updatedAt
+              ? ` · Updated ${new Date(feed.updatedAt).toLocaleString()}`
+              : ' · Waiting for first update'}
+          </small>
+        </span>
+      </button>
+      <ManageAccessButton
+        resourceName={feed.name}
+        tags={feed.accessTags}
+        onClick={() =>
+          onAccess({
+            kind: 'data-feed',
+            id: feed.id,
+            name: feed.name,
+          })
+        }
+      />
+    </article>
+  );
   return (
     <section className="data-feeds-page" aria-labelledby="data-feeds-heading">
       <h2 id="data-feeds-heading">Data feeds</h2>
@@ -289,54 +345,69 @@ export function DataFeeds({
       )}
       {!!feeds.length && (
         <div className="data-feed-list">
-          {feeds
-            .filter(
-              (feed) =>
-                !filterSite ||
-                (filterSite === 'unassigned'
-                  ? !feed.siteId
-                  : feed.siteId === filterSite),
-            )
-            .filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
-            .map((feed) => (
-              <article key={feed.id}>
-                <button
-                  className="data-feed-open"
-                  onClick={() => {
-                    setSecret('');
-                    setLegacySite('');
-                    setSelected(feed);
-                  }}
-                >
-                  <Database size={22} />
-                  <span>
-                    <strong>
-                      {feed.name}
-                      {feed.siteNumber ? ` · Site ${feed.siteNumber}` : ''}
-                    </strong>
-                    <small>
-                      {feed.fields.length}{' '}
-                      {feed.fields.length === 1 ? 'field' : 'fields'} ·{' '}
-                      {feed.readOnly ? 'View only' : 'Can edit'}
-                      {feed.updatedAt
-                        ? ` · Updated ${new Date(feed.updatedAt).toLocaleString()}`
-                        : ' · Waiting for first update'}
-                    </small>
-                  </span>
-                </button>
-                <ManageAccessButton
-                  resourceName={feed.name}
-                  tags={feed.accessTags}
-                  onClick={() =>
-                    onAccess({
-                      kind: 'data-feed',
-                      id: feed.id,
-                      name: feed.name,
-                    })
-                  }
-                />
-              </article>
-            ))}
+          {[...integrations].map(([applicationId, items]) => {
+            const storeIds = [
+              ...new Set(items.map((feed) => feed.siteId || 'unassigned')),
+            ].sort((a, b) =>
+              (
+                sites.find((site) => site.id === a)?.siteNumber || '~'
+              ).localeCompare(
+                sites.find((site) => site.id === b)?.siteNumber || '~',
+                undefined,
+                { numeric: true },
+              ),
+            );
+            return (
+              <details
+                className="data-feed-integration"
+                key={applicationId}
+                open={!!filterSite || !!query || storeIds.length === 1}
+              >
+                <summary>
+                  <strong>
+                    {items[0].applicationName || items[0].name.split(' · ')[0]}
+                  </strong>
+                  <small>
+                    {storeIds.length}{' '}
+                    {storeIds.length === 1 ? 'store' : 'stores'} ·{' '}
+                    {new Set(items.map((feed) => feed.sourceKey)).size} sources
+                  </small>
+                </summary>
+                {storeIds.map((id) => {
+                  const storeFeeds = items
+                    .filter((feed) => (feed.siteId || 'unassigned') === id)
+                    .sort((a, b) =>
+                      (a.sourceKey || a.name).localeCompare(
+                        b.sourceKey || b.name,
+                      ),
+                    );
+                  const site = sites.find((site) => site.id === id);
+                  return (
+                    <section
+                      className="data-feed-store"
+                      key={id}
+                      aria-label={
+                        site ? `Store ${site.siteNumber}` : 'Unassigned feeds'
+                      }
+                    >
+                      <h3>
+                        {site
+                          ? `${site.siteNumber} · ${site.name}`
+                          : storeFeeds[0].siteNumber
+                            ? `Store ${storeFeeds[0].siteNumber}`
+                            : 'Unassigned feeds'}
+                      </h3>
+                      {storeFeeds.map(feedRow)}
+                    </section>
+                  );
+                })}
+              </details>
+            );
+          })}
+          {visibleFeeds.filter((feed) => !feed.applicationId).map(feedRow)}
+          {!visibleFeeds.length && (
+            <p className="muted">No feeds match these filters.</p>
+          )}
         </div>
       )}
       <p>

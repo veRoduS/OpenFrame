@@ -194,6 +194,11 @@ export function mountDataFeeds(
   const publicFeed = (feed) =>
     publicResource('data-feed', {
       ...feedMetadata(feed),
+      applicationName: feed.applicationId
+        ? db
+            .prepare('SELECT name FROM data_feed_applications WHERE id=?')
+            .get(feed.applicationId)?.name || null
+        : null,
       siteNumber: feed.siteId
         ? db.prepare('SELECT siteNumber FROM sites WHERE id=?').get(feed.siteId)
             ?.siteNumber || null

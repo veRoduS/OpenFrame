@@ -322,3 +322,13 @@ holding resource access. Parent/sibling groups and direct shares cannot bypass
 this boundary. The gate is applied to library listings, direct feed requests,
 previews, screen mutations/commands, and device feed audiences. Without an access
 group, existing resource-sharing rules remain in effect.
+
+### Central store ingestion (server 0.30.3+)
+
+`POST /api/data-feeds/ingest-stores/:sourceKey` accepts a central application
+key and an atomic `stores` batch. Application key issuance accepts `siteIds`
+(1–200 distinct existing active site UUIDs) instead of `siteId`; metadata returns
+that selection or null for existing keys. Scope is immutable. Central keys are
+excluded from legacy assign-site operations. See the
+[SMCC handoff](smcc-integration-update.md) and
+[OpenAPI contract](../server/data-feeds.openapi.json).

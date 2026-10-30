@@ -2451,7 +2451,8 @@ void test('legacy source migration preserves key hashes and feed IDs and is repe
   const before = db
     .prepare('SELECT digest FROM data_feed_application_tokens WHERE id=?')
     .get(applicationKey.id).digest;
-  db.exec(`ALTER TABLE data_feed_application_tokens DROP COLUMN siteId;
+  db.exec(`ALTER TABLE data_feed_application_tokens DROP COLUMN siteIds;
+    ALTER TABLE data_feed_application_tokens DROP COLUMN siteId;
     ALTER TABLE data_feed_application_sources RENAME TO scoped_sources;
     CREATE TABLE data_feed_application_sources(applicationId TEXT NOT NULL,sourceKey TEXT NOT NULL,feedId TEXT NOT NULL UNIQUE,PRIMARY KEY(applicationId,sourceKey));
     INSERT INTO data_feed_application_sources SELECT applicationId,sourceKey,feedId FROM scoped_sources;
@@ -3056,4 +3057,615 @@ void test('assigning an existing integration preserves secrets and feeds and rol
   );
   assert.equal((await assign(a.id)).data.assignedFeeds, 0);
   assert.equal((await assign(a.id)).data.assignedKeys, 0);
+});
+
+async function centralFixture(t) {
+  const f = await applicationFixture(t, { name: 'SMCC' });
+  const groups = [],
+    sites = [];
+  for (const siteNumber of ['02882', '3404', '9999']) {
+    const group = (
+      await f.admin('/api/groups', 'POST', { name: `Store ${siteNumber}` })
+    ).data;
+    groups.push(group);
+    sites.push(
+      (
+        await f.admin('/api/sites', 'POST', {
+          siteNumber,
+          name: `Store ${siteNumber}`,
+          accessGroupId: group.id,
+        })
+      ).data,
+    );
+  }
+  const keyPath = `/api/data-feeds/applications/${f.application.id}/tokens`;
+  const issued = await f.admin(keyPath, 'POST', {
+    name: 'Central SMCC',
+    siteIds: sites.slice(0, 2).map((site) => site.id),
+    expiresInDays: null,
+  });
+  assert.equal(issued.status, 201);
+  const key = issued.data;
+  const batch = (
+    stores,
+    secret = key.token,
+    source = 'production',
+    headers = {},
+    raw = false,
+  ) =>
+    f.external(
+      `/api/data-feeds/ingest-stores/${source}`,
+      'POST',
+      raw ? stores : { stores },
+      { Authorization: `Bearer ${secret}`, ...headers },
+      raw,
+    );
+  return { ...f, groups, sites, keyPath, key, batch };
+}
+
+void test('one central application writes isolated store metrics and tables; retries preserve identity and omitted values', async (t) => {
+  const { admin, key, sites, groups, batch, application, user } =
+    await centralFixture(t);
+  assert.deepEqual(
+    key.siteIds,
+    sites.slice(0, 2).map((site) => site.id),
+  );
+  assert.equal(key.siteId, null);
+  const records = [
+    {
+      siteNumber: '02882',
+      metrics: { completed: 75, goal: 100, hourly: payload.hourly },
+      tables: {
+        training: Array.from({ length: 100 }, (_, i) => ({
+          label: `Row ${i}`,
+          value: i,
+        })),
+      },
+    },
+    {
+      siteNumber: '3404',
+      metrics: { completed: 82, goal: 100 },
+      tables: { training: [] },
+    },
+  ];
+  const first = await batch(records);
+  assert.equal(first.status, 200);
+  assert.equal(first.data.storesAccepted, 2);
+  assert.equal(first.data.feedsCreated, 4);
+  assert.equal(JSON.stringify(first.data).includes('completed'), false);
+  const feeds = (await admin('/api/data-feeds')).data.filter(
+    (feed) => feed.applicationId === application.id,
+  );
+  assert.equal(feeds.length, 4);
+  for (let i = 0; i < 2; i++) {
+    const reader = await user(`central-reader-${i}`);
+    await admin(`/api/groups/${groups[i].id}/members/${reader.id}`, 'PUT', {
+      role: 'member',
+    });
+    const visible = (await reader.call('/api/data-feeds')).data;
+    assert.equal(visible.length, 2);
+    assert.ok(visible.every((feed) => feed.siteId === sites[i].id));
+    assert.ok(visible.every((feed) => feed.applicationName === 'SMCC'));
+    const other = feeds.find((feed) => feed.siteId === sites[1 - i].id);
+    assert.equal(
+      (await reader.call(`/api/data-feeds/${other.id}/data`)).status,
+      404,
+    );
+  }
+  const again = await batch(records);
+  assert.equal(again.data.feedsCreated, 0);
+  assert.equal(again.data.feedsUpdated, 4);
+  assert.deepEqual(
+    (await admin('/api/data-feeds')).data
+      .filter((feed) => feed.applicationId === application.id)
+      .map((feed) => feed.id)
+      .sort(),
+    feeds.map((feed) => feed.id).sort(),
+  );
+  await batch([
+    {
+      siteNumber: '02882',
+      metrics: { completed: null },
+      tables: { training: [] },
+    },
+  ]);
+  const metric = feeds.find(
+    (feed) => feed.siteId === sites[0].id && feed.sourceKey === 'production',
+  );
+  const snapshot = (await admin(`/api/data-feeds/${metric.id}/data`)).data.data;
+  assert.equal(snapshot.completed, null);
+  assert.equal(snapshot.goal, 100);
+  const south = feeds.find(
+    (feed) => feed.siteId === sites[1].id && feed.sourceKey === 'production',
+  );
+  assert.equal(
+    (await admin(`/api/data-feeds/${south.id}/data`)).data.data.completed,
+    82,
+  );
+});
+
+void test('central batches reject unauthorized stores, invalid values, schemas and body limits without partial writes', async (t) => {
+  const { admin, batch, db, application, sites } = await centralFixture(t);
+  await batch([{ siteNumber: '02882', metrics: { completed: 1 } }]);
+  const before = () =>
+    db
+      .prepare("SELECT body FROM records WHERE kind='data-feed' ORDER BY id")
+      .all();
+  const original = before();
+  const lastUsed = db
+    .prepare(
+      'SELECT lastUsedAt FROM data_feed_application_tokens WHERE siteIds IS NOT NULL',
+    )
+    .get().lastUsedAt;
+  const bad = [
+    [{ siteNumber: '9999', metrics: { completed: 2 } }, 'SITE_NOT_AUTHORIZED'],
+    [{ siteNumber: '8888', metrics: { completed: 2 } }, 'SITE_NOT_AUTHORIZED'],
+    [{ siteNumber: '3404', metrics: { completed: 'bad' } }, 'INVALID_PAYLOAD'],
+    [
+      {
+        siteNumber: '3404',
+        tables: { training: [{ label: 'x', value: Infinity }] },
+      },
+      'INVALID_PAYLOAD',
+    ],
+    [
+      {
+        siteNumber: '3404',
+        metrics: { completed: [{ label: 'wrong type', value: 2 }] },
+      },
+      'SOURCE_SCHEMA_CONFLICT',
+    ],
+  ];
+  for (const [invalid, code] of bad) {
+    const result = await batch([
+      { siteNumber: '02882', metrics: { completed: 99 } },
+      invalid,
+    ]);
+    assert.ok(result.status >= 400, JSON.stringify(result));
+    if (code !== 'INVALID_PAYLOAD') assert.equal(result.data.code, code);
+    assert.deepEqual(before(), original);
+  }
+  assert.equal(
+    db
+      .prepare(
+        'SELECT lastUsedAt FROM data_feed_application_tokens WHERE siteIds IS NOT NULL',
+      )
+      .get().lastUsedAt,
+    lastUsed,
+  );
+  assert.equal(
+    (
+      await batch([
+        { siteNumber: '02882', metrics: { completed: 2 } },
+        { siteNumber: '02882', metrics: { completed: 3 } },
+      ])
+    ).data.code,
+    'DUPLICATE_SITE',
+  );
+  assert.equal(
+    (
+      await batch([
+        {
+          siteNumber: '3404',
+          tables: {
+            training: Array.from({ length: 101 }, (_, i) => ({
+              label: `Row ${i}`,
+              value: i,
+            })),
+          },
+        },
+      ])
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await batch([
+        {
+          siteNumber: '3404',
+          metrics: Object.fromEntries(
+            Array.from({ length: 21 }, (_, i) => [`field${i}`, 1]),
+          ),
+        },
+      ])
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await batch([
+        {
+          siteNumber: '3404',
+          tables: {
+            rows: Array.from({ length: 100 }, (_, i) => ({
+              label: `${i}`.padEnd(60, 'a'),
+              value: i,
+            })),
+          },
+          metrics: {},
+        },
+      ])
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await batch(
+        '{"stores":['.padEnd(262145, ' '),
+        undefined,
+        'production',
+        {},
+        true,
+      )
+    ).status,
+    413,
+  );
+  assert.equal(
+    (
+      await batch(
+        Array.from({ length: 51 }, () => ({
+          siteNumber: '3404',
+          metrics: { completed: 2 },
+        })),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await batch(
+        [{ siteNumber: '3404', metrics: { completed: 2 } }],
+        undefined,
+        'production',
+        { 'Content-Type': 'text/plain' },
+      )
+    ).status,
+    415,
+  );
+  await admin(`/api/sites/${sites[1].id}`, 'PATCH', { archived: true });
+  assert.equal(
+    (
+      await batch([
+        { siteNumber: '02882', metrics: { completed: 99 } },
+        { siteNumber: '3404', metrics: { completed: 2 } },
+      ])
+    ).data.code,
+    'SITE_ARCHIVED',
+  );
+  assert.deepEqual(before(), original);
+  assert.equal(
+    (await admin('/api/data-feeds')).data.filter(
+      (feed) => feed.applicationId === application.id,
+    ).length,
+    1,
+  );
+});
+
+void test('central keys preserve legacy keys and cannot bypass endpoint scopes, expiry or revocation', async (t) => {
+  const {
+    admin,
+    batch,
+    ingest,
+    keyPath,
+    sites,
+    key,
+    applicationKey,
+    application,
+    db,
+  } = await centralFixture(t);
+  for (const scope of [
+    { siteIds: [] },
+    { siteIds: [sites[0].id, sites[0].id] },
+    { siteIds: [sites[0].id], siteId: sites[1].id },
+    { siteIds: [randomUUID()] },
+  ])
+    assert.equal(
+      (await admin(keyPath, 'POST', { name: 'Invalid', ...scope })).status,
+      400,
+    );
+  assert.equal(
+    (await ingest({ completed: 1 }, 'production', key.token)).data.code,
+    'KEY_SCOPE',
+  );
+  assert.equal(
+    (
+      await batch(
+        [{ siteNumber: '02882', metrics: { completed: 1 } }],
+        applicationKey.token,
+      )
+    ).data.code,
+    'KEY_SCOPE',
+  );
+  assert.equal((await ingest({ completed: 3 })).status, 201);
+  const assigned = await admin(
+    `/api/data-feeds/applications/${application.id}/assign-site`,
+    'POST',
+    { siteId: sites[0].id },
+  );
+  assert.equal(assigned.status, 200);
+  assert.equal(assigned.data.assignedKeys, 1);
+  const listed = (await admin(keyPath)).data;
+  assert.deepEqual(
+    listed.find((item) => item.id === key.id).siteIds,
+    key.siteIds,
+  );
+  assert.equal(listed.find((item) => item.id === key.id).siteId, null);
+  assert.equal(
+    listed.some((item) => 'digest' in item || 'token' in item),
+    false,
+  );
+  const storeKey = (
+    await admin(keyPath, 'POST', { name: 'Single', siteId: sites[1].id })
+  ).data;
+  assert.equal(
+    (await ingest({ completed: 4 }, 'production', storeKey.token)).status,
+    201,
+  );
+  const stores = [{ siteNumber: '02882', metrics: { completed: 5 } }];
+  assert.equal((await batch(stores)).status, 200);
+  db.prepare(
+    'UPDATE data_feed_application_tokens SET expiresAt=? WHERE id=?',
+  ).run('2000-01-01T00:00:00Z', key.id);
+  assert.equal((await batch(stores)).status, 401);
+  const renewed = await admin(`${keyPath}/${key.id}`, 'PATCH', {
+    expiresInDays: null,
+  });
+  assert.equal(renewed.status, 200);
+  assert.deepEqual(renewed.data.siteIds, key.siteIds);
+  assert.equal((await batch(stores)).status, 200);
+  await admin(`${keyPath}/${key.id}`, 'DELETE');
+  assert.equal((await batch(stores)).status, 401);
+});
+
+void test('central ingestion rolls back database failures and enforces aggregate and per-store limits', async (t) => {
+  const { admin, batch, db, sites } = await centralFixture(t);
+  db.exec(
+    `CREATE TRIGGER fail_central BEFORE INSERT ON data_feed_application_sources WHEN NEW.siteId='${sites[1].id}' BEGIN SELECT RAISE(ABORT,'central rollback test'); END;`,
+  );
+  const stores = sites.slice(0, 2).map((site) => ({
+    siteNumber: site.siteNumber,
+    metrics: { completed: 1 },
+  }));
+  assert.equal((await batch(stores)).status, 500);
+  assert.equal(
+    db.prepare('SELECT COUNT(*) AS n FROM data_feed_application_sources').get()
+      .n,
+    0,
+  );
+  assert.equal(
+    db
+      .prepare(
+        'SELECT lastUsedAt FROM data_feed_application_tokens WHERE siteIds IS NOT NULL',
+      )
+      .get().lastUsedAt,
+    null,
+  );
+  db.exec('DROP TRIGGER fail_central');
+  for (let i = 0; i < 59; i++)
+    assert.equal((await batch(stores.slice(0, 1))).status, 200);
+  const limited = await batch(stores.slice(0, 1));
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('retry-after')) >= 1);
+  assert.equal((await batch(stores.slice(1))).status, 200);
+  // Aggregate rate limit also counts malformed authenticated requests.
+  for (let i = 0; i < 600; i++) {
+    const result = await batch([]);
+    if (result.status === 429) break;
+    assert.equal(result.status, 400);
+  }
+  assert.equal((await batch(stores.slice(1))).status, 429);
+  assert.equal((await admin('/api/data-feeds')).data.length, 3);
+});
+
+void test('central data resolves through unchanged shared player layouts without cross-store values', async (t) => {
+  const { admin, client, sites, groups, batch, application } =
+    await centralFixture(t);
+  await batch(
+    sites.slice(0, 2).map((site, i) => ({
+      siteNumber: site.siteNumber,
+      metrics: { completed: (i + 1) * 10 },
+    })),
+  );
+  const feeds = (await admin('/api/data-feeds')).data.filter(
+    (feed) => feed.applicationId === application.id,
+  );
+  const first = feeds.find((feed) => feed.siteId === sites[0].id);
+  const input = slide(first.id);
+  input.layers[0].data.siteBinding = {
+    applicationId: application.id,
+    sourceKey: 'production',
+  };
+  const saved = await admin('/api/slides', 'POST', input);
+  assert.equal(saved.status, 201);
+  const playlist = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Central shared template',
+      items: [{ slideId: saved.data.id, duration: 30 }],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${playlist.id}/publish`, 'POST')).status,
+    200,
+  );
+  for (let i = 0; i < 3; i++) {
+    const player = client();
+    const screen = (
+      await player('/api/player/enroll', 'POST', {
+        name: `Central screen ${i}`,
+        siteNumber: sites[i].siteNumber,
+      })
+    ).data;
+    await admin(`/api/devices/${screen.id}/approve`, 'POST', {
+      code: screen.code,
+      siteId: sites[i].id,
+    });
+    await admin(`/api/devices/${screen.id}`, 'PUT', {
+      name: `Central screen ${i}`,
+      playlistId: playlist.id,
+      blank: false,
+      rotation: 0,
+    });
+    await admin(`/api/access/device/${screen.id}`, 'POST', {
+      groupId: groups[i].id,
+    });
+    const sync = (
+      await player(
+        '/api/player/sync',
+        'POST',
+        { version: '0.15.5' },
+        { Authorization: `Bearer ${screen.token}` },
+      )
+    ).data;
+    const preview = (
+      await admin(
+        `/api/preview/${playlist.id}?version=published&siteId=${sites[i].id}`,
+      )
+    ).data;
+    if (i < 2) {
+      const local = feeds.find((feed) => feed.siteId === sites[i].id);
+      assert.deepEqual(Object.keys(sync.dataFeeds), [local.id]);
+      assert.equal(sync.dataFeeds[local.id].data.completed, (i + 1) * 10);
+      assert.equal(preview.dataFeeds[local.id].data.completed, (i + 1) * 10);
+    } else {
+      assert.equal(Object.values(sync.dataFeeds)[0].status, 'unavailable');
+      assert.equal(Object.values(sync.dataFeeds)[0].data, null);
+    }
+  }
+});
+
+void test('central scopes survive restarts, respect disabled creators and are removed by connection reset', async (t) => {
+  const { admin, batch, db, key, keyPath, application } =
+    await centralFixture(t);
+  const stores = [{ siteNumber: '02882', metrics: { completed: 42 } }];
+  await batch(stores);
+  const before = db
+    .prepare(
+      'SELECT digest,siteIds FROM data_feed_application_tokens WHERE id=?',
+    )
+    .get(key.id);
+  const dir = path.dirname(
+    db
+      .prepare('PRAGMA database_list')
+      .all()
+      .find((row) => row.name === 'main').file,
+  );
+  const reopened = createApp({ dataDir: dir });
+  try {
+    assert.deepEqual(
+      reopened.db
+        .prepare(
+          'SELECT digest,siteIds FROM data_feed_application_tokens WHERE id=?',
+        )
+        .get(key.id),
+      before,
+    );
+  } finally {
+    reopened.close();
+    reopened.db.close();
+  }
+  const creator = db
+    .prepare('SELECT creatorId FROM data_feed_application_tokens WHERE id=?')
+    .get(key.id).creatorId;
+  for (const update of ['disabled=1', "role='user'"]) {
+    db.prepare(`UPDATE users SET ${update} WHERE id=?`).run(creator);
+    assert.equal((await batch(stores)).status, 401);
+    db.prepare("UPDATE users SET disabled=0,role='admin' WHERE id=?").run(
+      creator,
+    );
+  }
+  assert.equal(
+    (await admin(keyPath)).data.find((item) => item.id === key.id).siteIds
+      .length,
+    2,
+  );
+  const result = await admin(
+    `/api/data-feeds/applications/${application.id}?disconnectWidgets=true`,
+    'DELETE',
+  );
+  assert.equal(result.status, 200);
+  assert.equal((await batch(stores)).status, 401);
+  assert.equal(
+    db
+      .prepare(
+        'SELECT COUNT(*) AS n FROM data_feed_application_tokens WHERE applicationId=?',
+      )
+      .get(application.id).n,
+    0,
+  );
+});
+
+void test('central contract examples work and quota/body failures leave all stores unchanged', async (t) => {
+  const { admin, batch, sites, db, application } = await centralFixture(t);
+  const contract = (await admin('/api/data-feeds/openapi.json')).data;
+  const endpoint = contract.paths['/api/data-feeds/ingest-stores/{sourceKey}'];
+  assert.equal(endpoint.parameters[0].name, 'sourceKey');
+  assert.deepEqual(endpoint.post.security, [{ ApplicationWriteToken: [] }]);
+  const sample = endpoint.post.requestBody.content['application/json'].example;
+  sample.stores[0].siteNumber = sites[0].siteNumber;
+  sample.stores[1].siteNumber = sites[1].siteNumber;
+  assert.equal((await batch(sample.stores)).status, 200);
+  const snapshot = () =>
+    db
+      .prepare(
+        "SELECT body FROM records WHERE kind='data-feed' AND json_extract(body,'$.applicationId')=? ORDER BY id",
+      )
+      .all(application.id);
+  const original = snapshot();
+  const rows = Array.from({ length: 100 }, (_, i) => ({
+    label: String(i).padEnd(60, 'x'),
+    value: i,
+  }));
+  const oversized = await batch([
+    { siteNumber: sites[0].siteNumber, metrics: { completed: 999 } },
+    {
+      siteNumber: sites[1].siteNumber,
+      tables: Object.fromEntries(
+        Array.from({ length: 10 }, (_, i) => [`table${i}`, rows]),
+      ),
+    },
+  ]);
+  assert.equal(oversized.status, 413);
+  assert.deepEqual(snapshot(), original);
+  const count = Number(
+    db.prepare("SELECT COUNT(*) AS n FROM records WHERE kind='data-feed'").get()
+      .n,
+  );
+  for (let i = count; i < 199; i++) {
+    const feed = {
+      id: randomUUID(),
+      name: `Quota ${i}`,
+      fields: [{ key: 'value', type: 'number' }],
+      data: null,
+      revision: null,
+      updatedAt: null,
+    };
+    db.prepare('INSERT INTO records VALUES (?,?,?)').run(
+      'data-feed',
+      feed.id,
+      JSON.stringify(feed),
+    );
+  }
+  const result = await batch(
+    sites
+      .slice(0, 2)
+      .map((site) => ({ siteNumber: site.siteNumber, metrics: { extra: 1 } })),
+    undefined,
+    'new-source',
+  );
+  assert.equal(result.status, 409);
+  assert.equal(result.data.code, 'FEED_LIMIT');
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM records WHERE kind='data-feed'").get()
+      .n,
+    199,
+  );
+  assert.deepEqual(snapshot(), original);
+  assert.equal(
+    (
+      await batch([
+        { siteNumber: sites[0].siteNumber, metrics: { completed: 77 } },
+      ])
+    ).status,
+    200,
+  );
 });

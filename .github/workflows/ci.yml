@@ -124,6 +124,9 @@ jobs:
       - name: Application table ingestion and rendering
         timeout-minutes: 4
         run: node tests/data-tables.browser.mjs
+      - name: Central multi-store feeds and keys
+        timeout-minutes: 4
+        run: node tests/multi-store-feeds.browser.mjs
       - name: Data connection reset and widget reconnection
         timeout-minutes: 4
         run: node tests/data-feed-reset.browser.mjs

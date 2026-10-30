@@ -244,3 +244,43 @@ button.data-feed-open {
   margin-block: 8px;
   overflow-wrap: anywhere;
 }
+
+.data-feed-integration {
+  border: 1px solid var(--color-border, #dde3df);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+.data-feed-integration > summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.data-feed-integration > summary small {
+  display: block;
+  margin: 6px 0 0 18px;
+  color: var(--of-text-muted, #63716a);
+}
+.data-feed-store {
+  min-width: 0;
+  margin-top: 20px;
+}
+.data-feed-store h3 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+.data-feed-store article + article {
+  margin-top: 8px;
+}
+.central-store-picker {
+  max-height: 260px;
+  overflow: auto;
+}
+.central-store-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.central-store-picker input[type='checkbox'] {
+  width: auto;
+  flex: 0 0 auto;
+}

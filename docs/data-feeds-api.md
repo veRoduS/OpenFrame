@@ -10,6 +10,24 @@ OpenFrame supports **application API keys** that automatically create feeds and 
 
 For an existing integration, start with the [API update and migration bulletin](api-update-multi-site.md).
 
+## One integration, multiple stores (server 0.30.3+)
+
+Use one application for SMCC and issue a **Multiple stores (central)** key with
+an explicit store selection. `POST /api/data-feeds/ingest-stores/:sourceKey`
+accepts an atomic `stores` batch with store-numbered `metrics` and `tables`
+sections. See the brief [SMCC integration update](smcc-integration-update.md)
+for the request, limits, response, and retry contract. Per-store application keys
+and the original ingestion route continue working unchanged. Central keys cannot
+use that old route; single-store keys cannot use the batch route.
+
+Settings groups application feeds by integration, with stores underneath.
+Internally snapshots remain per store and source; this preserves screen-level
+isolation and the existing **Follows each screen’s store** widget bindings.
+New central feeds use the site's access group, falling back to the application's
+managing group. Existing feed ownership stays unchanged. Keys authorize only
+the selected existing stores; rotate a key to add stores. The application itself
+is not tied to a single site.
+
 ## Application keys: automatic metric creation
 
 For a concise integration handoff, use the [application metrics API one-pager](data-feeds-api-one-pager.md).

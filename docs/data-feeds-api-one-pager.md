@@ -1,5 +1,9 @@
 # Application metrics API — one-page guide
 
+For one key updating several stores (server 0.30.3+), use the
+[SMCC multi-store handoff](smcc-integration-update.md). This page describes the
+original per-store method, which remains supported.
+
 **Requires:** OpenFrame server 0.23.2+ (included in milestone 0.24.0). Existing data-widget players need no upgrade. An admin creates an application once in **Settings → Data feeds → New application**, chooses its managing group, then generates an **application API key**. Copy the one-time key and keep it in the application's secret configuration. No per-metric setup is required on OpenFrame.
 
 ## Request format

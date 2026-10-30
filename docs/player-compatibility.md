@@ -180,3 +180,9 @@ and no APK update is required. Offline devices retain their existing content
 until they reconnect. Authoring validation permits intentionally unbound widgets
 while still rejecting invalid non-null feed IDs and relative bindings with no
 example feed.
+
+Server 0.30.3 adds central store-batch ingestion and groups feeds by integration.
+It materializes the same per-site/source feeds used by existing relative widget
+bindings, without changing manifests, snapshots, or installed player code.
+Existing single-store keys retain their original endpoint and semantics. Player
+0.15.5 remains compatible; this server change needs no new APK.
