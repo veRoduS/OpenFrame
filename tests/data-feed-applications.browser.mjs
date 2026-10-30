@@ -69,6 +69,7 @@ try {
   }
   await api('/api/setup', 'POST', { password: 'application-browser-password' });
   const group = await api('/api/groups', 'POST', { name: 'Store metrics' });
+  const storeGroup = await api('/api/groups', 'POST', { name: 'Store 001' });
   await page.goto(`${base}/dashboard/settings`);
   await page
     .getByRole('heading', { name: 'Data feeds', exact: true })
@@ -255,6 +256,12 @@ try {
   await page.getByText('Sites (0)', { exact: true }).click();
   await page.getByLabel('Site number', { exact: true }).fill('001');
   await page.getByLabel('Site name', { exact: true }).fill('North');
+  assert.equal(
+    await page
+      .getByLabel('New site access group', { exact: true })
+      .inputValue(),
+    storeGroup.id,
+  );
   await page.getByRole('button', { name: 'Create site', exact: true }).click();
   await page.getByText('Sites (1)', { exact: true }).waitFor();
   if (
@@ -269,6 +276,7 @@ try {
     .filter({ hasText: /^001 · North$/ })
     .waitFor();
   const site = (await api('/api/sites'))[0];
+  assert.equal(site.accessGroupId, storeGroup.id);
   const policyUpdate = page.waitForResponse(
     (response) =>
       response.url().endsWith(`/api/sites/${site.id}`) &&
