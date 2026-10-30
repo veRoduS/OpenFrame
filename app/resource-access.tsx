@@ -123,6 +123,14 @@ export function ResourceAccessDialog({
             ? 'Choose View or Edit access. Access inherited through the group hierarchy is View only.'
             : 'Shared users and groups can edit this item. Attached images are visible read-only.'}
         </DialogDescription>
+        {resource?.kind === 'slide' &&
+          access?.canShare &&
+          user.role !== 'admin' && (
+            <p className="muted">
+              You can also share this slide with parent groups. Sharing to a
+              parent makes the slide available to that group and its subgroups.
+            </p>
+          )}
         {error && (
           <p role="alert" className="inline-error">
             {error}
@@ -228,7 +236,9 @@ export function ResourceAccessDialog({
                               groups.some(
                                 (own) =>
                                   own.directMember &&
-                                  isWithin(groups, group.id, own.id),
+                                  (isWithin(groups, group.id, own.id) ||
+                                    (resource?.kind === 'slide' &&
+                                      isWithin(groups, own.id, group.id))),
                               ),
                           )
                           .map(({ item: group, depth }) => (

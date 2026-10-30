@@ -195,6 +195,28 @@ Library and playlist responses include `publicationState: "draft" | "published" 
 Generated text layers may carry `starterText:true` only for the exact initial string `Something worth\nsharing.`. Editing the text or omitting its marker permanently removes the marker for that existing layer. Publishing removes untouched marked layers from the snapshot and from source slides the publisher can edit, in one transaction; source slides with only View access are retained. Draft previews never trigger cleanup. The marker is not sent to players. Existing unmarked layers are never inferred to be starters.
 
 
+## Forks, sharing and image uploads
+
+Server **0.29.8** adds optional `items[].skipped` to linked-fork authoring.
+Set it to true to omit an entry, or false to restore it. Keep this field when
+round-tripping fork items through custom management clients. Entry IDs keep
+repeated slides independent. Skipped entries remain in the draft for restoration
+but are omitted from previews, published snapshots and published entry mappings;
+the server also excludes them from playback duration and publication comparisons.
+Only forks can contain skipped entries, and publishing requires at least one
+included slide. Sync/manifest schemas are unchanged.
+
+Authorized slide sharers can target an ancestor of their own group membership
+through `POST /api/access/slide/:id`. This creates a normal View/Edit grant and
+does not transfer management or membership. Other resource types retain their
+existing target restrictions; unrelated groups and unauthorized resharing remain
+forbidden.
+
+Image uploads through `POST /api/assets` retain the **15 MB file-size limit**
+but no longer enforce an input megapixel limit. Images are still decoded,
+rotated, resized to at most 1920 pixels per dimension and stored as WebP. Invalid
+images return 400 and oversized files return 413. Video limits are unchanged.
+
 ## Site assignment and shared metrics
 
 Server **0.29.7** adds optional [home workspaces](home-workspace.md) through

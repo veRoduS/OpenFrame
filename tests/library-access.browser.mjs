@@ -209,6 +209,10 @@ try {
     true,
   );
   await dialog
+    .getByRole('switch', { name: 'Skip slide 1', exact: true })
+    .click();
+  await dialog.getByText('Skipped in this fork', { exact: true }).waitFor();
+  await dialog
     .getByRole('button', { name: 'Move slide 2 up', exact: true })
     .click();
   assert.equal(
@@ -222,6 +226,73 @@ try {
   );
   assert.equal(fork.fork.speed, 2);
   assert.equal(fork.items[0].slideId, local.id);
+  assert.equal(fork.items[1].skipped, true);
+  assert.equal(
+    await dialog
+      .getByRole('switch', { name: 'Skip slide 2', exact: true })
+      .getAttribute('aria-checked'),
+    'true',
+  );
+  await dialog
+    .getByRole('button', { name: 'Publish playlist', exact: true })
+    .click();
+  await dialog.locator('.playlist-fields:not([inert])').waitFor();
+  await dialog
+    .getByText(
+      'Published. Screens will download this version on their next sync.',
+      { exact: true },
+    )
+    .waitFor();
+  assert.deepEqual(
+    (await api(page, `/api/preview/${fork.id}?version=published`)).items.map(
+      (item) => item.slide.id,
+    ),
+    [local.id],
+  );
+  await dialog
+    .getByRole('switch', { name: 'Skip slide 2', exact: true })
+    .click();
+  await dialog
+    .getByRole('button', { name: 'Publish playlist', exact: true })
+    .click();
+  await dialog.locator('.playlist-fields:not([inert])').waitFor();
+  await dialog
+    .getByText(
+      'Published. Screens will download this version on their next sync.',
+      { exact: true },
+    )
+    .waitFor();
+  assert.deepEqual(
+    (await api(page, `/api/preview/${fork.id}?version=published`)).items.map(
+      (item) => item.slide.id,
+    ),
+    [local.id, source.id],
+  );
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^Slides/ }).click();
+  await page
+    .getByRole('button', {
+      name: 'Manage access to Local announcement',
+      exact: true,
+    })
+    .click();
+  await dialog.getByLabel('Groups', { exact: true }).selectOption(top.id);
+  await dialog
+    .getByRole('button', { name: 'Grant group access', exact: true })
+    .click();
+  await dialog
+    .getByLabel('Permission for Master group', { exact: true })
+    .waitFor();
+  assert.equal(
+    await dialog
+      .getByLabel('Permission for Master group', { exact: true })
+      .inputValue(),
+    'view',
+  );
+  assert.equal(
+    await dialog.getByLabel('Managing group', { exact: true }).inputValue(),
+    branch.id,
+  );
   await page.keyboard.press('Escape');
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
@@ -433,7 +504,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(
-    'Library browser checks passed: inherited read-only views, independent forks, timing/order, bulk tagging, folder moves, and desktop/mobile layouts.',
+    'Library browser checks passed: inherited read-only views, independent forks, skip/restore, parent-group sharing, timing/order, bulk tagging, folder moves, and desktop/mobile layouts.',
   );
 } finally {
   await browser?.close();

@@ -8,12 +8,18 @@ const transition = (value) => ({
 export function publicationState(playlist) {
   if (!playlist.published) return 'draft';
   const entries = (items, speed = 1) =>
-    items.map((item) => ({
-      slideId: item.slide?.id || item.slideId,
-      duration: Math.max(2, Math.min(3600, Math.round(item.duration / speed))),
-      startsAt: item.scheduleEnabled === false ? null : item.startsAt || null,
-      expiresAt: item.scheduleEnabled === false ? null : item.expiresAt || null,
-    }));
+    items
+      .filter((item) => !item.skipped)
+      .map((item) => ({
+        slideId: item.slide?.id || item.slideId,
+        duration: Math.max(
+          2,
+          Math.min(3600, Math.round(item.duration / speed)),
+        ),
+        startsAt: item.scheduleEnabled === false ? null : item.startsAt || null,
+        expiresAt:
+          item.scheduleEnabled === false ? null : item.expiresAt || null,
+      }));
   const draft = {
     name: playlist.name,
     transition: transition(playlist.transition),

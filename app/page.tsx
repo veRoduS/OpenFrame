@@ -97,6 +97,7 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
   Layers,
+  SkipForward,
   X,
 } from 'lucide-react';
 import {
@@ -1695,7 +1696,26 @@ export default function App() {
                                     >
                                       <strong title={p.name}>{p.name}</strong>
                                       <span>
-                                        {p.items.length} slides{' '}
+                                        {
+                                          p.items.filter(
+                                            (item) => !item.skipped,
+                                          ).length
+                                        }{' '}
+                                        slides{' '}
+                                        {p.items.some(
+                                          (item) => item.skipped,
+                                        ) && (
+                                          <span>
+                                            {' '}
+                                            ·{' '}
+                                            {
+                                              p.items.filter(
+                                                (item) => item.skipped,
+                                              ).length
+                                            }{' '}
+                                            skipped
+                                          </span>
+                                        )}
                                         <span className="dot-separator">/</span>{' '}
                                         {playlistDuration(p)} seconds
                                         {p.fork ? ' / Linked fork' : ''}
@@ -4907,7 +4927,11 @@ function PlaylistEditor({
               </button>
               <button
                 className="primary"
-                disabled={busy || !p.items.length || !p.name.trim()}
+                disabled={
+                  busy ||
+                  !p.items.some((item) => !item.skipped) ||
+                  !p.name.trim()
+                }
                 onClick={() => action(true)}
               >
                 <Check size={17} />
@@ -5018,7 +5042,9 @@ function PlaylistEditor({
               </div>
               <p>
                 1× uses the original timing; 2× plays twice as fast. New master
-                slides are appended when using custom order.
+                slides are appended when using custom order. Skip a slide to
+                leave it out of this fork while keeping it in the master. Turn
+                Skip off to restore it.
               </p>
             </section>
           )}
@@ -5094,8 +5120,9 @@ function PlaylistEditor({
                 const statusDate = availability.at
                   ? new Date(availability.at)
                   : null;
-                const statusLabel =
-                  availability.state === 'active'
+                const statusLabel = item.skipped
+                  ? 'Skipped in this fork'
+                  : availability.state === 'active'
                     ? 'Active'
                     : availability.state === 'invalid'
                       ? 'Check schedule'
@@ -5111,7 +5138,7 @@ function PlaylistEditor({
                         )}`;
                 return (
                   <div
-                    className="sequence-row"
+                    className={`sequence-row${item.skipped ? ' is-skipped' : ''}`}
                     key={`${index}-${item.slideId}`}
                   >
                     <span className="sequence-number">
@@ -5128,10 +5155,12 @@ function PlaylistEditor({
                         </span>
                       )}
                       <span
-                        className={`sequence-status ${availability.state}`}
+                        className={`sequence-status ${item.skipped ? 'skipped' : availability.state}`}
                         title={statusDate?.toString()}
                       >
-                        {availability.state === 'active' ? (
+                        {item.skipped ? (
+                          <SkipForward size={13} aria-hidden="true" />
+                        ) : availability.state === 'active' ? (
                           <CheckCircle2 size={13} aria-hidden="true" />
                         ) : availability.state === 'scheduled' ? (
                           <Clock size={13} aria-hidden="true" />
@@ -5142,6 +5171,26 @@ function PlaylistEditor({
                       </span>
                     </div>
                     <div className="sequence-controls">
+                      {p.fork && (
+                        <div className="sequence-toggle">
+                          <span>Skip</span>
+                          <Switch
+                            id={`skip-${index}`}
+                            aria-label={`Skip slide ${index + 1}`}
+                            checked={!!item.skipped}
+                            onCheckedChange={(skipped) =>
+                              setP({
+                                ...p,
+                                items: p.items.map((entry, position) =>
+                                  position === index
+                                    ? { ...entry, skipped }
+                                    : entry,
+                                ),
+                              })
+                            }
+                          />
+                        </div>
+                      )}
                       <label
                         className="sequence-toggle"
                         htmlFor={`schedule-${index}`}
@@ -5412,7 +5461,12 @@ function PlaylistEditor({
             </div>
           </div>
           <div className="playlist-total">
-            <span>{p.items.length} slides</span>
+            <span>
+              {p.items.filter((item) => !item.skipped).length} slides
+              {p.items.some((item) => item.skipped)
+                ? ` · ${p.items.filter((item) => item.skipped).length} skipped`
+                : ''}
+            </span>
             <strong>
               {activeDuration} seconds playing now · {playlistDuration(p)}{' '}
               seconds across all entries
@@ -5424,6 +5478,11 @@ function PlaylistEditor({
               </span>
             )}
           </div>
+          {p.items.length > 0 && p.items.every((item) => item.skipped) && (
+            <p className="field-help">
+              Turn off Skip for at least one slide before publishing.
+            </p>
+          )}
         </div>
         {error && (
           <div className="inline-error" role="alert">

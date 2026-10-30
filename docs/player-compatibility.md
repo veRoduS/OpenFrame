@@ -141,3 +141,13 @@ smaller publications work in both directions, and new players keep rendering
 older snapshots. The renderer remains bounded to 100 category rows with no new
 timers, network requests or frames. Non-expiring API keys and home-workspace
 preferences are server/web features and do not require a player update.
+
+Server **0.29.8** adds Skip to linked-fork authoring and removes skipped entries
+when constructing previews, publications and entry mappings. Players continue to
+receive ordinary flattened playlists using the existing manifest schemas; no
+player upgrade is required for this feature. Skip remains local to each fork and
+only published overrides follow master updates. Parent-group slide sharing
+changes session authorization only. Removing the uploaded-image megapixel cap
+keeps the 15 MB file limit and existing 1920-pixel WebP optimization, so the
+player media format and resolution bounds are unchanged. No player source, sync
+contract, frame count or timer changes are included in this revision.

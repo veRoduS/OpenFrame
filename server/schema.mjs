@@ -218,6 +218,7 @@ export const playlistSchema = z.object({
           sourceEntryId: id.optional(),
           afterEntryId: id.nullable().optional(),
           durationOverride: z.boolean().optional(),
+          skipped: z.boolean().optional(),
           slideId: id,
           duration: z.number().int().min(2).max(3600),
           startsAt: z.iso.datetime({ offset: true }).nullable().optional(),

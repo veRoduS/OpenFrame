@@ -2018,6 +2018,327 @@ void test('managing groups edit directly while hierarchy access stays view-only'
   );
 });
 
+void test('fork skips are per entry, survive master updates, retain local anchors and flatten correctly for nested forks', async (t) => {
+  const { admin, db } = await fixture(t);
+  const slides = [];
+  for (const name of ['Repeated', 'Last', 'Local', 'New master'])
+    slides.push((await admin('/api/slides', 'POST', { ...slide, name })).data);
+  let master = (
+    await admin('/api/playlists', 'POST', {
+      name: 'Skip master',
+      items: [
+        { slideId: slides[0].id, duration: 10 },
+        { slideId: slides[0].id, duration: 20 },
+        { slideId: slides[1].id, duration: 30 },
+      ],
+    })
+  ).data;
+  await admin(`/api/playlists/${master.id}/publish`, 'POST');
+  const record = (id) =>
+    JSON.parse(
+      db
+        .prepare("SELECT body FROM records WHERE kind='playlist' AND id=?")
+        .get(id).body,
+    );
+  let fork = (
+    await admin(`/api/playlists/${master.id}/fork`, 'POST', {
+      name: 'Skip local fork',
+    })
+  ).data;
+  const skippedId = fork.items[1].id;
+  fork = (
+    await admin(`/api/playlists/${fork.id}`, 'PUT', {
+      ...fork,
+      items: [
+        fork.items[0],
+        { ...fork.items[1], skipped: true },
+        { id: randomUUID(), slideId: slides[2].id, duration: 8 },
+        fork.items[2],
+      ],
+    })
+  ).data;
+  assert.equal(fork.items.length, 4);
+  assert.equal(
+    fork.items.find((entry) => entry.id === skippedId).skipped,
+    true,
+  );
+  const draftPreview = (await admin(`/api/preview/${fork.id}`)).data;
+  assert.deepEqual(
+    draftPreview.items.map((entry) => entry.duration),
+    [10, 8, 30],
+  );
+  assert.equal(
+    draftPreview.items.some((entry) => 'skipped' in entry),
+    false,
+  );
+  assert.equal(
+    (await admin(`/api/playlists/${fork.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.equal(
+    record(fork.id).publishedEntries.length,
+    record(fork.id).published.items.length,
+  );
+  assert.deepEqual(
+    record(master.id).published.items.map((entry) => entry.duration),
+    [10, 20, 30],
+  );
+  let nested = (
+    await admin(`/api/playlists/${fork.id}/fork`, 'POST', {
+      name: 'Nested skip fork',
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${nested.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.deepEqual(
+    record(nested.id).published.items.map((entry) => entry.slide.id),
+    [slides[0].id, slides[2].id, slides[1].id],
+  );
+  // Restoring in a local draft must not leak into the published fork or its child.
+  await admin(`/api/playlists/${fork.id}`, 'PUT', {
+    ...fork,
+    items: fork.items.map((entry) => ({ ...entry, skipped: false })),
+  });
+  master = (
+    await admin(`/api/playlists/${master.id}`, 'PUT', {
+      ...master,
+      items: [
+        master.items[0],
+        master.items[1],
+        { slideId: slides[3].id, duration: 40 },
+        master.items[2],
+      ],
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${master.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.deepEqual(
+    record(fork.id).published.items.map((entry) => entry.duration),
+    [10, 8, 40, 30],
+  );
+  assert.deepEqual(
+    record(nested.id).published.items.map((entry) => entry.duration),
+    [10, 8, 40, 30],
+  );
+  assert.equal(
+    record(fork.id).publishedForkState.items.find(
+      (entry) => entry.id === skippedId,
+    ).skipped,
+    true,
+  );
+  const restored = (await admin('/api/library')).data.playlists.find(
+    (entry) => entry.id === fork.id,
+  );
+  assert.equal(
+    restored.items.find((entry) => entry.id === skippedId).skipped,
+    false,
+  );
+  assert.equal(
+    (await admin(`/api/playlists/${fork.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.deepEqual(
+    record(fork.id).published.items.map((entry) => entry.duration),
+    [10, 20, 8, 40, 30],
+  );
+  assert.deepEqual(
+    record(nested.id).published.items.map((entry) => entry.duration),
+    [10, 20, 8, 40, 30],
+  );
+  // Custom order keeps the entry skip independent of which slot it occupies.
+  nested = (await admin('/api/library')).data.playlists.find(
+    (entry) => entry.id === nested.id,
+  );
+  nested = (
+    await admin(`/api/playlists/${nested.id}`, 'PUT', {
+      ...nested,
+      fork: { ...nested.fork, order: 'custom' },
+      items: [...nested.items]
+        .reverse()
+        .map((entry) => ({ ...entry, skipped: entry.id === skippedId })),
+    })
+  ).data;
+  assert.equal(
+    (await admin(`/api/playlists/${nested.id}/publish`, 'POST')).status,
+    200,
+  );
+  assert.equal(
+    record(nested.id).publishedEntries.some((entry) => entry.id === skippedId),
+    false,
+  );
+  assert.deepEqual(
+    record(nested.id).published.items.map((entry) => entry.duration),
+    [30, 40, 8, 10],
+  );
+  assert.equal(
+    (
+      await admin(`/api/playlists/${nested.id}`, 'PUT', {
+        ...nested,
+        items: nested.items.map((entry) => ({ ...entry, skipped: true })),
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await admin(`/api/playlists/${nested.id}/publish`, 'POST')).status,
+    400,
+  );
+  assert.equal(
+    (
+      await admin('/api/playlists', 'POST', {
+        name: 'Not a fork',
+        items: [{ slideId: slides[0].id, duration: 10, skipped: true }],
+      })
+    ).status,
+    400,
+  );
+});
+
+void test('slide managers may share up to parent groups without gaining unrelated sharing or management rights', async (t) => {
+  const { admin, user } = await fixture(t);
+  const publisher = await user('upward-publisher');
+  const siblingUser = await user('upward-viewer');
+  const root = (
+    await admin('/api/groups', 'POST', { name: 'Shared organisation' })
+  ).data;
+  const child = (
+    await admin('/api/groups', 'POST', {
+      name: 'Publishing store',
+      parentId: root.id,
+    })
+  ).data;
+  const sibling = (
+    await admin('/api/groups', 'POST', {
+      name: 'Other store',
+      parentId: root.id,
+    })
+  ).data;
+  const unrelated = (
+    await admin('/api/groups', 'POST', { name: 'Unrelated organisation' })
+  ).data;
+  await admin(`/api/groups/${child.id}/members/${publisher.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  await admin(
+    `/api/groups/${sibling.id}/members/${siblingUser.user.id}`,
+    'PUT',
+    { role: 'member' },
+  );
+  const photo = await uploadImage(publisher.call);
+  const own = (
+    await publisher.call('/api/slides', 'POST', {
+      ...slide,
+      name: 'Share upward',
+      managingGroupId: child.id,
+      layers: [{ id: randomUUID(), type: 'image', x: 0, y: 0, width: 100, height: 100, assetId: photo.id }],
+    })
+  ).data;
+  assert.equal(
+    (await siblingUser.call('/api/library')).data.slides.some(
+      (entry) => entry.id === own.id,
+    ),
+    false,
+  );
+  const route = `/api/access/slide/${own.id}`;
+  assert.equal((await siblingUser.call(photo.url)).status, 404);
+  assert.equal(
+    (
+      await publisher.call(route, 'POST', {
+        groupId: root.id,
+        permission: 'view',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await siblingUser.call('/api/library')).data.slides.find(
+      (entry) => entry.id === own.id,
+    ).readOnly,
+    true,
+  );
+  assert.equal((await siblingUser.call(photo.url)).status, 200);
+  assert.equal(
+    (
+      await siblingUser.call(`/api/assets/${photo.id}`, 'PUT', {
+        name: 'No edit',
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await siblingUser.call(`/api/slides/${own.id}`, 'PUT', {
+        ...own,
+        name: 'Not allowed',
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await publisher.call(route, 'POST', { groupId: unrelated.id })).status,
+    403,
+  );
+  assert.equal(
+    (await publisher.call(route, 'POST', { groupId: sibling.id })).status,
+    403,
+  );
+  assert.equal(
+    (
+      await publisher.call(`/api/access/slide/${own.id}/management`, 'PUT', {
+        groupId: root.id,
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await publisher.call('/api/library')).data.slides.find(
+      (entry) => entry.id === own.id,
+    ).managingGroupId,
+    child.id,
+  );
+  const inherited = (
+    await admin('/api/slides', 'POST', { ...slide, managingGroupId: root.id })
+  ).data;
+  assert.equal(
+    (
+      await publisher.call(`/api/access/slide/${inherited.id}`, 'POST', {
+        groupId: root.id,
+      })
+    ).status,
+    403,
+  );
+  const playlist = (
+    await publisher.call('/api/playlists', 'POST', {
+      name: 'Store playlist',
+      managingGroupId: child.id,
+      items: [{ slideId: own.id, duration: 10 }],
+    })
+  ).data;
+  assert.equal(
+    (
+      await publisher.call(`/api/access/playlist/${playlist.id}`, 'POST', {
+        groupId: root.id,
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (await publisher.call(route, 'POST', { groupId: root.id, remove: true }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await siblingUser.call('/api/library')).data.slides.some(
+      (entry) => entry.id === own.id,
+    ),
+    false,
+  );
+});
+
 void test('published linked forks preserve local overrides and do not publish local drafts on master updates', async (t) => {
   const { admin, user, db } = await fixture(t);
   const localUser = await user('fork-editor');
