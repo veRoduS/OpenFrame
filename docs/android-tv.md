@@ -241,3 +241,19 @@ Use only the remote and APK throughout:
 Renderer termination and activity recreation also need Android instrumentation or
 a test firmware harness; ordinary remote operation cannot reliably inject them.
 The JVM PIN regression test does not establish TV navigation or OEM compatibility.
+
+### Automatic update troubleshooting
+
+Automatic updates means automatic **availability checks**, followed by a notice;
+Android still requires **Check for updates → Download and install** and installer
+confirmation. Enable checks under **Back/Menu → Automatic updates → On**; the
+default is Off. That dialog also shows the last check result, including failures.
+A player on the latest published version will not display an update notice.
+
+Player 0.15.7 fixes a cooldown issue in 0.15.6 and earlier: unsuccessful
+or canceled checks could suppress another automatic attempt for six hours, and
+returning from Home could postpone the next attempt further. Checks now run on
+player startup, then six hours after a successful check. Failed checks retry in
+about one minute while playback is open. Returning from Home retains the due time.
+**Check for updates** always bypasses the automatic cooldown. Check the selected
+update source and Internet access to GitHub if that manual check reports an error.

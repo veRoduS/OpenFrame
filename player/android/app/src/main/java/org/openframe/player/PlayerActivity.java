@@ -48,7 +48,7 @@ public final class PlayerActivity extends Activity {
     private int lifecycleGeneration;
     private int generation;
     private static final ScheduledExecutorService updateWorker = Executors.newSingleThreadScheduledExecutor();
-    private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L;
+    private boolean updateCheckedThisSession;
     private static final String AUTO_UPDATES = "automaticUpdatesEnabled";
     private ScheduledFuture<?> updatePolling;
     private Future<?> updateTask;
@@ -339,7 +339,7 @@ public final class PlayerActivity extends Activity {
     private void startUpdates() {
         if (automaticUpdatesEnabled() && resumed && activeServer != null && web != null && updatePolling == null) {
             updatePolling = updateWorker.scheduleWithFixedDelay(() -> runOnUiThread(() -> checkUpdates(false)),
-                    0, 6, TimeUnit.HOURS);
+                    0, UpdateCheckSchedule.RETRY_MS, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -376,9 +376,8 @@ public final class PlayerActivity extends Activity {
         String sourceKey = localUpdates ? UpdateSource.SERVER + ":" + activeServer : UpdateSource.GITHUB;
         long now = System.currentTimeMillis();
         long last = getPreferences(MODE_PRIVATE).getLong("updateCheckedAt", 0);
-        if (!manual && sourceKey.equals(getPreferences(MODE_PRIVATE).getString("updateCheckedSource", "")) &&
-                now >= last && now - last < UPDATE_INTERVAL_MS) return;
-        getPreferences(MODE_PRIVATE).edit().putLong("updateCheckedAt", now).putString("updateCheckedSource", sourceKey).apply();
+        if (!manual && !UpdateCheckSchedule.due(updateCheckedThisSession, sourceKey,
+                getPreferences(MODE_PRIVATE).getString("updateCheckedSource", ""), now, last)) return;
         updateBusy = true;
         int request = ++updateGeneration;
         if (manual) progress("Checking for an update…");
@@ -395,6 +394,12 @@ public final class PlayerActivity extends Activity {
                         if (updateNotice != null) updateNotice.setVisibility(View.GONE);
                         return;
                     }
+                    updateCheckedThisSession = true;
+                    getPreferences(MODE_PRIVATE).edit().putLong("updateCheckedAt", System.currentTimeMillis())
+                            .putString("updateCheckedSource", sourceKey)
+                            .putString("updateStatus", release == null ? "No release available from this source."
+                                    : newer ? "Version " + release.versionName + " available. Choose Check for updates to install."
+                                    : "Up to date: " + BuildConfig.VERSION_NAME).apply();
                     availableUpdate = newer ? release : null;
                     if (updateNotice != null) {
                         updateNotice.setText(newer ? "OpenFrame " + release.versionName + " available — press Menu or Back to update" : "");
@@ -412,6 +417,8 @@ public final class PlayerActivity extends Activity {
                 runOnUiThread(() -> {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
                     cancelUpdateTask();
+                    updateCheckedThisSession = false;
+                    getPreferences(MODE_PRIVATE).edit().putString("updateStatus", "Check failed: " + source.checkFailureMessage(ex)).apply();
                     if (manual) updateMessage("Could not check for updates", source.checkFailureMessage(ex));
                 });
             }
@@ -731,11 +738,15 @@ public final class PlayerActivity extends Activity {
     private void chooseAutomaticUpdates() {
         boolean enabled = automaticUpdatesEnabled();
         new AlertDialog.Builder(this).setTitle("Automatic updates")
-                .setMessage("When enabled, OpenFrame checks for player updates when it opens and every six hours while it is open.")
+                .setMessage("When enabled, OpenFrame checks at startup and every six hours while open. Failed checks retry in about a minute while open. Installation requires your confirmation.\n\nLast check result: "
+                        + getPreferences(MODE_PRIVATE).getString("updateStatus", "No completed check yet."))
                 .setSingleChoiceItems(new String[]{"Off (default)", "On"}, enabled ? 1 : 0, (dialog, which) -> {
                     boolean next = which == 1;
                     getPreferences(MODE_PRIVATE).edit().putBoolean(AUTO_UPDATES, next).apply();
-                    if (next) startUpdates();
+                    if (next) {
+                        updateCheckedThisSession = false;
+                        startUpdates();
+                    }
                     else {
                         if (updatePolling != null) updatePolling.cancel(false);
                         updatePolling = null;
