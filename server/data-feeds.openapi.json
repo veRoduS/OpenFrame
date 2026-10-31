@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenFrame Data Feeds API",
-    "version": "1.1.0",
-    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md. Application ingestion is namespaced by application, assigned site, and source name. Existing unassigned keys retain a separate legacy namespace."
+    "version": "1.3.0",
+    "description": "Reusable live slide data. Integrations use scoped application keys for automatic feed/metric ingestion or existing write-only per-feed keys. Session-based registration and key management are admin-only. See docs/data-feeds-api.md. Application ingestion is namespaced by application, assigned site, and source name. Existing unassigned keys retain a separate legacy namespace. Central application keys can submit atomic batches for explicitly selected stores using ingest-stores. Each screen still receives only its authorized local snapshots. Field limits default to 100 and are administrator-configurable from 1 to 500; existing wider feeds retain their schema and accept value updates after the configured limit is lowered."
   },
   "servers": [
     {
@@ -544,7 +544,7 @@
       },
       "delete": {
         "operationId": "deleteFeed",
-        "summary": "Delete unused feed and its tokens; reject references in drafts or publications",
+        "summary": "Delete a feed and its keys; optionally disconnect used widgets and preserve their layouts",
         "security": [
           {
             "SessionCookie": []
@@ -556,7 +556,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DataConnectionResetResult"
+                    }
+                  ]
                 }
               }
             }
@@ -670,9 +677,19 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "disconnectWidgets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Explicitly disconnect referenced widgets while preserving layouts and settings. For an application, delete its feeds and keys too. Without this option the existing in-use protections apply."
           }
         ],
-        "description": "Admin session required."
+        "description": "Administrator session required. disconnectWidgets=true atomically disconnects affected widgets in drafts and published snapshots, removes this connection and its associated keys, and returns counts. Widget presentation and field names are preserved; players clear old values after successful sync. Application keys remain active for individual feed deletion."
       }
     },
     "/api/data-feeds/{feedId}/data": {
@@ -1752,7 +1769,7 @@
       ],
       "delete": {
         "operationId": "deleteApplication",
-        "summary": "Admin deletes an application only when it has no feeds; its keys are removed",
+        "summary": "Delete an application; optionally delete its feeds and disconnect widgets while preserving layouts",
         "security": [
           {
             "SessionCookie": []
@@ -1764,7 +1781,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Ok"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DataConnectionResetResult"
+                    }
+                  ]
                 }
               }
             }
@@ -1819,7 +1843,20 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "disconnectWidgets",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "Explicitly disconnect referenced widgets while preserving layouts and settings. For an application, delete its feeds and keys too. Without this option the existing in-use protections apply."
+          }
+        ],
+        "description": "Administrator session required. disconnectWidgets=true atomically disconnects affected widgets in drafts and published snapshots, removes this connection and its associated keys, and returns counts. Widget presentation and field names are preserved; players clear old values after successful sync. Application keys remain active for individual feed deletion."
       }
     },
     "/api/data-feeds/applications/{applicationId}/tokens": {
@@ -2184,7 +2221,7 @@
       "post": {
         "operationId": "ingestApplicationMetrics",
         "summary": "Automatically create a scoped feed and append typed metrics; merge values atomically",
-        "description": "Numeric tables use nonempty arrays of label/value rows and are inferred as categories fields. A separate source such as production-tables keeps tables independent from same-named number fields. Existing category limits apply: 100 rows, unique labels up to 60 characters, and numeric values within plus or minus one trillion. Included tables replace their arrays; omitted fields retain their data.",
+        "description": "Numeric tables use nonempty arrays of label/value rows and are inferred as categories fields. A separate source such as production-tables keeps tables independent from same-named number fields. Existing category limits apply: 100 rows, unique labels up to 60 characters, and numeric values within plus or minus one trillion. Included tables replace their arrays; omitted fields retain their data. Central keys are rejected with 403 KEY_SCOPE; use ingest-stores for their selected stores. Existing single-store and legacy keys are unchanged.",
         "security": [
           {
             "ApplicationWriteToken": []
@@ -2384,10 +2421,7 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "siteNumber",
-                  "name"
-                ],
+                "required": ["siteNumber", "name"],
                 "properties": {
                   "siteNumber": {
                     "type": "string",
@@ -2399,10 +2433,7 @@
                     "maxLength": 100
                   },
                   "accessGroupId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid",
                     "description": "Optional membership gate in addition to resource permissions. Includes the group and descendants; administrators bypass it."
                   }
@@ -2466,10 +2497,7 @@
                     "type": "boolean"
                   },
                   "accessGroupId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
+                    "type": ["string", "null"],
                     "format": "uuid",
                     "description": "Optional membership gate in addition to resource permissions. Includes the group and descendants; administrators bypass it."
                   }
@@ -2506,9 +2534,7 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "siteId"
-                ],
+                "required": ["siteId"],
                 "properties": {
                   "siteId": {
                     "type": "string",
@@ -2567,9 +2593,7 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "siteId"
-                ],
+                "required": ["siteId"],
                 "properties": {
                   "siteId": {
                     "type": "string",
@@ -2653,10 +2677,7 @@
                       }
                     },
                     "nextCursor": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     }
                   }
                 }
@@ -2671,6 +2692,432 @@
           },
           "403": {
             "description": "Administrator required"
+          }
+        }
+      }
+    },
+    "/api/data-feeds/reset/preview": {
+      "post": {
+        "operationId": "reviewDataConnectionReset",
+        "summary": "Administrator reviews a full reset across all sites without deleting data",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counts and revision of the reviewed reset scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataConnectionResetReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrator required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; all deletes and disconnections roll back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/reset": {
+      "post": {
+        "operationId": "resetDataConnections",
+        "summary": "Delete all metric applications, feeds and keys while preserving widgets, sites, screens and layouts",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["confirmation", "revision"],
+                "properties": {
+                  "confirmation": {
+                    "type": "string",
+                    "enum": ["RESET"]
+                  },
+                  "revision": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deleted connection counts and retained/disconnected widget counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataConnectionResetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid confirmation or schema: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Administrator required or rejected Origin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "RESET_CHANGED: connections or widgets changed since the review; nothing deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error; all deletes and disconnections roll back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/data-feeds/ingest-stores/{sourceKey}": {
+      "post": {
+        "operationId": "ingestStoreBatch",
+        "summary": "Atomically merge one source across selected stores with a central application key",
+        "description": "Server 0.30.3+. Central keys only. Maximum 256 KiB JSON and 50 distinct authorized active stores; each metrics/tables section is nonempty, <=32 KiB and <= the configured field limit (default 100, configurable 1\u2013500). Metrics use the named source; tables use sourceKey + -tables (80 characters maximum). Array values replace rows, omitted fields/stores remain unchanged. Field types must match across stores. The entire request rolls back on failure. Uses 60 attempts/minute per application/store and 600 store attempts/minute per application, shared with the original endpoint. New feeds belong to the site access group or application managing group; existing ownership remains unchanged.",
+        "security": [
+          {
+            "ApplicationWriteToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoreIngestionBatch"
+              },
+              "example": {
+                "stores": [
+                  {
+                    "siteNumber": "2882",
+                    "metrics": {
+                      "completed": 75,
+                      "goal": 100
+                    },
+                    "tables": {
+                      "training": [
+                        {
+                          "label": "Safety",
+                          "value": 98
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "siteNumber": "3404",
+                    "metrics": {
+                      "completed": 82,
+                      "goal": 100
+                    },
+                    "tables": {
+                      "training": []
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Entire batch accepted; counters only, no previous metric values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreIngestionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON, source/field key, value or ambiguous new chart: INVALID_PAYLOAD",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign-in required or expired/revoked/unauthorized application key: INVALID_TOKEN",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "KEY_SCOPE: central key required; SITE_NOT_AUTHORIZED: unknown or unapproved store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SITE_ARCHIVED, SOURCE_SCHEMA_CONFLICT, FEED_LIMIT, FIELD_LIMIT, or invalid application configuration. No writes performed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE: 256 KiB request or 32 KiB section exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Send application/json: UNSUPPORTED_MEDIA_TYPE",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED: 60 attempts/minute per application/site across its keys and sources; 600/minute application ceiling. Retry-After is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until another attempt",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed; prior data/schema preserved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "sourceKey",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$"
+          },
+          "description": "Stable case-sensitive feed name chosen by the application, scoped by the application key."
+        }
+      ]
+    },
+    "/api/settings/data-feeds": {
+      "get": {
+        "operationId": "getFeedLimits",
+        "summary": "Administrator reads workspace field limits",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current persistent workspace setting. Existing wider feeds retain all fields and accept value updates; only new schemas/fields are restricted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedLimits"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setFeedLimits",
+        "summary": "Administrator changes the persistent field limit without restarting",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["maxFieldsPerFeed"],
+                "properties": {
+                  "maxFieldsPerFeed": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500,
+                    "default": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current persistent workspace setting. Existing wider feeds retain all fields and accept value updates; only new schemas/fields are restricted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedLimits"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid input or unauthorized session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -2701,10 +3148,7 @@
       "Field": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "key",
-          "type"
-        ],
+        "required": ["key", "type"],
         "properties": {
           "key": {
             "type": "string",
@@ -2712,21 +3156,14 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "number",
-              "series",
-              "categories"
-            ]
+            "enum": ["number", "series", "categories"]
           }
         }
       },
       "FeedDefinition": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name",
-          "fields"
-        ],
+        "required": ["name", "fields"],
         "properties": {
           "name": {
             "type": "string",
@@ -2734,26 +3171,20 @@
             "maxLength": 100
           },
           "managingGroupId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "fields": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 20,
+            "maxItems": 500,
             "items": {
               "$ref": "#/components/schemas/Field"
             },
-            "description": "Unique field keys. Definitions cannot be changed after creation."
+            "description": "Unique field keys. Definitions cannot be changed after creation. New feeds must fit the workspace field limit (default 100, configurable 1\u2013500)."
           },
           "siteId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Active site required for new manual feeds once any site exists. Updates cannot change an existing assignment."
           }
@@ -2763,10 +3194,7 @@
         "allOf": [
           {
             "type": "object",
-            "required": [
-              "name",
-              "fields"
-            ],
+            "required": ["name", "fields"],
             "properties": {
               "name": {
                 "type": "string",
@@ -2774,16 +3202,13 @@
                 "maxLength": 100
               },
               "managingGroupId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "uuid"
               },
               "fields": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 20,
+                "maxItems": 500,
                 "items": {
                   "$ref": "#/components/schemas/Field"
                 },
@@ -2806,17 +3231,11 @@
                 "format": "date-time"
               },
               "updatedAt": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "date-time"
               },
               "revision": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "applicationId": {
                 "type": "string",
@@ -2827,18 +3246,16 @@
                 "description": "Application-supplied source name; namespaced by applicationId and assigned site."
               },
               "siteId": {
-                "type": [
-                  "string",
-                  "null"
-                ],
+                "type": ["string", "null"],
                 "format": "uuid",
                 "description": "Assigned site; null denotes the legacy unassigned namespace."
               },
               "siteNumber": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
+              },
+              "applicationName": {
+                "type": ["string", "null"],
+                "description": "Integration name for grouping visible feeds; no additional feed access is granted."
               }
             }
           }
@@ -2847,15 +3264,12 @@
       "SnapshotData": {
         "type": "object",
         "minProperties": 1,
-        "maxProperties": 20,
-        "description": "Complete snapshot: exactly the declared keys, each value matching its feed field type. This general schema cannot encode a feed-specific field definition. Series timestamps and category labels must be unique. Total encoded request <=32768 bytes. Null clears a number; [] clears a chart.",
+        "maxProperties": 500,
+        "description": "Complete snapshot: exactly the declared keys, each value matching its feed field type. This general schema cannot encode a feed-specific field definition. Series timestamps and category labels must be unique. Total encoded request <=32768 bytes. Null clears a number; [] clears a chart. The configured field limit does not prevent updates to already-declared fields after it is lowered.",
         "additionalProperties": {
           "anyOf": [
             {
-              "type": [
-                "number",
-                "null"
-              ],
+              "type": ["number", "null"],
               "minimum": -1000000000000.0,
               "maximum": 1000000000000.0
             },
@@ -2864,10 +3278,7 @@
               "maxItems": 240,
               "items": {
                 "type": "object",
-                "required": [
-                  "time",
-                  "value"
-                ],
+                "required": ["time", "value"],
                 "additionalProperties": false,
                 "properties": {
                   "time": {
@@ -2888,10 +3299,7 @@
               "maxItems": 100,
               "items": {
                 "type": "object",
-                "required": [
-                  "label",
-                  "value"
-                ],
+                "required": ["label", "value"],
                 "additionalProperties": false,
                 "properties": {
                   "label": {
@@ -2912,24 +3320,13 @@
       },
       "Snapshot": {
         "type": "object",
-        "required": [
-          "revision",
-          "updatedAt",
-          "data",
-          "status"
-        ],
+        "required": ["revision", "updatedAt", "data", "status"],
         "properties": {
           "revision": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "updatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "data": {
@@ -2943,21 +3340,13 @@
             ]
           },
           "status": {
-            "enum": [
-              "ready",
-              "empty",
-              "unavailable"
-            ]
+            "enum": ["ready", "empty", "unavailable"]
           }
         }
       },
       "UpdateReceipt": {
         "type": "object",
-        "required": [
-          "feedId",
-          "revision",
-          "updatedAt"
-        ],
+        "required": ["feedId", "revision", "updatedAt"],
         "properties": {
           "feedId": {
             "type": "string",
@@ -2976,9 +3365,7 @@
       "TokenRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -2986,10 +3373,7 @@
             "maxLength": 80
           },
           "expiresInDays": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "minimum": 1,
             "maximum": 365,
             "default": 90,
@@ -3025,25 +3409,16 @@
             "format": "date-time"
           },
           "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Expiration timestamp, or null when the key never expires. Revocation and creator authorization still apply."
           },
           "revokedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "lastUsedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -3055,9 +3430,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "token"
-            ],
+            "required": ["token"],
             "properties": {
               "token": {
                 "type": "string",
@@ -3070,9 +3443,7 @@
       },
       "Error": {
         "type": "object",
-        "required": [
-          "error"
-        ],
+        "required": ["error"],
         "properties": {
           "error": {
             "type": "string"
@@ -3085,9 +3456,7 @@
       },
       "Ok": {
         "type": "object",
-        "required": [
-          "ok"
-        ],
+        "required": ["ok"],
         "properties": {
           "ok": {
             "const": true
@@ -3097,9 +3466,7 @@
       "ApplicationDefinition": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -3107,10 +3474,7 @@
             "maxLength": 80
           },
           "managingGroupId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "default": null
           }
@@ -3118,13 +3482,7 @@
       },
       "Application": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "managingGroupId",
-          "createdAt",
-          "feedCount"
-        ],
+        "required": ["id", "name", "managingGroupId", "createdAt", "feedCount"],
         "properties": {
           "name": {
             "type": "string",
@@ -3132,10 +3490,7 @@
             "maxLength": 80
           },
           "managingGroupId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "default": null
           },
@@ -3177,25 +3532,16 @@
             "format": "date-time"
           },
           "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time",
             "description": "Expiration timestamp, or null when the key never expires. Revocation and creator authorization still apply."
           },
           "revokedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "lastUsedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "applicationId": {
@@ -3203,12 +3549,20 @@
             "format": "uuid"
           },
           "siteId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "Assigned site; null denotes the legacy unassigned namespace."
+            "description": "Single-store scope. Null for central keys (siteIds array) or legacy unassigned keys (siteIds null)."
+          },
+          "siteIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "uniqueItems": true,
+            "description": "Explicit allowed stores for a central key. Null means a single-store or legacy key. New sites are not authorized automatically."
           }
         }
       },
@@ -3219,9 +3573,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "token"
-            ],
+            "required": ["token"],
             "properties": {
               "token": {
                 "type": "string",
@@ -3235,15 +3587,12 @@
       "IngestData": {
         "type": "object",
         "minProperties": 1,
-        "maxProperties": 20,
-        "description": "Named metric updates, merged atomically. Unknown names create fields inferred from number/null or nonempty series/category arrays; existing types are immutable. Omitted metrics keep their values. At most 20 fields total per feed. Null clears a number; [] clears an existing chart but cannot define a new chart type. Payload <=32768 bytes.",
+        "maxProperties": 500,
+        "description": "Named metric updates, merged atomically. Unknown names create fields inferred from number/null or nonempty series/category arrays; existing types are immutable. Omitted metrics keep their values. Field limit defaults to 100 and is administrator-configurable from 1 to 500. Existing wider feeds can update their declared fields after the setting is lowered. Null clears a number; [] clears an existing chart but cannot define a new chart type. Payload <=32768 bytes.",
         "additionalProperties": {
           "anyOf": [
             {
-              "type": [
-                "number",
-                "null"
-              ],
+              "type": ["number", "null"],
               "minimum": -1000000000000.0,
               "maximum": 1000000000000.0
             },
@@ -3252,10 +3601,7 @@
               "maxItems": 240,
               "items": {
                 "type": "object",
-                "required": [
-                  "time",
-                  "value"
-                ],
+                "required": ["time", "value"],
                 "additionalProperties": false,
                 "properties": {
                   "time": {
@@ -3276,10 +3622,7 @@
               "maxItems": 100,
               "items": {
                 "type": "object",
-                "required": [
-                  "label",
-                  "value"
-                ],
+                "required": ["label", "value"],
                 "additionalProperties": false,
                 "properties": {
                   "label": {
@@ -3344,10 +3687,7 @@
             "type": "boolean"
           },
           "siteId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Assigned site; null denotes the legacy unassigned namespace."
           }
@@ -3356,9 +3696,7 @@
       "ApplicationTokenRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string",
@@ -3366,25 +3704,38 @@
             "maxLength": 80
           },
           "expiresInDays": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "minimum": 1,
             "maximum": 365,
             "default": 90,
             "description": "Number of days from now, or null for a non-expiring key. Omitted on creation defaults to 90 days."
           },
           "siteId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Assigned site; null denotes the legacy unassigned namespace."
+          },
+          "siteIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "uniqueItems": true,
+            "description": "Explicit allowed stores for a central key. Null means a single-store or legacy key. New sites are not authorized automatically."
           }
         },
-        "description": "Site is required once any site has been configured."
+        "description": "Choose siteId for a single-store key or distinct siteIds for a central key; do not combine them. A store scope is required after any site is configured. Scope is immutable; rotate a key to change its allowed stores.",
+        "not": {
+          "required": ["siteIds", "siteId"],
+          "properties": {
+            "siteId": {
+              "type": "string"
+            }
+          }
+        }
       },
       "Site": {
         "type": "object",
@@ -3405,17 +3756,11 @@
             "format": "date-time"
           },
           "archivedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "accessGroupId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "Optional membership gate in addition to resource permissions. Includes the group and descendants; administrators bypass it."
           }
@@ -3434,10 +3779,7 @@
           },
           "actorKind": {
             "type": "string",
-            "enum": [
-              "user",
-              "device"
-            ]
+            "enum": ["user", "device"]
           },
           "actorId": {
             "type": "string"
@@ -3455,23 +3797,14 @@
             "type": "string"
           },
           "resourceName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "fromSiteId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "toSiteId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           }
         }
@@ -3479,18 +3812,277 @@
       "KeyExpiryRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "expiresInDays"
-        ],
+        "required": ["expiresInDays"],
         "properties": {
           "expiresInDays": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "minimum": 1,
             "maximum": 365,
             "description": "Set null to never expire, or 1\u2013365 days from now. Revoked keys cannot be renewed."
+          }
+        }
+      },
+      "DataConnectionResetCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applications",
+          "feeds",
+          "keys",
+          "widgets",
+          "slides",
+          "publishedPlaylists"
+        ],
+        "properties": {
+          "applications": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feeds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keys": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "widgets": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slides": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "publishedPlaylists": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DataConnectionResetReview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "counts"],
+        "properties": {
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DataConnectionResetCounts"
+          }
+        }
+      },
+      "DataConnectionResetResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "applications",
+          "feeds",
+          "keys",
+          "widgets",
+          "slides",
+          "publishedPlaylists"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "applications": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feeds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "keys": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "widgets": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "slides": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "publishedPlaylists": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "StoreIngestionBatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stores"],
+        "properties": {
+          "stores": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["siteNumber"],
+              "anyOf": [
+                {
+                  "required": ["metrics"]
+                },
+                {
+                  "required": ["tables"]
+                }
+              ],
+              "properties": {
+                "siteNumber": {
+                  "type": "string",
+                  "pattern": "^[0-9]{1,20}$",
+                  "description": "Exact registered store number; preserve leading zeros and include each once."
+                },
+                "metrics": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "maxProperties": 500,
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$"
+                  },
+                  "description": "At most 32 KiB when serialized; omitted fields retain previous values. Field limit defaults to 100 and can be configured from 1 to 500; existing wider feeds can update their existing fields after the limit is lowered.",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": ["number", "null"],
+                        "minimum": -1000000000000.0,
+                        "maximum": 1000000000000.0
+                      },
+                      {
+                        "type": "array",
+                        "maxItems": 240,
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["time", "value"],
+                          "properties": {
+                            "time": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "value": {
+                              "type": "number",
+                              "minimum": -1000000000000.0,
+                              "maximum": 1000000000000.0
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                          "$ref": "#/components/schemas/StoreTableRow"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "tables": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "maxProperties": 500,
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$"
+                  },
+                  "description": "At most 32 KiB when serialized; omitted fields retain previous values. Field limit defaults to 100 and can be configured from 1 to 500; existing wider feeds can update their existing fields after the limit is lowered.",
+                  "additionalProperties": {
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                      "$ref": "#/components/schemas/StoreTableRow"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "StoreTableRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "value"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "value": {
+            "type": "number",
+            "minimum": -1000000000000.0,
+            "maximum": 1000000000000.0
+          }
+        }
+      },
+      "StoreIngestionResult": {
+        "type": "object",
+        "required": [
+          "ok",
+          "applicationId",
+          "sourceKey",
+          "storesAccepted",
+          "feedsCreated",
+          "feedsUpdated",
+          "updatedAt"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "applicationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceKey": {
+            "type": "string"
+          },
+          "storesAccepted": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "feedsCreated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "feedsUpdated": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FeedLimits": {
+        "type": "object",
+        "required": ["maxFieldsPerFeed", "minimum", "maximum"],
+        "properties": {
+          "maxFieldsPerFeed": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100
+          },
+          "minimum": {
+            "const": 1
+          },
+          "maximum": {
+            "const": 500
           }
         }
       }

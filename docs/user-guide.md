@@ -124,6 +124,8 @@ On **Slides**, use the icon-only view controls to choose **List view**, **Small 
 
 ## Data feeds and live dashboards
 
+To start over with metric integrations, administrators can use **Settings → Data feeds → Reset all data connections**, or delete an application/feed individually. Widgets stay in place in drafts and published playlists, show waiting data after sync, and can be connected to replacement sources later. See [resetting data connections](data-connection-reset.md).
+
 As an admin, open **Settings → Data feeds → New application** to give an integration one application API key. Choose its managing group once; the application supplies a stable feed name and JSON metric names/values, and OpenFrame creates feeds and fields on first push. New metrics appear automatically, omitted metrics keep their values, and existing types stay fixed. Application keys can be rotated or revoked under **Manage keys**. Select the created feed/field in a slide widget as usual. See [automatic metric ingestion](data-feeds-api.md#application-keys-automatic-metric-creation) for an example.
 
 As an admin, open **Settings → Data feeds** to create a reusable data source. Choose its managing group, then define named fields as Number, Time series, or Categories. Field keys/types are fixed after creation. Click a feed to see its latest snapshot, generate a named API key for an application, copy an example request/payload, or revoke a key. The generated key appears once in a pop-up with the update URL. API keys are write-only, scoped to that feed, and can expire after your selected period or be set to **Never expires**. Send the key in the `Authorization: Bearer YOUR_API_KEY` header; the application does not need to sign in. Only admins can create, change, or delete feeds and manage their API keys. Users with viewing access can use shared feeds in slide widgets; inherited group access remains View only.
@@ -147,3 +149,9 @@ Publish the playlist layout once. Further data updates appear through normal pla
 New slides mark their generated “Something worth\nsharing.” text as a starter. Publishing removes that layer if its text was never edited, including when an image covers it. Saving and draft previews keep the starter until publication. Changing its text clears the marker; changing it back later does not make it eligible for cleanup. Text added deliberately, and existing unmarked slides, are preserved. Cleanup updates editable source slides and their existing publications. For a shared slide you can only view, cleanup affects your published snapshot without changing the owner's slide. Failed publications leave source slides untouched.
 
 Deleting a slide is blocked while it remains in a playlist draft or publication. The confirmation lists visible dependent playlists; remove the slide, save the drafts, and publish their replacements first. Restart/revoke confirmations explain screen interruption and reconnect behavior. Revoking a feed API key requires confirmation and immediately stops that application's updates.
+
+Administrators can change **Settings → Data feeds → Feed limits → Fields per
+feed** (server 0.32.0+). The default is 100, with a range of 1–500.
+Changes take effect immediately and persist after restart. Lowering the limit
+preserves existing fields and value updates; new feeds/additional fields must
+fit the current setting. Existing numbered sources are not automatically merged.

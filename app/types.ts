@@ -277,6 +277,7 @@ export type Device = {
   command?: { type: string } | null;
 };
 export type DataFeed = {
+  applicationName?: string | null;
   siteNumber?: string | null;
   siteId?: string | null;
   id: string;

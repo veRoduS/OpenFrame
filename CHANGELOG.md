@@ -2,6 +2,30 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.32.0] - 2026-10-30
+
+- Release configurable feed field limits with a default of 100 and admin controls from 1 to 500
+
+## [0.31.1] - 2026-10-30
+
+- Raise the default feed field limit to 100 and add persistent admin controls for 1–500 fields without disrupting existing feeds
+
+## [0.31.0] - 2026-10-30
+
+- Release central SMCC store ingestion, safe data-connection resets and shared metric publication fixes
+
+## [0.30.3] - 2026-10-30
+
+- Add central application keys and atomic multi-store metric/table ingestion, grouped store feeds, and an SMCC integration handoff
+
+## [0.30.2] - 2026-10-30
+
+- Allow data-connection reset and used feed/application deletion while preserving widgets for reconnection
+
+## [0.30.1] - 2026-10-30
+
+- Fix shared store-relative playlist publishing without exposing example-store feeds
+
 ## [0.30.0] - 2026-10-30
 
 - Publish the accumulated multi-site, home workspace, API-key, playlist and weather improvements as the latest server milestone.

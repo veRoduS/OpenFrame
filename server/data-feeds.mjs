@@ -5,6 +5,8 @@ import { z } from 'zod';
 import contract from './data-feeds.openapi.json' with { type: 'json' };
 import { requireActiveSite, auditSite, siteTransaction } from './sites.mjs';
 import { mountDataFeedApplications } from './data-feed-applications.mjs';
+import { createDataFeedReset } from './data-feed-reset.mjs';
+import { mountDataFeedLimits, MAX_FEED_FIELDS } from './data-feed-limits.mjs';
 
 export const fieldSchema = z
   .object({
@@ -20,7 +22,7 @@ export const feedSchema = z
     fields: z
       .array(fieldSchema)
       .min(1)
-      .max(20)
+      .max(MAX_FEED_FIELDS)
       .refine(
         (fields) => new Set(fields.map((f) => f.key)).size === fields.length,
         'Field keys must be unique',
@@ -184,6 +186,7 @@ export function mountDataFeeds(
     expiresAt TEXT, revokedAt TEXT, lastUsedAt TEXT);
     CREATE INDEX IF NOT EXISTS data_feed_token_feed ON data_feed_tokens(feedId);`);
   migrateKeyExpiry(db, 'data_feed_tokens');
+  const fieldLimits = mountDataFeedLimits(app, { db, administrator });
   const raw = (id) => {
     const row = db
       .prepare("SELECT body FROM records WHERE kind='data-feed' AND id=?")
@@ -193,11 +196,17 @@ export function mountDataFeeds(
   const publicFeed = (feed) =>
     publicResource('data-feed', {
       ...feedMetadata(feed),
+      applicationName: feed.applicationId
+        ? db
+            .prepare('SELECT name FROM data_feed_applications WHERE id=?')
+            .get(feed.applicationId)?.name || null
+        : null,
       siteNumber: feed.siteId
         ? db.prepare('SELECT siteNumber FROM sites WHERE id=?').get(feed.siteId)
             ?.siteNumber || null
         : null,
     });
+  const resetConnections = createDataFeedReset(db);
   mountDataFeedApplications(app, {
     db,
     accounts,
@@ -207,6 +216,8 @@ export function mountDataFeeds(
     raw,
     fieldSchema,
     values,
+    resetConnections,
+    fieldLimits,
   });
   const tokenFields = 'id,feedId,name,createdAt,expiresAt,revokedAt,lastUsedAt';
   const references = (slide, id) => {
@@ -225,17 +236,26 @@ export function mountDataFeeds(
     allRecords('playlist').some((playlist) =>
       playlist.published?.items?.some((item) => references(item.slide, id)),
     );
-  function validateLayers(slide, user) {
+  function validateLayers(slide, user, { publishing = false } = {}) {
     for (const layer of slide.layers.filter((l) => l.type === 'data')) {
       const config = layer.data;
-      if (!config?.feedId)
+      if (!config || (!config.feedId && config.siteBinding))
         throw fail(
           400,
           'INVALID_BINDING',
           'Choose a data feed for each data widget',
         );
+      // Unbound widgets remain saveable and render a waiting placeholder.
+      if (!config.feedId) continue;
       const feed = raw(config.feedId);
-      if (!feed || !accounts.can(user, 'data-feed', feed.id))
+      // Publication uses already-authorized, saved slides. A store-relative
+      // source's example feed supplies its schema, not its delivery permission.
+      // New/edited slides still require example-feed access; fixed feeds always do.
+      if (
+        !feed ||
+        (!(publishing && config.siteBinding) &&
+          !accounts.can(user, 'data-feed', feed.id))
+      )
         throw fail(
           403,
           'FEED_ACCESS_REQUIRED',
@@ -390,6 +410,13 @@ export function mountDataFeeds(
   );
   app.post('/api/data-feeds', administrator, (req, res) => {
     const input = feedSchema.parse(req.body);
+    const limit = fieldLimits.read().maxFieldsPerFeed;
+    if (input.fields.length > limit)
+      throw fail(
+        409,
+        'FIELD_LIMIT',
+        `Maximum of ${limit} fields per feed; adjust Feed limits in Settings`,
+      );
     if (input.siteId) requireActiveSite(db, input.siteId);
     else if (db.prepare('SELECT COUNT(*) AS n FROM sites').get().n)
       throw fail(400, 'SITE_REQUIRED', 'Choose a site for this feed');
@@ -470,8 +497,40 @@ export function mountDataFeeds(
       );
     res.json(publicFeed(put('data-feed', { ...feed, ...input })));
   });
+  app.post('/api/data-feeds/reset/preview', administrator, (_req, res) => {
+    res.json(resetConnections.preview({ all: true }));
+  });
+  app.post('/api/data-feeds/reset', administrator, (req, res) => {
+    const input = z
+      .object({
+        confirmation: z.literal('RESET'),
+        revision: z.string().regex(/^[a-f0-9]{64}$/),
+      })
+      .strict()
+      .parse(req.body);
+    res.json(
+      resetConnections.remove(
+        { all: true },
+        { actor: req.user, expectedRevision: input.revision },
+      ),
+    );
+  });
   app.delete('/api/data-feeds/:id', administrator, (req, res) => {
     requireEditable('data-feed', req.params.id);
+    const disconnect =
+      z
+        .enum(['true', 'false'])
+        .default('false')
+        .parse(req.query.disconnectWidgets) === 'true';
+    if (disconnect) {
+      res.json(
+        resetConnections.remove(
+          { feedIds: [req.params.id] },
+          { actor: req.user },
+        ),
+      );
+      return;
+    }
     if (inUse(req.params.id))
       throw fail(
         409,

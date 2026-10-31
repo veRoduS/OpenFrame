@@ -10,6 +10,46 @@ OpenFrame supports **application API keys** that automatically create feeds and 
 
 For an existing integration, start with the [API update and migration bulletin](api-update-multi-site.md).
 
+## One integration, multiple stores (server 0.30.3+)
+
+Use one application for SMCC and issue a **Multiple stores (central)** key with
+an explicit store selection. `POST /api/data-feeds/ingest-stores/:sourceKey`
+accepts an atomic `stores` batch with store-numbered `metrics` and `tables`
+sections. See the brief [SMCC integration update](smcc-integration-update.md)
+for the request, limits, response, and retry contract. Per-store application keys
+and the original ingestion route continue working unchanged. Central keys cannot
+use that old route; single-store keys cannot use the batch route.
+
+Settings groups application feeds by integration, with stores underneath.
+Internally snapshots remain per store and source; this preserves screen-level
+isolation and the existing **Follows each screen’s store** widget bindings.
+New central feeds use the site's access group, falling back to the application's
+managing group. Existing feed ownership stays unchanged. Keys authorize only
+the selected existing stores; rotate a key to add stores. The application itself
+is not tied to a single site.
+
+## Configurable field limits (server 0.32.0+)
+
+The default is **100 fields per feed**. Administrators can set **1–500** in
+**Settings → Data feeds → Feed limits**. The persistent setting applies immediately
+to manual feed creation and both application-ingestion endpoints. The 32 KiB
+section/request limit and 256 KiB central batch limit remain enforced, along with
+100 table rows, 240 series points and existing rate limits. Limits on total feeds
+and feeds per published playlist remain unchanged.
+
+Lowering the setting preserves existing fields and data. Existing wider feeds
+continue accepting updates to their declared fields and can be renamed; additional
+fields must fit the current setting. Feed-specific keys continue using their
+existing fixed schema. Raising the limit does not combine existing numbered
+sources: the external integration chooses which source receives each field.
+
+Administrator sessions can read `GET /api/settings/data-feeds` and update
+`PUT /api/settings/data-feeds` with `{"maxFieldsPerFeed":100}`. Responses include
+`maxFieldsPerFeed`, `minimum` (1), and `maximum` (500). Application/player keys
+cannot change this setting. Player delivery currently includes complete
+referenced feeds; [selective metric delivery](player-metric-delivery.md) describes
+that proposed follow-up.
+
 ## Application keys: automatic metric creation
 
 For a concise integration handoff, use the [application metrics API one-pager](data-feeds-api-one-pager.md).
@@ -42,7 +82,7 @@ The first successful request creates a reusable feed named after the application
 
 A later push such as `{"completed":43,"orders":12}` updates `completed`, creates `orders`, and keeps `goal` at 100. This endpoint **merges named metrics**; it does not require a complete snapshot. New numeric values or null create Number fields. Nonempty arrays of `{time,value}` create Time series fields; nonempty arrays of `{label,value}` create Categories fields. Once created, a metric's type cannot change. Null clears an existing number; an empty array clears an existing chart. New chart fields need a nonempty first array so their type can be identified. All existing value bounds and chart validation below still apply.
 
-Feed names are case-sensitive, 1–80 characters, starting with a letter or number and containing only letters, numbers, underscores or hyphens. Metric keys use the existing 1–40 character field-key rules below. Each request has 1–20 metrics; each feed may accumulate at most 20 fields. Use another feed name for an additional set of metrics. Payloads remain limited to **32 KiB**. The **60 ingestion calls per minute per application/site** budget is shared by its keys and feed names, including parsed requests with invalid metric values. An application also has a **600/minute aggregate ceiling**. Saturated-site rejections do not consume other sites’ aggregate allowance. Unassigned keys share a separate 60/minute scope. Writes validate the entire request before committing feed creation, fields, values, ownership, source mapping and key usage together. Invalid requests retain the previous data and schema.
+Feed names are case-sensitive, 1–80 characters, starting with a letter or number and containing only letters, numbers, underscores or hyphens. Metric keys use the existing 1–40 character field-key rules below. Each request has 1–100 metrics by default; each feed may accumulate at most 100 fields by default. Use another feed name for an additional set of metrics. Payloads remain limited to **32 KiB**. The **60 ingestion calls per minute per application/site** budget is shared by its keys and feed names, including parsed requests with invalid metric values. An application also has a **600/minute aggregate ceiling**. Saturated-site rejections do not consume other sites’ aggregate allowance. Unassigned keys share a separate 60/minute scope. Writes validate the entire request before committing feed creation, fields, values, ownership, source mapping and key usage together. Invalid requests retain the previous data and schema.
 
 The server supports up to 50 registered applications, 20 active keys per application and 200 total feeds across both modes. Expired/revoked key metadata is pruned when generating another key. Application keys can expire in 1–365 days (90 by default) or **Never expires**. Change an existing key’s expiration without rotating its secret, or revoke it under **Manage keys**. The issuing account must remain an active admin: disabling, deleting or demoting it stops writes. User deletion also explicitly revokes its application keys. Rotating a key within the same application preserves its feed names and IDs.
 
@@ -88,7 +128,7 @@ The first push creates each table field as `categories`. Later pushes replace ea
 
 In the editor choose **Widgets → Table**, select the resulting feed and table field, and set its unit/precision. Each table has one label column and one numeric value column, with one display unit per card. SMCC's decision to skip mixed-unit tables is consistent with this presentation. Row order is preserved. Use **First row** and **Visible rows** to divide larger tables across cards. For views and ranges through row 40, these controls need server **0.26.1** and player **0.12.1**. Rows 41–100 require server **0.29.7** and player **0.15.4**; the ingestion method and numeric-row format are unchanged.
 
-Limits remain **100 rows per field**, unique trimmed labels of **1–60 characters**, finite values within **±1 trillion**, and **32 KiB per request**. A request can include up to 20 table fields subject to that total byte limit. The table source shares the application's existing rate budget. Update timestamps describe the feed's receipt time, not an observation timestamp for each row. Text cells, multiple value columns, mixed units, and collector datasets require a separately agreed payload; they are not inferred from this numeric-row format.
+Limits remain **100 rows per field**, unique trimmed labels of **1–60 characters**, finite values within **±1 trillion**, and **32 KiB per request**. A request can include fields up to the workspace limit (100 by default, configurable 1–500), subject to that total byte limit. The table source shares the application's existing rate budget. Update timestamps describe the feed's receipt time, not an observation timestamp for each row. Text cells, multiple value columns, mixed units, and collector datasets require a separately agreed payload; they are not inferred from this numeric-row format.
 
 ## Feed-specific keys: existing quick start
 
@@ -139,11 +179,11 @@ Successful response: HTTP `200`, `Content-Type: application/json`:
 | --- | --- | --- |
 | `number` | `75` or `null` | Finite number between −1,000,000,000,000 and +1,000,000,000,000. `null` explicitly clears a measurement. No numeric strings. |
 | `series` | `[{"time":"2026-10-06T10:00:00Z","value":75}]` | At most 240 points. ISO 8601 datetime with `Z` or an explicit offset. Unique timestamps in strictly ascending chronological order. Each value has the number bounds above and cannot be null. |
-| `categories` | `[{"label":"Grocery","value":42}]` | At most 40 entries. Unique, nonempty labels, trimmed, at most 60 characters. Values have the number bounds above and cannot be null. The chart preserves input order; negative values are supported. |
+| `categories` | `[{"label":"Grocery","value":42}]` | At most 100 entries. Unique, nonempty labels, trimmed, at most 60 characters. Values have the number bounds above and cannot be null. The chart preserves input order; negative values are supported. |
 
 An empty series or category array clears that chart. Progress targets must be positive to render; an invalid/null target displays an explanatory placeholder. Bars clamp the fill to 0–100%, while showing the actual value and percentage when the goal is exceeded. Line graphs use actual timestamp spacing. Chart axes auto-scale and include zero.
 
-Maximum request body **32 KiB (32,768 bytes)**. A feed has 1–20 unique fields; keys match `^[A-Za-z][A-Za-z0-9_]{0,39}$`. Your payload must satisfy both the field limits and the total body limit. No automatic append or stored history is provided: your integration supplies the rolling series each time. There is one current snapshot per feed, persisted across server restarts. Treat concurrent writers as last successful write wins; there is no compare-and-swap or ordering by source time.
+Maximum request body **32 KiB (32,768 bytes)**. A new feed supports up to the workspace field limit (100 by default; administrators can set 1–500 under Settings → Data feeds → Feed limits); keys match `^[A-Za-z][A-Za-z0-9_]{0,39}$`. Your payload must satisfy both the field limits and the total body limit. No automatic append or stored history is provided: your integration supplies the rolling series each time. There is one current snapshot per feed, persisted across server restarts. Treat concurrent writers as last successful write wins; there is no compare-and-swap or ordering by source time.
 
 Maximum **60 attempted authorized updates per minute per feed**, shared by all its tokens. Validation failures after authentication also consume that budget. HTTP `429` includes `Retry-After` in seconds. Keep a regular integration at 15-second or slower cadence unless faster ingestion is needed; players usually fetch every 15 seconds, so more writes do not imply faster screen refresh.
 
@@ -186,7 +226,7 @@ These endpoints are for the OpenFrame UI or a trusted operator session, **not** 
 | `GET /api/data-feeds/openapi.json` | Public machine-readable contract; no authentication. |
 | `GET /api/data-feeds/guide` | Public downloadable copy of this guide; no credentials. |
 | `GET / POST /api/data-feeds/applications` | Admin list/create `{name,managingGroupId?:UUID|null}`; metadata includes `id`, `createdAt`, and `feedCount`. |
-| `DELETE /api/data-feeds/applications/{id}` | Admin deletes an application with no feeds and its keys; 409 `APPLICATION_IN_USE` otherwise. |
+| `DELETE /api/data-feeds/applications/{id}` | Admin deletes an application with no feeds and its keys; 409 `APPLICATION_IN_USE` otherwise unless `disconnectWidgets=true` explicitly deletes its feeds and disconnects widgets too. |
 | `GET / POST /api/data-feeds/applications/{id}/tokens` | Admin lists key metadata or generates a key with `{name,expiresInDays?:90}`; POST returns one-time `token`. |
 | `DELETE /api/data-feeds/applications/{id}/tokens/{tokenId}` | Admin revokes an application key. |
 | `POST /api/data-feeds/ingest/{sourceKey}` | Application-key authentication; automatically creates/extends a scoped feed and merges named metric values. |
@@ -194,7 +234,7 @@ These endpoints are for the OpenFrame UI or a trusted operator session, **not** 
 | `POST /api/data-feeds` | Create `{name, managingGroupId: UUID or null, fields:[{key,type}]}`. Returns 201 metadata. |
 | `GET /api/data-feeds/{id}` | View feed metadata. |
 | `PUT /api/data-feeds/{id}` | Edit name/management using the same creation shape; fields must remain identical. Edit permission required. |
-| `DELETE /api/data-feeds/{id}` | Delete an unused feed and tokens. Refused with 409 `FEED_IN_USE` while referenced by drafts or published playlists. |
+| `DELETE /api/data-feeds/{id}` | Delete an unused feed and tokens. Refused with 409 `FEED_IN_USE` while referenced by drafts or published playlists unless an administrator explicitly supplies `disconnectWidgets=true`; see [widget-preserving deletion and reset](https://github.com/veRoduS/OpenFrame/blob/main/docs/data-connection-reset.md). |
 | `GET /api/data-feeds/{id}/data` | View `{revision,updatedAt,data,status}`. `status` is `empty` before the first write, otherwise `ready`. |
 | `GET /api/data-feeds/{id}/tokens` | Edit permission required. Metadata only; no token/hash. |
 | `POST /api/data-feeds/{id}/tokens` | Edit permission required. Body `{name,expiresInDays:90}`. Returns 201 metadata plus one-time `token`. |

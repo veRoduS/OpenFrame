@@ -1,5 +1,9 @@
 # Application metrics API — one-page guide
 
+For one key updating several stores (server 0.30.3+), use the
+[SMCC multi-store handoff](smcc-integration-update.md). This page describes the
+original per-store method, which remains supported.
+
 **Requires:** OpenFrame server 0.23.2+ (included in milestone 0.24.0). Existing data-widget players need no upgrade. An admin creates an application once in **Settings → Data feeds → New application**, chooses its managing group, then generates an **application API key**. Copy the one-time key and keep it in the application's secret configuration. No per-metric setup is required on OpenFrame.
 
 ## Request format
@@ -49,7 +53,7 @@ Successful JSON responses contain `applicationId`, `sourceKey`, `feedId`, `field
 
 Existing field types cannot change. New chart fields require a nonempty array. Each chart value replaces that field's whole array; points are not appended automatically. Strings and booleans are unsupported. Numbers must be finite and within ±1 trillion. Time series allow 240 points with unique, increasing ISO timestamps; categories allow 40 entries with unique, trimmed labels of 1–60 characters.
 
-**Limits:** source names match `[A-Za-z0-9][A-Za-z0-9_-]{0,79}` and are case-sensitive; metric names match `[A-Za-z][A-Za-z0-9_]{0,39}`. Send 1–20 metrics per request, with at most 20 fields per feed and 32 KiB per body. Use another source for more fields. The server allows 200 total feeds; each application/site shares a 60-call/minute budget across its keys and sources, with a 600-call/minute application ceiling.
+**Limits:** source names match `[A-Za-z0-9][A-Za-z0-9_-]{0,79}` and are case-sensitive; metric names match `[A-Za-z][A-Za-z0-9_]{0,39}`. The default is 100 fields per feed; administrators can set 1–500 under Settings → Data feeds → Feed limits (server 0.32.0+). Bodies remain limited to 32 KiB. Existing wider feeds continue accepting value updates after lowering the setting. Use another source for more fields. The server allows 200 total feeds; each application/site shares a 60-call/minute budget across its keys and sources, with a 600-call/minute application ceiling.
 
 ## Errors and key lifecycle
 

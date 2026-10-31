@@ -1,7 +1,9 @@
 import { KeyExpiryFields, KeyExpiryEditor } from './api-key-expiry';
 import { useSiteFilter } from './hooks/use-site-filter';
 import { useEffect, useId, useRef, useState } from 'react';
+import { DataFeedLimitSettings } from './data-feed-limit-settings';
 import { DataFeedApplications } from './data-feed-applications';
+import { DataFeedResetButton } from './data-feed-reset';
 import {
   DataCardOptions,
   DataCardStylePicker,
@@ -95,6 +97,8 @@ export function DataFeeds({
   onRefresh: () => Promise<void>;
   onAccess: (resource: SharedResource) => void;
 }) {
+  const [applicationRevision, setApplicationRevision] = useState(0);
+  const [maxFieldsPerFeed, setMaxFieldsPerFeed] = useState(100);
   const [query, setQuery] = useState('');
   const [filterSite, setFilterSite] = useSiteFilter('metrics', userId, sites);
   const [createSite, setCreateSite] = useState('');
@@ -211,6 +215,62 @@ export function DataFeeds({
       setError('Clipboard unavailable. Select and copy the text.');
     }
   }
+  const visibleFeeds = feeds.filter(
+    (feed) =>
+      (!filterSite ||
+        (filterSite === 'unassigned'
+          ? !feed.siteId
+          : feed.siteId === filterSite)) &&
+      `${feed.name} ${feed.applicationName || ''} ${feed.siteNumber || ''} ${sites.find((site) => site.id === feed.siteId)?.name || ''}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  );
+  const integrations = new Map<string, DataFeed[]>();
+  for (const feed of visibleFeeds) {
+    if (!feed.applicationId) continue;
+    integrations.set(feed.applicationId, [
+      ...(integrations.get(feed.applicationId) || []),
+      feed,
+    ]);
+  }
+  const feedRow = (feed: DataFeed) => (
+    <article key={feed.id}>
+      <button
+        className="data-feed-open"
+        onClick={() => {
+          setSecret('');
+          setLegacySite('');
+          setSelected(feed);
+        }}
+      >
+        <Database size={22} />
+        <span>
+          <strong>
+            {feed.name}
+            {feed.siteNumber ? ` · Site ${feed.siteNumber}` : ''}
+          </strong>
+          <small>
+            {feed.fields.length} {feed.fields.length === 1 ? 'field' : 'fields'}{' '}
+            · {feed.readOnly ? 'View only' : 'Can edit'}
+            {feed.updatedAt
+              ? ` · Updated ${new Date(feed.updatedAt).toLocaleString()}`
+              : ' · Waiting for first update'}
+          </small>
+        </span>
+      </button>
+      <ManageAccessButton
+        resourceName={feed.name}
+        tags={feed.accessTags}
+        onClick={() =>
+          onAccess({
+            kind: 'data-feed',
+            id: feed.id,
+            name: feed.name,
+          })
+        }
+      />
+    </article>
+  );
   return (
     <section className="data-feeds-page" aria-labelledby="data-feeds-heading">
       <h2 id="data-feeds-heading">Data feeds</h2>
@@ -218,7 +278,24 @@ export function DataFeeds({
         Connect an application with an API key and send data to metrics,
         progress bars, graphs, and charts across your slides.
       </p>
-      {isAdmin && <DataFeedApplications groups={groups} />}
+      {isAdmin && (
+        <DataFeedApplications
+          key={applicationRevision}
+          groups={groups}
+          onRefresh={onRefresh}
+        />
+      )}
+      {isAdmin && <DataFeedLimitSettings onChange={setMaxFieldsPerFeed} />}
+      {isAdmin && (
+        <DataFeedResetButton
+          onComplete={async () => {
+            setSelected(null);
+            setSecret('');
+            setApplicationRevision((value) => value + 1);
+            await onRefresh();
+          }}
+        />
+      )}
       <div className="data-feed-toolbar">
         <label>
           Site
@@ -271,54 +348,69 @@ export function DataFeeds({
       )}
       {!!feeds.length && (
         <div className="data-feed-list">
-          {feeds
-            .filter(
-              (feed) =>
-                !filterSite ||
-                (filterSite === 'unassigned'
-                  ? !feed.siteId
-                  : feed.siteId === filterSite),
-            )
-            .filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
-            .map((feed) => (
-              <article key={feed.id}>
-                <button
-                  className="data-feed-open"
-                  onClick={() => {
-                    setSecret('');
-                    setLegacySite('');
-                    setSelected(feed);
-                  }}
-                >
-                  <Database size={22} />
-                  <span>
-                    <strong>
-                      {feed.name}
-                      {feed.siteNumber ? ` · Site ${feed.siteNumber}` : ''}
-                    </strong>
-                    <small>
-                      {feed.fields.length}{' '}
-                      {feed.fields.length === 1 ? 'field' : 'fields'} ·{' '}
-                      {feed.readOnly ? 'View only' : 'Can edit'}
-                      {feed.updatedAt
-                        ? ` · Updated ${new Date(feed.updatedAt).toLocaleString()}`
-                        : ' · Waiting for first update'}
-                    </small>
-                  </span>
-                </button>
-                <ManageAccessButton
-                  resourceName={feed.name}
-                  tags={feed.accessTags}
-                  onClick={() =>
-                    onAccess({
-                      kind: 'data-feed',
-                      id: feed.id,
-                      name: feed.name,
-                    })
-                  }
-                />
-              </article>
-            ))}
+          {[...integrations].map(([applicationId, items]) => {
+            const storeIds = [
+              ...new Set(items.map((feed) => feed.siteId || 'unassigned')),
+            ].sort((a, b) =>
+              (
+                sites.find((site) => site.id === a)?.siteNumber || '~'
+              ).localeCompare(
+                sites.find((site) => site.id === b)?.siteNumber || '~',
+                undefined,
+                { numeric: true },
+              ),
+            );
+            return (
+              <details
+                className="data-feed-integration"
+                key={applicationId}
+                open={!!filterSite || !!query || storeIds.length === 1}
+              >
+                <summary>
+                  <strong>
+                    {items[0].applicationName || items[0].name.split(' · ')[0]}
+                  </strong>
+                  <small>
+                    {storeIds.length}{' '}
+                    {storeIds.length === 1 ? 'store' : 'stores'} ·{' '}
+                    {new Set(items.map((feed) => feed.sourceKey)).size} sources
+                  </small>
+                </summary>
+                {storeIds.map((id) => {
+                  const storeFeeds = items
+                    .filter((feed) => (feed.siteId || 'unassigned') === id)
+                    .sort((a, b) =>
+                      (a.sourceKey || a.name).localeCompare(
+                        b.sourceKey || b.name,
+                      ),
+                    );
+                  const site = sites.find((site) => site.id === id);
+                  return (
+                    <section
+                      className="data-feed-store"
+                      key={id}
+                      aria-label={
+                        site ? `Store ${site.siteNumber}` : 'Unassigned feeds'
+                      }
+                    >
+                      <h3>
+                        {site
+                          ? `${site.siteNumber} · ${site.name}`
+                          : storeFeeds[0].siteNumber
+                            ? `Store ${storeFeeds[0].siteNumber}`
+                            : 'Unassigned feeds'}
+                      </h3>
+                      {storeFeeds.map(feedRow)}
+                    </section>
+                  );
+                })}
+              </details>
+            );
+          })}
+          {visibleFeeds.filter((feed) => !feed.applicationId).map(feedRow)}
+          {!visibleFeeds.length && (
+            <p className="muted">No feeds match these filters.</p>
+          )}
         </div>
       )}
       <p>
@@ -532,7 +624,7 @@ export function DataFeeds({
               <button
                 type="button"
                 className="ghost"
-                disabled={fields.length >= 20}
+                disabled={fields.length >= maxFieldsPerFeed}
                 onClick={() =>
                   setFields([...fields, { key: '', type: 'number' }])
                 }
@@ -871,7 +963,13 @@ export function DataFeeds({
                 <div className="data-feed-actions">
                   {deleting ? (
                     <>
-                      <span>Delete feed and all its API keys?</span>
+                      <span>
+                        Delete this feed and its feed-specific API keys? Widgets
+                        keep their layout and settings and become disconnected.
+                        Application keys remain active and can recreate a feed
+                        on the next push; delete the application for a complete
+                        reset.
+                      </span>
                       <button
                         className="ghost"
                         disabled={busy}
@@ -883,10 +981,14 @@ export function DataFeeds({
                         disabled={busy}
                         onClick={() =>
                           void run(async () => {
-                            await api(base, 'DELETE');
+                            await api(
+                              `${base}?disconnectWidgets=true`,
+                              'DELETE',
+                            );
                             await onRefresh();
                             setSelected(null);
                             setSecret('');
+                            setApplicationRevision((value) => value + 1);
                           })
                         }
                       >
@@ -1111,23 +1213,41 @@ export function DataWidgetOptions({
               const f = source
                 ? source.example
                 : feeds.find((v) => v.id === e.target.value);
+              if (!f) {
+                patch({ feedId: null, siteBinding: undefined });
+                return;
+              }
+              const compatible = (key: string | undefined, type: string) =>
+                f.fields.some(
+                  (field) => field.key === key && field.type === type,
+                )
+                  ? key || ''
+                  : '';
               patch({
-                feedId: f?.id || null,
+                feedId: f.id,
                 siteBinding: source
                   ? {
                       applicationId: source.applicationId,
                       sourceKey: source.sourceKey,
                     }
                   : undefined,
-                field: f?.fields.find((v) => v.type === expected)?.key || '',
-                targetField: '',
+                field:
+                  compatible(config.field, expected) ||
+                  f.fields.find((value) => value.type === expected)?.key ||
+                  '',
+                targetField: compatible(config.targetField, 'number'),
                 ...(config.card
                   ? {
                       card: {
                         ...config.card,
-                        deltaField: '',
-                        rowDeltaField: '',
-                        rowOffset: 0,
+                        deltaField: compatible(
+                          config.card.deltaField,
+                          'number',
+                        ),
+                        rowDeltaField: compatible(
+                          config.card.rowDeltaField,
+                          'categories',
+                        ),
                       },
                     }
                   : {}),
@@ -1151,6 +1271,12 @@ export function DataWidgetOptions({
             )}
           </select>
         </label>
+        {!config.feedId && (
+          <p className="muted">
+            This widget is disconnected. Its layout and settings are saved.
+            Choose a replacement feed when your integration is ready.
+          </p>
+        )}
         {config.siteBinding && (
           <p className="muted">
             Each screen shows this source from its own store. Fields come from{' '}

@@ -161,3 +161,34 @@ the new player accepts them and older servers. Earlier servers reject the new
 layout on authoring writes, so select Horizontal or Vertical before saving to a
 downgraded server. The shared renderer adds no requests, timers or subscriptions
 and keeps the one-visible/one-prepared-frame budget.
+
+Server **0.30.1** fixes publication authorization for saved store-relative
+widgets, including shared store-group audiences, store-user publishers, slide
+refreshes and inherited fork updates. The example feed supplies source/field
+validation during publication, while actual local feed permissions remain
+enforced by preview/sync resolution. Fixed-feed checks and new/edited widget
+authorization are unchanged. No sync/manifest fields, player code, timers or
+resource budgets change; this correction needs only a server update and no APK.
+
+Server **0.30.2** adds explicit data-connection deletion/reset that preserves
+widgets as `feedId:null` without a site binding, including published snapshots.
+The existing data schema already permits null feed IDs; schema 4, sync and
+ingestion formats are unchanged. Existing renderers show Waiting for data.
+New publication revisions and empty feed snapshot maps clear old metric values
+on the next successful sync. No player code, timers or frame budgets change,
+and no APK update is required. Offline devices retain their existing content
+until they reconnect. Authoring validation permits intentionally unbound widgets
+while still rejecting invalid non-null feed IDs and relative bindings with no
+example feed.
+
+Server 0.30.3 adds central store-batch ingestion and groups feeds by integration.
+It materializes the same per-site/source feeds used by existing relative widget
+bindings, without changing manifests, snapshots, or installed player code.
+Existing single-store keys retain their original endpoint and semantics. Player
+0.15.5 remains compatible; this server change needs no new APK.
+
+Local server revision 0.31.1 raises the default feed field limit to 100 and lets
+administrators set 1–500. Metadata may list more fields; published manifests and
+player snapshots keep their existing formats and complete-feed delivery.
+Existing wider feeds retain their fields and accept value updates if the setting
+is lowered. Player 0.15.5 remains compatible; no APK change is required.

@@ -219,6 +219,23 @@ images return 400 and oversized files return 413. Video limits are unchanged.
 
 ## Site assignment and shared metrics
 
+Server **0.30.2** adds administrator [connection reset and widget-preserving
+delete](data-connection-reset.md) operations. Used feeds/applications can be
+deleted with `?disconnectWidgets=true`; the normal delete protections remain
+when that option is absent. A full reset requires a reviewed revision and typed
+confirmation. Disconnected data widgets use `feedId:null` without `siteBinding`,
+retain field/presentation settings, and may be saved or published. Published
+snapshots receive new revisions so players clear old values on their next sync.
+
+
+Server **0.30.1** corrects publication checks for data widgets with `siteBinding`.
+Recipients and publishers of saved slides need not view the example `feedId`;
+the server retains source/field validation and authoring access checks, then
+resolves and authorizes each actual local feed at preview/sync time. Fixed feeds
+still require viewing permission for every playlist recipient. Manifest schemas,
+bindings, ingestion methods and player requirements are unchanged.
+
+
 Server **0.29.7** adds optional [home workspaces](home-workspace.md) through
 `PATCH /api/account/home` and nullable `user.home` in `GET /api/auth`. This is a
 self-service preference for non-built-in admins; it does not alter their role or
@@ -305,3 +322,23 @@ holding resource access. Parent/sibling groups and direct shares cannot bypass
 this boundary. The gate is applied to library listings, direct feed requests,
 previews, screen mutations/commands, and device feed audiences. Without an access
 group, existing resource-sharing rules remain in effect.
+
+### Central store ingestion (server 0.30.3+)
+
+`POST /api/data-feeds/ingest-stores/:sourceKey` accepts a central application
+key and an atomic `stores` batch. Application key issuance accepts `siteIds`
+(1–200 distinct existing active site UUIDs) instead of `siteId`; metadata returns
+that selection or null for existing keys. Scope is immutable. Central keys are
+excluded from legacy assign-site operations. See the
+[SMCC handoff](smcc-integration-update.md) and
+[OpenAPI contract](../server/data-feeds.openapi.json).
+
+### Configurable field limit (server 0.32.0+)
+
+Administrator sessions read `GET /api/settings/data-feeds` and update
+`PUT /api/settings/data-feeds` with `{"maxFieldsPerFeed":100}`. The default is 100;
+allowed values are integers from 1 to 500. The persistent setting applies
+immediately to new manual feeds and application field creation. Existing wider
+feeds preserve data/schema and can update existing values after lowering it.
+Body sizes, table rows, series points, feed counts, rate limits and player
+delivery remain unchanged. See [the API guide](data-feeds-api.md).

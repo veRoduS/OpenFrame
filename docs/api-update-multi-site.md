@@ -1,5 +1,11 @@
 # OpenFrame API Update: Site-Scoped Metrics
 
+For **server 0.30.3+**, integrations can instead use one central application
+key and an atomic all-store batch. See the brief
+[SMCC integration update](smcc-integration-update.md). The per-store methods
+below remain supported unchanged; their body-routing restrictions apply to the
+original `/ingest/:sourceKey` endpoint.
+
 Developer migration bulletin • 30 October 2026
 
 **Audience:** Developers maintaining existing OpenFrame metric integrations. The
