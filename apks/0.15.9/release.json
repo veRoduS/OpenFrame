@@ -1,0 +1,64 @@
+{
+  "packageName": "org.openframe.player",
+  "versionName": "0.15.9",
+  "versionCode": 15009,
+  "minSdk": 28,
+  "size": 139463,
+  "sha256": "bd9d50bdbc0fb253f1f7fc89414ab75a1f53749a483a66e153be1c5e02ce7ab3",
+  "apkUrl": "/downloads/android/openframe-player-0.15.9.apk",
+  "sourceCommit": "afc895c31a824dc7b0b61ca4dacef68b4a81d3c8",
+  "signerSha256": "424fcf12c1a588a1207c773123b34296dd6cbc2af22a754ac7645f9e5480984a",
+  "compatibility": {
+    "protocols": {
+      "playerSync": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": [
+          1
+        ]
+      },
+      "playlistManifest": {
+        "server": [
+          2,
+          3,
+          4,
+          5
+        ],
+        "android": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "pi": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "androidUpdate": {
+        "server": [
+          1
+        ],
+        "android": [
+          1
+        ],
+        "pi": []
+      }
+    },
+    "reviewedWith": {
+      "server": "0.32.0",
+      "player": "0.15.9"
+    },
+    "impact": "compatible",
+    "summary": "Android PIN keyboard dismissal and kiosk menu presentation only; pairing, playback, signing and server/player protocols unchanged.",
+    "reviewedAt": "2026-10-31T17:49:24.966Z"
+  }
+}
