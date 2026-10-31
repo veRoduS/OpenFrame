@@ -173,3 +173,71 @@ enrollments without site numbers still require an administrator. See
 [site enrollment and shared metric layouts](sites.md).
 Existing approved screens need an upgraded player's heartbeat before their first
 site assignment. Changing local setup text does not move a paired screen.
+
+## Optional Kiosk Mode (player 0.15.6)
+
+Press **Back/Menu → Kiosk Mode**. Configure and confirm a 4–12 digit administrator
+PIN, then choose **Enable Kiosk Features**. All setup uses the APK, TV keyboard
+and remote. No device owner enrollment, developer options or ADB is required.
+Remember the PIN: there is no bypass/reset in the app. It protects kiosk and
+connection settings, power settings access and intentional exit. Android's Home,
+power and system controls remain available; this is not full device lockdown.
+
+Existing installations gain these features by installing the normally signed APK
+over the installed player. Do not uninstall or clear data. A separate additive
+kiosk preference schema leaves the server, name, site, update preferences,
+credentials and cached media untouched. Kiosk and boot startup default off. After
+pairing, a nonmodal **Kiosk Mode is now available** button offers **Configure now**
+and **Later**. Later dismisses it permanently; the menu remains available. Kiosk
+preferences, PIN and recovery limits survive subsequent updates and restarts.
+Reopening after the package installer uses the saved server and player storage.
+
+Home candidacy is initially disabled, including for upgraded players. Explicitly
+choosing Home configuration enables the candidate and opens Android Home settings.
+Select OpenFrame there if offered. Canceling does not select it. Reopen the kiosk
+menu after returning to see the resolved default Home status. Firmware without
+Home settings displays an explanation; use the ordinary launcher instead. Boot
+startup is labeled **Requested (firmware dependent)** rather than guaranteed:
+Android background launch restrictions, force-stop and vendor startup policy can
+prevent it. Choosing OpenFrame as Home can improve startup behavior where supported.
+
+Playback uses immersive fullscreen and keeps the display awake while visible.
+**Device sleep prevention** explains the observed inactivity timeout (or unknown
+status) and opens ordinary device power settings. Some firmware offers no Never
+option. Compatibility is conservatively **Partial** because this ordinary APK
+cannot establish full lockdown or guarantee startup on consumer Google TV.
+
+With kiosk recovery enabled, main-frame WebView failures and renderer termination
+schedule delayed reconstruction from the same saved player/cache. Automatic
+attempts are capped at three in ten minutes, persisted across restarts. Repeated
+failure leaves a manual Retry/Settings path rather than restarting indefinitely.
+Network sync already retries every 15 seconds while visible and retains the last
+complete cache offline. Process crashes are not automatically relaunched; reopen
+from Home. **Exit player**, after PIN verification, disables kiosk startup and the
+Home candidate and returns to the system launcher without deleting player data.
+
+### Onn Google TV physical acceptance (required before release)
+
+These checks have not been run on physical Onn hardware. Record model, Android
+version, WebView version, firmware build, APK version and signer for each run.
+Use only the remote and APK throughout:
+
+| Scenario | Expected result |
+| --- | --- |
+| Fresh install and pair | Optional notice after pairing; playback continues; kiosk off |
+| Update a paired pre-kiosk release using its updater | Same screen identity, server, name, site, update preferences and cached playlist; notice once |
+| Choose Later, relaunch, then update again | No repeated notice; Kiosk Mode remains in menu |
+| Configure/change PIN; wrong PIN five times | Matching numeric PIN required; wrong attempts rejected; 30-second cooldown |
+| Enable kiosk then restart/update | Settings/PIN retained; same playback session; no re-pairing |
+| Home selection accepted/canceled | Actual resolved Home reflected; cancellation leaves previous default |
+| Home settings absent or restricted | Explanation; ordinary launcher still usable |
+| Reboot and force-stop | Record actual startup behavior; never infer success from saved request |
+| Renderer failure / repeated failure | Cached session restored; bounded attempts and manual recovery path |
+| Wi-Fi outage and restoration | Cached playlist retained, sync resumes without re-enrollment |
+| Activity recreation / APK installer return and cancellation | Same saved session; pairing/cache intact |
+| Sleep timeout and 24-hour playback | Record inactivity, HDMI/CEC and power behavior; settings status accurate |
+| PIN-protected Exit and subsequent reopening | System Home usable; boot startup paused; pairing retained |
+
+Renderer termination and activity recreation also need Android instrumentation or
+a test firmware harness; ordinary remote operation cannot reliably inject them.
+The JVM PIN regression test does not establish TV navigation or OEM compatibility.

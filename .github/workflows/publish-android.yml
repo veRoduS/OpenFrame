@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths: ['player/version.json', 'player/android/app/build.gradle', '.github/workflows/publish-android.yml']
   workflow_dispatch:
+    inputs:
+      build_only:
+        description: Build a signed APK artifact without publishing
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -36,6 +41,7 @@ jobs:
           OPENFRAME_PYTHON: python3
       - name: Check whether this player version is already published
         id: existing
+        if: github.event_name == 'push' || !inputs.build_only
         run: |
           node --input-type=module <<'JS'
           import {readFileSync, appendFileSync} from 'node:fs';
@@ -91,7 +97,7 @@ jobs:
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-      - name: Build, verify, and publish the APK folder
+      - name: Build and verify the APK folder
         if: steps.existing.outputs.published != 'true'
         env:
           OPENFRAME_ANDROID_KEYSTORE: ${{ runner.temp }}/openframe-release.jks
@@ -99,7 +105,24 @@ jobs:
           OPENFRAME_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.OPENFRAME_ANDROID_KEY_ALIAS }}
           OPENFRAME_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.OPENFRAME_ANDROID_KEY_PASSWORD }}
           OPENFRAME_ANDROID_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm build:android
+          BUILD_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.build_only }}
+        run: |
+          if [ "$BUILD_ONLY" = "true" ]; then
+            pnpm build:android --local
+          else
+            pnpm build:android
+          fi
+      - name: Upload signed APK artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.build_only
+        uses: actions/upload-artifact@v4
+        with:
+          name: openframe-android-signed
+          path: |
+            outputs/android/*.apk
+            outputs/android/*.sha256
+            outputs/android/*-usb.zip
+          if-no-files-found: error
+          retention-days: 14
       - name: Remove the temporary signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/openframe-release.jks"
