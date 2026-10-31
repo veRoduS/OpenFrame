@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.15.9] - 2026-10-31
+
+- Dismiss PIN keypad on submit and simplify Android kiosk menus
+
 ## [0.15.8] - 2026-10-31
 
 - Fix remote update toggle, confirm Android Home selection, seed store PIN and dismiss kiosk notice

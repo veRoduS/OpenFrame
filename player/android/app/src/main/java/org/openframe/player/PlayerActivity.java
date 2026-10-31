@@ -587,14 +587,13 @@ public final class PlayerActivity extends Activity {
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
         boolean automatic = automaticUpdatesEnabled();
         new AlertDialog.Builder(this).setTitle("OpenFrame Player")
-                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Prevent device sleep", "Kiosk Mode", "Exit player"}, (dialog, which) -> {
+                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Kiosk Mode", "Exit player"}, (dialog, which) -> {
                     if (which == 1) authorize(this::setup);
                     if (which == 2) checkUpdates(true);
                     if (which == 3) chooseAutomaticUpdates();
                     if (which == 4) chooseUpdateSource();
-                    if (which == 5) authorize(this::showDeviceSleepSettings);
-                    if (which == 6) authorize(this::showKiosk);
-                    if (which == 7) authorize(this::exitKiosk);
+                    if (which == 5) authorize(this::showKiosk);
+                    if (which == 6) authorize(this::exitKiosk);
                 }).show();
     }
 
@@ -680,30 +679,49 @@ public final class PlayerActivity extends Activity {
     private void seedStorePin() {
         if (agent != null) kiosk.seedStorePin(agent.assignedStoreNumber());
     }
+    private void kioskAction(LinearLayout content, AlertDialog dialog, String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setOnClickListener(v -> { dialog.dismiss(); action.run(); });
+        content.addView(button);
+    }
     private void showKiosk() {
         seedStorePin();
-        String[] items = {"Kiosk Mode: " + (kiosk.enabled() ? "Enabled" : "Disabled"),
-            "Launch at startup: " + (kiosk.startup() ? "Requested (firmware dependent)" : "Disabled"),
-            "Default Home application: " + (isHome() ? "OpenFrame" : "Not configured"),
-            "Fullscreen playback: Enabled", "Automatic playback recovery: " + (kiosk.recovery() ? "Enabled" : "Disabled"),
-            "Device sleep prevention / Open settings", "Administrator PIN: " + (kiosk.prefs.contains("pin") ? "Change" : "Configure"),
-            "Device compatibility: Partial", "Enable Kiosk Features", "Return to playback"};
-        new AlertDialog.Builder(this).setTitle("OpenFrame — Kiosk Mode").setItems(items, (d,w) -> {
-            if (w == 0) { if (!kiosk.enabled()) { configurePinThenEnable(); return; } kiosk.prefs.edit().putBoolean("enabled", false).apply(); }
-            if (w == 1) kiosk.prefs.edit().putBoolean("startup", !kiosk.prefs.getBoolean("startup", false)).apply();
-            if (w == 2) openHomeSettings();
-            if (w == 4) kiosk.prefs.edit().putBoolean("recovery", !kiosk.prefs.getBoolean("recovery", true)).apply();
-            if (w == 5) showDeviceSleepSettings();
-            if (w == 6) configurePin();
-            if (w == 7) updateMessage("Partial kiosk support", "Home and boot startup depend on firmware. Home, power, system settings and other apps remain controlled by Android. OpenFrame does not provide full device lockdown.");
-            if (w == 8) configurePinThenEnable();
-            if (w == 0 || w == 1 || w == 4) showKiosk();
-        }).setNegativeButton("Back", null).show();
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        int inset = (int) (24 * getResources().getDisplayMetrics().density);
+        content.setPadding(inset, 0, inset, inset / 2);
+        TextView status = text("Kiosk mode: " + (kiosk.enabled() ? "Enabled" : "Disabled")
+                + "\nFullscreen playback: Enabled"
+                + "\nDevice compatibility: Partial — Android controls Home and startup; full device lockdown is unavailable.", 16);
+        status.setFocusable(false);
+        content.addView(status);
+        scroll.addView(content);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("OpenFrame — Kiosk Mode")
+                .setView(scroll).setNegativeButton("Return to playback", null).create();
+        kioskAction(content, dialog, kiosk.enabled() ? "Disable kiosk mode" : "Enable kiosk mode", () -> {
+            if (!kiosk.enabled()) { configurePinThenEnable(); return; }
+            kiosk.prefs.edit().putBoolean("enabled", false).apply();
+            showKiosk();
+        });
+        kioskAction(content, dialog, "Launch at startup: " + (kiosk.startup() ? "Requested (firmware dependent)" : "Disabled"), () -> {
+            kiosk.prefs.edit().putBoolean("startup", !kiosk.prefs.getBoolean("startup", false)).apply();
+            showKiosk();
+        });
+        kioskAction(content, dialog, "Default Home application: " + (isHome() ? "OpenFrame" : "Not configured") + " — Configure", this::openHomeSettings);
+        kioskAction(content, dialog, "Automatic playback recovery: " + (kiosk.recovery() ? "Enabled" : "Disabled"), () -> {
+            kiosk.prefs.edit().putBoolean("recovery", !kiosk.prefs.getBoolean("recovery", true)).apply();
+            showKiosk();
+        });
+        kioskAction(content, dialog, "Device sleep prevention — Open settings", this::showDeviceSleepSettings);
+        kioskAction(content, dialog, "Administrator PIN — " + (kiosk.prefs.contains("pin") ? "Change" : "Configure"), this::configurePin);
+        dialog.show();
     }
     private void configurePinThenEnable() {
         seedStorePin();
         if (!kiosk.prefs.contains("pin")) { configurePin(); return; }
-        new AlertDialog.Builder(this).setTitle("Enable Kiosk Features")
+        new AlertDialog.Builder(this).setTitle("Enable kiosk mode")
             .setMessage("Your initial PIN is the assigned store number, padded with leading zeros to at least four digits, unless you have changed it. Enable PIN protected settings, best effort boot startup and bounded playback recovery? Next, Android may let you choose OpenFrame as Home. Canceling Home selection leaves your existing Home unchanged. Check device sleep settings separately.")
             .setPositiveButton("Enable and choose Home", (d,w) -> {
                 kiosk.prefs.edit().putBoolean("enabled", true).putBoolean("startup", true).putBoolean("recovery", true).apply(); openHomeSettings();
@@ -714,13 +732,40 @@ public final class PlayerActivity extends Activity {
         EditText first = pinField("New PIN (4–20 digits)"); EditText second = pinField("Confirm PIN");
         fields.addView(first); fields.addView(second);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Administrator PIN")
-            .setMessage("Remember this PIN. There is no remote PIN reset. After saving, select Enable Kiosk Features.")
-            .setView(fields).setPositiveButton("Save", null).setNegativeButton("Cancel", null).create();
+            .setMessage("Remember this PIN. There is no remote PIN reset. After saving, choose Enable kiosk mode.")
+            .setView(fields).setPositiveButton("Save", null).setNegativeButton("Cancel", (d,w) -> hidePinKeyboard(second)).create();
         dialog.setOnShowListener(d -> dialog.getButton(-1).setOnClickListener(v -> {
             String pin = first.getText().toString();
             if (!pin.matches("[0-9]{4,20}") || !pin.equals(second.getText().toString())) { second.setError("PINs must match and contain 4–20 digits"); return; }
-            String salt = KioskPin.salt(); kiosk.prefs.edit().putString("salt", salt).putString("pin", KioskPin.hash(pin, salt)).apply(); dialog.dismiss(); showKiosk();
-        })); dialog.show();
+            String salt = KioskPin.salt(); kiosk.prefs.edit().putString("salt", salt).putString("pin", KioskPin.hash(pin, salt)).apply(); hidePinKeyboard(second); dialog.dismiss(); showKiosk();
+        }));
+        first.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        first.setOnEditorActionListener((view, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_NEXT) return false;
+            second.requestFocus();
+            return true;
+        });
+        bindPinSubmit(second, dialog);
+        dialog.show();
+    }
+    private void hidePinKeyboard(EditText input) {
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null && input.getWindowToken() != null)
+            keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+        input.clearFocus();
+    }
+    private void bindPinSubmit(EditText input, AlertDialog dialog) {
+        input.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        input.setOnEditorActionListener((view, action, event) -> {
+            boolean enter = event != null && (event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER);
+            if (action != EditorInfo.IME_ACTION_DONE && action != EditorInfo.IME_ACTION_GO && !enter) return false;
+            if (event == null || (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0))
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+        dialog.setOnCancelListener(d -> hidePinKeyboard(input));
+        dialog.setOnDismissListener(d -> hidePinKeyboard(input));
     }
     private EditText pinField(String hint) {
         EditText input = new EditText(this); input.setHint(hint); input.setSingleLine(true);
@@ -731,16 +776,23 @@ public final class PlayerActivity extends Activity {
         if (!kiosk.prefs.contains("pin")) { action.run(); return; }
         if (System.currentTimeMillis() < kiosk.prefs.getLong("pinBlockedUntil", 0)) { updateMessage("Try later", "Wait 30 seconds before trying the administrator PIN again."); return; }
         EditText input = pinField("Administrator PIN");
-        new AlertDialog.Builder(this).setTitle("Administrator PIN").setView(input)
-            .setPositiveButton("Unlock", (d,w) -> {
-                if (KioskPin.verify(input.getText().toString(), kiosk.prefs.getString("salt", ""), kiosk.prefs.getString("pin", ""))) {
-                    kiosk.prefs.edit().putInt("pinFailures", 0).apply(); action.run();
-                } else {
-                    int failures = kiosk.prefs.getInt("pinFailures", 0) + 1;
-                    kiosk.prefs.edit().putInt("pinFailures", failures % 5).putLong("pinBlockedUntil", failures >= 5 ? System.currentTimeMillis() + 30000 : 0).apply();
-                    updateMessage("Incorrect PIN", "Try again from the player menu.");
-                }
-            }).setNegativeButton("Cancel", null).show();
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Administrator PIN").setView(input)
+            .setPositiveButton("Unlock", null).setNegativeButton("Cancel", (d,w) -> hidePinKeyboard(input)).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            boolean verified = KioskPin.verify(input.getText().toString(), kiosk.prefs.getString("salt", ""), kiosk.prefs.getString("pin", ""));
+            hidePinKeyboard(input);
+            dialog.dismiss();
+            if (verified) {
+                kiosk.prefs.edit().putInt("pinFailures", 0).apply();
+                action.run();
+            } else {
+                int failures = kiosk.prefs.getInt("pinFailures", 0) + 1;
+                kiosk.prefs.edit().putInt("pinFailures", failures % 5).putLong("pinBlockedUntil", failures >= 5 ? System.currentTimeMillis() + 30000 : 0).apply();
+                updateMessage("Incorrect PIN", "Try again from the player menu.");
+            }
+        }));
+        bindPinSubmit(input, dialog);
+        dialog.show();
     }
     private void exitKiosk() {
         new AlertDialog.Builder(this).setTitle("Exit player")

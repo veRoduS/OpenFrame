@@ -289,3 +289,19 @@ Physical acceptance additions: toggle automatic checks on/off and reopen the
 menu/restart on both update sources; confirm canceled and accepted Home-role
 requests and test the remote Home key; check store 7 uses 0007 and an existing PIN
 survives updating; time the notice dismissal and verify menu access afterward.
+
+### Kiosk menu and PIN entry (player 0.15.9)
+
+Pressing the keypad Done/Enter key submits the administrator PIN and dismisses
+the keypad before opening the next menu. Unlock and Cancel also dismiss it.
+When changing a PIN, Next moves to confirmation and Done saves matching PINs.
+
+Kiosk Mode now shows fullscreen and device compatibility as non-selectable status
+text above the controls. There is one Enable/Disable kiosk mode action; the
+redundant Enable Kiosk Features entry is removed. Device sleep prevention lives
+in Kiosk Mode rather than the main playback menu. The startup, Home, recovery
+and PIN controls remain available, with Return to playback below them.
+
+On a physical Onn TV, verify Done, remote Enter, Unlock, Cancel and Back dismiss
+the keypad; invalid PINs still fail; scrolling and focus skip status text; sleep
+settings remain reachable from Kiosk Mode; enabling and disabling still persist.
