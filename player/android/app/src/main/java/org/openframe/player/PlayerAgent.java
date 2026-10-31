@@ -35,6 +35,8 @@ final class PlayerAgent {
     private volatile long playbackAt;
     private String error, verifiedRevision;
     private final String siteNumber;
+    private volatile String assignedStoreNumber = "";
+    String assignedStoreNumber() { return assignedStoreNumber; }
     private boolean connected;
     private long lastContact;
 
@@ -271,6 +273,9 @@ final class PlayerAgent {
     }
 
     private void publish() throws Exception {
+        // Native-only assignment, confirmed by the server; never use the requested setup number.
+        assignedStoreNumber = state.optBoolean("approved") && !state.isNull("siteId")
+                ? state.optString("siteNumber", "") : "";
         // Explicit allowlist: never expose tokens or the configured server to page scripts.
         JSONObject visible = new JSONObject();
         for (String key : new String[]{"approved", "code", "blank", "rotation", "manifest", "weather", "dataFeeds", "generation"}) {

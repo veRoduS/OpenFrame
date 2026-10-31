@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
     <application
         android:label="OpenFrame Player"
         android:icon="@drawable/icon"
@@ -16,7 +22,7 @@
         android:supportsRtl="true">
         <provider android:name=".UpdateProvider" android:authorities="${applicationId}.updates"
             android:exported="false" android:grantUriPermissions="true" />
-        <activity android:name=".PlayerActivity" android:exported="true"
+        <activity android:name=".PlayerActivity" android:exported="true" android:launchMode="singleTask"
             android:screenOrientation="landscape"
             android:configChanges="keyboardHidden|orientation|screenSize">
             <intent-filter>

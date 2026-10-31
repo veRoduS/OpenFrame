@@ -6,6 +6,11 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
 final class KioskPin {
+    static String fromStoreNumber(String number) {
+        String value = number == null ? "" : number.trim();
+        if (!value.matches("[0-9]{1,20}")) return null;
+        return value.length() < 4 ? ("0000" + value).substring(value.length()) : value;
+    }
     static String salt() {
         byte[] bytes = new byte[16];
         new SecureRandom().nextBytes(bytes);

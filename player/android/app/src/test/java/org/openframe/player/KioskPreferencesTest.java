@@ -24,6 +24,19 @@ public class KioskPreferencesTest {
                     return null;
                 });
     }
+    @Test public void initialStorePinDoesNotReplaceAnAdministratorPin() {
+        KioskPreferences config = new KioskPreferences(storage());
+        assertTrue(config.seedStorePin("42"));
+        String hash = (String) values.get("pin");
+        assertTrue(KioskPin.verify("0042", (String) values.get("salt"), hash));
+        assertFalse(config.seedStorePin("999"));
+        assertEquals(hash, values.get("pin"));
+    }
+    @Test public void missingAssignmentDoesNotInventAPin() {
+        KioskPreferences config = new KioskPreferences(storage());
+        assertFalse(config.seedStorePin(""));
+        assertFalse(values.containsKey("pin"));
+    }
     @Test public void freshInstallIsOptIn() {
         KioskPreferences config = new KioskPreferences(storage());
         assertFalse(config.enabled()); assertFalse(config.startup()); assertFalse(config.recovery());

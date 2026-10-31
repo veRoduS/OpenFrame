@@ -257,3 +257,35 @@ player startup, then six hours after a successful check. Failed checks retry in
 about one minute while playback is open. Returning from Home retains the due time.
 **Check for updates** always bypasses the automatic cooldown. Check the selected
 update source and Internet access to GitHub if that manual check reports an error.
+
+### Remote controls and kiosk refinements (player 0.15.8)
+
+**Automatic updates** now shows a **Turn on / Turn off** button and the current
+saved state. Earlier versions combined an explanation with an Android choice
+list; Android could hide the choices, leaving checks off. This was independent
+of choosing GitHub or This server. Either source supports automatic checks.
+
+Home configuration now requests Android's Home role when available and checks
+whether Android retained the selection on return. If selection was canceled or
+firmware refused it, the player explains that Home is not configured. Android TV
+firmware can still route the remote Home button to Google TV; the APK cannot
+force a replacement launcher. Test the remote Home button on the actual device.
+
+When first opening kiosk settings, an unset administrator PIN defaults to the
+server-confirmed assigned store number, padded with leading zeros to at least
+four digits (store 42 → 0042). Existing configured PINs are preserved, including
+across store reassignment and APK updates. A device without a confirmed store
+number still offers manual PIN configuration. Store-based PINs are predictable;
+an administrator can change the PIN under Kiosk Mode. Manual PINs accept 4–20
+digits to accommodate store numbers. The enrollment form's unconfirmed requested
+site number is never used as the default PIN.
+
+The bottom-right kiosk availability notice disappears after eight seconds. This
+acts like Later and does not reappear on future launches; Kiosk Mode remains in
+the Back/Menu menu. Selecting the notice opens Configure now/Later without a timer
+closing that dialog.
+
+Physical acceptance additions: toggle automatic checks on/off and reopen the
+menu/restart on both update sources; confirm canceled and accepted Home-role
+requests and test the remote Home key; check store 7 uses 0007 and an existing PIN
+survives updating; time the notice dismissal and verify menu access afterward.

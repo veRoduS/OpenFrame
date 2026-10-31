@@ -81,6 +81,21 @@ public class PlayerAgentTest {
         assertEquals(1, enrollments.get());
     }
 
+    @Test public void kioskStoreNumberUsesConfirmedAssignmentAndSurvivesReopen() throws Exception {
+        PlayerAgent player = new PlayerAgent(temp.getRoot(), origin, "TV", "0.15.8", "999");
+        player.tick();
+        assertEquals("", player.assignedStoreNumber());
+        publish("assigned", PlayerAgent.sha256(image));
+        response.put("siteId", "site-a").put("siteNumber", "42").put("siteRevision", 1);
+        player.tick();
+        assertEquals("42", player.assignedStoreNumber());
+        assertEquals("42", agent().assignedStoreNumber());
+        assertFalse(player.snapshot().contains("siteNumber"));
+        response.put("approved", false);
+        player.tick();
+        assertEquals("", player.assignedStoreNumber());
+    }
+
     @Test public void enrollmentIncludesSiteAndKeepsIdentity() throws Exception {
         PlayerAgent player = new PlayerAgent(temp.getRoot(), origin, "North TV", "0.15.1", "001");
         player.tick();

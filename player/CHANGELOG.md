@@ -4,6 +4,10 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
+## [0.15.8] - 2026-10-31
+
+- Fix remote update toggle, confirm Android Home selection, seed store PIN and dismiss kiosk notice
+
 ## [0.15.7] - 2026-10-31
 
 - Fix automatic update cooldown after failed checks and restore startup checks
