@@ -122,7 +122,10 @@ export function createAudit(db) {
           .map((c) => c.name)
           .filter(
             (name) =>
-              !(table === 'data_feed_application_tokens' && name === 'siteId'),
+              !(
+                table === 'data_feed_application_tokens' &&
+                ['siteId', 'siteIds'].includes(name)
+              ),
           );
         if (!columns.length) continue;
         const row = (prefix) =>

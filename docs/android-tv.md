@@ -173,3 +173,135 @@ enrollments without site numbers still require an administrator. See
 [site enrollment and shared metric layouts](sites.md).
 Existing approved screens need an upgraded player's heartbeat before their first
 site assignment. Changing local setup text does not move a paired screen.
+
+## Optional Kiosk Mode (player 0.15.6)
+
+Press **Back/Menu → Kiosk Mode**. Configure and confirm a 4–12 digit administrator
+PIN, then choose **Enable Kiosk Features**. All setup uses the APK, TV keyboard
+and remote. No device owner enrollment, developer options or ADB is required.
+Remember the PIN: there is no bypass/reset in the app. It protects kiosk and
+connection settings, power settings access and intentional exit. Android's Home,
+power and system controls remain available; this is not full device lockdown.
+
+Existing installations gain these features by installing the normally signed APK
+over the installed player. Do not uninstall or clear data. A separate additive
+kiosk preference schema leaves the server, name, site, update preferences,
+credentials and cached media untouched. Kiosk and boot startup default off. After
+pairing, a nonmodal **Kiosk Mode is now available** button offers **Configure now**
+and **Later**. Later dismisses it permanently; the menu remains available. Kiosk
+preferences, PIN and recovery limits survive subsequent updates and restarts.
+Reopening after the package installer uses the saved server and player storage.
+
+Home candidacy is initially disabled, including for upgraded players. Explicitly
+choosing Home configuration enables the candidate and opens Android Home settings.
+Select OpenFrame there if offered. Canceling does not select it. Reopen the kiosk
+menu after returning to see the resolved default Home status. Firmware without
+Home settings displays an explanation; use the ordinary launcher instead. Boot
+startup is labeled **Requested (firmware dependent)** rather than guaranteed:
+Android background launch restrictions, force-stop and vendor startup policy can
+prevent it. Choosing OpenFrame as Home can improve startup behavior where supported.
+
+Playback uses immersive fullscreen and keeps the display awake while visible.
+**Device sleep prevention** explains the observed inactivity timeout (or unknown
+status) and opens ordinary device power settings. Some firmware offers no Never
+option. Compatibility is conservatively **Partial** because this ordinary APK
+cannot establish full lockdown or guarantee startup on consumer Google TV.
+
+With kiosk recovery enabled, main-frame WebView failures and renderer termination
+schedule delayed reconstruction from the same saved player/cache. Automatic
+attempts are capped at three in ten minutes, persisted across restarts. Repeated
+failure leaves a manual Retry/Settings path rather than restarting indefinitely.
+Network sync already retries every 15 seconds while visible and retains the last
+complete cache offline. Process crashes are not automatically relaunched; reopen
+from Home. **Exit player**, after PIN verification, disables kiosk startup and the
+Home candidate and returns to the system launcher without deleting player data.
+
+### Onn Google TV physical acceptance (required before release)
+
+These checks have not been run on physical Onn hardware. Record model, Android
+version, WebView version, firmware build, APK version and signer for each run.
+Use only the remote and APK throughout:
+
+| Scenario | Expected result |
+| --- | --- |
+| Fresh install and pair | Optional notice after pairing; playback continues; kiosk off |
+| Update a paired pre-kiosk release using its updater | Same screen identity, server, name, site, update preferences and cached playlist; notice once |
+| Choose Later, relaunch, then update again | No repeated notice; Kiosk Mode remains in menu |
+| Configure/change PIN; wrong PIN five times | Matching numeric PIN required; wrong attempts rejected; 30-second cooldown |
+| Enable kiosk then restart/update | Settings/PIN retained; same playback session; no re-pairing |
+| Home selection accepted/canceled | Actual resolved Home reflected; cancellation leaves previous default |
+| Home settings absent or restricted | Explanation; ordinary launcher still usable |
+| Reboot and force-stop | Record actual startup behavior; never infer success from saved request |
+| Renderer failure / repeated failure | Cached session restored; bounded attempts and manual recovery path |
+| Wi-Fi outage and restoration | Cached playlist retained, sync resumes without re-enrollment |
+| Activity recreation / APK installer return and cancellation | Same saved session; pairing/cache intact |
+| Sleep timeout and 24-hour playback | Record inactivity, HDMI/CEC and power behavior; settings status accurate |
+| PIN-protected Exit and subsequent reopening | System Home usable; boot startup paused; pairing retained |
+
+Renderer termination and activity recreation also need Android instrumentation or
+a test firmware harness; ordinary remote operation cannot reliably inject them.
+The JVM PIN regression test does not establish TV navigation or OEM compatibility.
+
+### Automatic update troubleshooting
+
+Automatic updates means automatic **availability checks**, followed by a notice;
+Android still requires **Check for updates → Download and install** and installer
+confirmation. Enable checks under **Back/Menu → Automatic updates → On**; the
+default is Off. That dialog also shows the last check result, including failures.
+A player on the latest published version will not display an update notice.
+
+Player 0.15.7 fixes a cooldown issue in 0.15.6 and earlier: unsuccessful
+or canceled checks could suppress another automatic attempt for six hours, and
+returning from Home could postpone the next attempt further. Checks now run on
+player startup, then six hours after a successful check. Failed checks retry in
+about one minute while playback is open. Returning from Home retains the due time.
+**Check for updates** always bypasses the automatic cooldown. Check the selected
+update source and Internet access to GitHub if that manual check reports an error.
+
+### Remote controls and kiosk refinements (player 0.15.8)
+
+**Automatic updates** now shows a **Turn on / Turn off** button and the current
+saved state. Earlier versions combined an explanation with an Android choice
+list; Android could hide the choices, leaving checks off. This was independent
+of choosing GitHub or This server. Either source supports automatic checks.
+
+Home configuration now requests Android's Home role when available and checks
+whether Android retained the selection on return. If selection was canceled or
+firmware refused it, the player explains that Home is not configured. Android TV
+firmware can still route the remote Home button to Google TV; the APK cannot
+force a replacement launcher. Test the remote Home button on the actual device.
+
+When first opening kiosk settings, an unset administrator PIN defaults to the
+server-confirmed assigned store number, padded with leading zeros to at least
+four digits (store 42 → 0042). Existing configured PINs are preserved, including
+across store reassignment and APK updates. A device without a confirmed store
+number still offers manual PIN configuration. Store-based PINs are predictable;
+an administrator can change the PIN under Kiosk Mode. Manual PINs accept 4–20
+digits to accommodate store numbers. The enrollment form's unconfirmed requested
+site number is never used as the default PIN.
+
+The bottom-right kiosk availability notice disappears after eight seconds. This
+acts like Later and does not reappear on future launches; Kiosk Mode remains in
+the Back/Menu menu. Selecting the notice opens Configure now/Later without a timer
+closing that dialog.
+
+Physical acceptance additions: toggle automatic checks on/off and reopen the
+menu/restart on both update sources; confirm canceled and accepted Home-role
+requests and test the remote Home key; check store 7 uses 0007 and an existing PIN
+survives updating; time the notice dismissal and verify menu access afterward.
+
+### Kiosk menu and PIN entry (player 0.15.9)
+
+Pressing the keypad Done/Enter key submits the administrator PIN and dismisses
+the keypad before opening the next menu. Unlock and Cancel also dismiss it.
+When changing a PIN, Next moves to confirmation and Done saves matching PINs.
+
+Kiosk Mode now shows fullscreen and device compatibility as non-selectable status
+text above the controls. There is one Enable/Disable kiosk mode action; the
+redundant Enable Kiosk Features entry is removed. Device sleep prevention lives
+in Kiosk Mode rather than the main playback menu. The startup, Home, recovery
+and PIN controls remain available, with Return to playback below them.
+
+On a physical Onn TV, verify Done, remote Enter, Unlock, Cancel and Back dismiss
+the keypad; invalid PINs still fail; scrolling and focus skip status text; sleep
+settings remain reachable from Kiosk Mode; enabling and disabling still persist.

@@ -311,6 +311,10 @@ export function createApp({
     '/api/data-feeds/ingest',
     express.json({ limit: '32kb', strict: true }),
   );
+  app.use(
+    '/api/data-feeds/ingest-stores',
+    express.json({ limit: '256kb', strict: true }),
+  );
   app.use(express.json({ limit: '1mb' }));
   mountAndroidReleases(app, {
     source: androidReleaseSource,
@@ -957,6 +961,11 @@ export function createApp({
           'data-feed',
           publicResource('data-feed', {
             ...feedMetadata(feed),
+            applicationName: feed.applicationId
+              ? db
+                  .prepare('SELECT name FROM data_feed_applications WHERE id=?')
+                  .get(feed.applicationId)?.name || null
+              : null,
             siteNumber: feed.siteId
               ? db
                   .prepare('SELECT siteNumber FROM sites WHERE id=?')
@@ -1444,7 +1453,14 @@ export function createApp({
         const slide =
           item.slide || allRecords('slide').find((s) => s.id === item.slideId);
         for (const layer of slide?.layers || [])
-          if (layer.data && !visible('data-feed', layer.data.feedId))
+          // A relative source is authorized against each screen's resolved local
+          // feed at delivery, not against the editor's example store here.
+          if (
+            layer.data &&
+            layer.data.feedId &&
+            !layer.data.siteBinding &&
+            !visible('data-feed', layer.data.feedId)
+          )
             throw fail(
               409,
               'Viewing access to every data feed is required for every playlist recipient',
@@ -1598,7 +1614,11 @@ export function createApp({
       throw fail(400, 'A playlist can use at most 20 distinct data feeds');
     if (!previewing)
       for (const item of items)
-        dataFeeds.validateLayers(item.slide, accounts.context.getStore()?.user);
+        dataFeeds.validateLayers(
+          item.slide,
+          accounts.context.getStore()?.user,
+          { publishing },
+        );
     return {
       schemaVersion: items.some((i) =>
         i.slide.layers.some((l) => l.type === 'video'),

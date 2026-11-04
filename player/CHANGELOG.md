@@ -4,9 +4,25 @@ The Pi agent and Android TV app share this player version. Server versions are
 tracked independently in the root `CHANGELOG.md`. Earlier combined history also
 remains in that file.
 
-## [0.15.6] - 2026-11-03
+## [0.15.10] - 2026-11-04
 
-- Render live metric sentences and extended text formatting
+- Render metric sentences and extended text formatting alongside current Android kiosk updates
+
+## [0.15.9] - 2026-10-31
+
+- Dismiss PIN keypad on submit and simplify Android kiosk menus
+
+## [0.15.8] - 2026-10-31
+
+- Fix remote update toggle, confirm Android Home selection, seed store PIN and dismiss kiosk notice
+
+## [0.15.7] - 2026-10-31
+
+- Fix automatic update cooldown after failed checks and restore startup checks
+
+## [0.15.6] - 2026-10-31
+
+- Add optional Android kiosk configuration and bounded recovery
 
 ## [0.15.5] - 2026-10-30
 

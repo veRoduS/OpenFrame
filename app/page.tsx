@@ -4571,7 +4571,7 @@ function Editor({
                         : '<MetricName>'}{' '}
                       anywhere in your sentence. Store sources follow the
                       screen’s assigned store. Missing values display —. Live
-                      text and extended formatting require player 0.15.6 or
+                      text and extended formatting require player 0.15.10 or
                       newer.
                     </p>
                     {current.data && (

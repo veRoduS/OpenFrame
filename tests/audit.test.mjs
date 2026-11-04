@@ -156,7 +156,7 @@ void test('sharing restore reverses the complete operation and remains in audit 
     [],
   );
 });
-void test('text metric bindings enforce feed access and are included in publication snapshots', async (t) => {
+void test('text metric bindings persist and disconnect safely when their feed is deleted', async (t) => {
   const { admin } = await fixture(t);
   const site = (
     await admin('/api/sites', 'POST', { siteNumber: '11', name: 'Store' })
@@ -190,6 +190,16 @@ void test('text metric bindings enforce feed access and are included in publicat
     (await admin(`/api/data-feeds/${feed.id}`, 'DELETE')).status,
     409,
   );
+  assert.equal(
+    (await admin(`/api/data-feeds/${feed.id}?disconnectWidgets=true`, 'DELETE'))
+      .status,
+    200,
+  );
+  const saved = (await admin('/api/library')).data.slides.find(
+    (item) => item.id === slide.data.id,
+  );
+  assert.equal(saved.layers[0].data.feedId, null);
+  assert.equal(saved.layers[0].text, layer.text);
 });
 
 void test('restoring a slide also restores its publication, and a conflict rolls back all changes', async (t) => {

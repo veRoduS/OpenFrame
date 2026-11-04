@@ -48,7 +48,7 @@ public final class PlayerActivity extends Activity {
     private int lifecycleGeneration;
     private int generation;
     private static final ScheduledExecutorService updateWorker = Executors.newSingleThreadScheduledExecutor();
-    private static final long UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000L;
+    private boolean updateCheckedThisSession;
     private static final String AUTO_UPDATES = "automaticUpdatesEnabled";
     private ScheduledFuture<?> updatePolling;
     private Future<?> updateTask;
@@ -60,9 +60,18 @@ public final class PlayerActivity extends Activity {
     private boolean displayBlank;
     private AlertDialog updateProgress;
     private TextView deviceSleepStatus;
+    private KioskPreferences kiosk;
+    private boolean offerShown;
+    private boolean homeSelectionPending;
+    private Button kioskOffer;
+    private final android.os.Handler recoveryHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable pendingRecovery;
+
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
+        kiosk = new KioskPreferences(this);
+        homeSelectionPending = saved != null && saved.getBoolean("homeSelectionPending");
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
@@ -221,6 +230,16 @@ public final class PlayerActivity extends Activity {
                 @Override public void onPageFinished(WebView view, String url) {
                     if (web == view && !resumed) view.evaluateJavascript(backgroundScript(true, lifecycleGeneration), null);
                 }
+                @Override public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                    if (web == view) {
+                        disposeWeb();
+                        recoverPlayback();
+                    }
+                    return true;
+                }
+                @Override public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                    if (web == view && request.isForMainFrame()) recoverPlayback();
+                }
                 @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
                 @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                     String url = request.getUrl().toString();
@@ -233,6 +252,7 @@ public final class PlayerActivity extends Activity {
                             runOnUiThread(() -> {
                                 if (web == view && updateNotice != null) {
                                     displayBlank = blank;
+                                    try { if (new org.json.JSONObject(snapshot).optBoolean("approved") && !blank) showKioskOffer(); } catch (org.json.JSONException ignored) { }
                                     updateNotice.setVisibility(availableUpdate != null && !blank ? View.VISIBLE : View.GONE);
                                 }
                             });
@@ -275,6 +295,7 @@ public final class PlayerActivity extends Activity {
             else { web.onPause(); web.pauseTimers(); }
             startPolling();
             startUpdates();
+
         } catch (Exception ex) {
             showFailure(ex);
         }
@@ -321,7 +342,7 @@ public final class PlayerActivity extends Activity {
     private void startUpdates() {
         if (automaticUpdatesEnabled() && resumed && activeServer != null && web != null && updatePolling == null) {
             updatePolling = updateWorker.scheduleWithFixedDelay(() -> runOnUiThread(() -> checkUpdates(false)),
-                    0, 6, TimeUnit.HOURS);
+                    0, UpdateCheckSchedule.RETRY_MS, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -358,9 +379,8 @@ public final class PlayerActivity extends Activity {
         String sourceKey = localUpdates ? UpdateSource.SERVER + ":" + activeServer : UpdateSource.GITHUB;
         long now = System.currentTimeMillis();
         long last = getPreferences(MODE_PRIVATE).getLong("updateCheckedAt", 0);
-        if (!manual && sourceKey.equals(getPreferences(MODE_PRIVATE).getString("updateCheckedSource", "")) &&
-                now >= last && now - last < UPDATE_INTERVAL_MS) return;
-        getPreferences(MODE_PRIVATE).edit().putLong("updateCheckedAt", now).putString("updateCheckedSource", sourceKey).apply();
+        if (!manual && !UpdateCheckSchedule.due(updateCheckedThisSession, sourceKey,
+                getPreferences(MODE_PRIVATE).getString("updateCheckedSource", ""), now, last)) return;
         updateBusy = true;
         int request = ++updateGeneration;
         if (manual) progress("Checking for an update…");
@@ -377,6 +397,12 @@ public final class PlayerActivity extends Activity {
                         if (updateNotice != null) updateNotice.setVisibility(View.GONE);
                         return;
                     }
+                    updateCheckedThisSession = true;
+                    getPreferences(MODE_PRIVATE).edit().putLong("updateCheckedAt", System.currentTimeMillis())
+                            .putString("updateCheckedSource", sourceKey)
+                            .putString("updateStatus", release == null ? "No release available from this source."
+                                    : newer ? "Version " + release.versionName + " available. Choose Check for updates to install."
+                                    : "Up to date: " + BuildConfig.VERSION_NAME).apply();
                     availableUpdate = newer ? release : null;
                     if (updateNotice != null) {
                         updateNotice.setText(newer ? "OpenFrame " + release.versionName + " available — press Menu or Back to update" : "");
@@ -394,6 +420,8 @@ public final class PlayerActivity extends Activity {
                 runOnUiThread(() -> {
                     if (!resumed || isDestroyed() || request != updateGeneration) return;
                     cancelUpdateTask();
+                    updateCheckedThisSession = false;
+                    getPreferences(MODE_PRIVATE).edit().putString("updateStatus", "Check failed: " + source.checkFailureMessage(ex)).apply();
                     if (manual) updateMessage("Could not check for updates", source.checkFailureMessage(ex));
                 });
             }
@@ -470,6 +498,7 @@ public final class PlayerActivity extends Activity {
 
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
+        state.putBoolean("homeSelectionPending", homeSelectionPending);
         if (readyUpdate != null) {
             try {
                 state.putString("readyUpdate", readyUpdate.json().toString());
@@ -480,6 +509,7 @@ public final class PlayerActivity extends Activity {
     }
     private void disposeWeb() {
         if (web != null) {
+            if (web.getParent() instanceof android.view.ViewGroup) ((android.view.ViewGroup) web.getParent()).removeView(web);
             web.stopLoading();
             web.removeJavascriptInterface("OpenFrameAndroid");
             web.destroy();
@@ -493,13 +523,22 @@ public final class PlayerActivity extends Activity {
         super.onResume();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (deviceSleepStatus != null) deviceSleepStatus.setText(deviceSleepSummary());
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         resumed = true;
+        if (homeSelectionPending) {
+            homeSelectionPending = false;
+            updateMessage(isHome() ? "OpenFrame is the default Home app" : "Home selection not confirmed",
+                    isHome() ? "Android reports OpenFrame as Home. Press Home on the remote to test this firmware."
+                    : "Android has not kept OpenFrame as its default Home app. Some Google TV firmware restricts replacement launchers. Try Default Home application again, or open OpenFrame from the TV launcher. Boot startup remains best effort.");
+        }
         lifecycleGeneration++;
         if (web != null) {
             web.onResume(); web.resumeTimers();
             web.evaluateJavascript(backgroundScript(false, lifecycleGeneration), null);
         }
         startPolling();
+        if (web == null && agent != null) recoverPlayback();
         if (waitingForInstallPermission) {
             waitingForInstallPermission = false;
             if (getPackageManager().canRequestPackageInstalls()) requestInstallation();
@@ -508,6 +547,8 @@ public final class PlayerActivity extends Activity {
         startUpdates();
     }
     @Override protected void onPause() {
+        if (pendingRecovery != null) recoveryHandler.removeCallbacks(pendingRecovery);
+        pendingRecovery = null;
         resumed = false;
         final int pausedGeneration = ++lifecycleGeneration;
         stopPolling();
@@ -532,25 +573,239 @@ public final class PlayerActivity extends Activity {
     }
     @Override protected void onDestroy() {
         generation++;
+        if (kioskOffer != null) dismissKioskOffer();
         stopPolling();
         stopUpdates();
         disposeWeb();
         super.onDestroy();
     }
     @Override public void onBackPressed() {
-        if (web == null) { super.onBackPressed(); return; }
+        if (web == null) { authorize(() -> showPlayerMenu()); return; }
+        showPlayerMenu();
+    }
+    private void showPlayerMenu() {
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
         boolean automatic = automaticUpdatesEnabled();
         new AlertDialog.Builder(this).setTitle("OpenFrame Player")
-                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Prevent device sleep", "Exit player"}, (dialog, which) -> {
-                    if (which == 1) setup();
+                .setItems(new String[]{"Resume playback", "Connection settings", "Check for updates", "Automatic updates: " + (automatic ? "On" : "Off"), "Update source: " + (localUpdates ? "This server" : "GitHub"), "Kiosk Mode", "Exit player"}, (dialog, which) -> {
+                    if (which == 1) authorize(this::setup);
                     if (which == 2) checkUpdates(true);
                     if (which == 3) chooseAutomaticUpdates();
                     if (which == 4) chooseUpdateSource();
-                    if (which == 5) showDeviceSleepSettings();
-                    if (which == 6) finish();
+                    if (which == 5) authorize(this::showKiosk);
+                    if (which == 6) authorize(this::exitKiosk);
                 }).show();
     }
+
+    private final Runnable kioskOfferTimeout = () -> dismissKioskOffer();
+    private void dismissKioskOffer() {
+        recoveryHandler.removeCallbacks(kioskOfferTimeout);
+        kiosk.prefs.edit().putBoolean("offer", false).apply();
+        if (kioskOffer != null && kioskOffer.getParent() instanceof android.view.ViewGroup)
+            ((android.view.ViewGroup) kioskOffer.getParent()).removeView(kioskOffer);
+        kioskOffer = null;
+    }
+    private void showKioskOffer() {
+        if (offerShown || !resumed || !kiosk.prefs.getBoolean("offer", false)) return;
+        offerShown = true;
+        // Nonmodal notice; playback and pairing continue behind it.
+        android.widget.FrameLayout root = findViewById(android.R.id.content);
+        Button offer = new Button(this);
+        kioskOffer = offer;
+        offer.setText("Kiosk Mode is now available. Configure now / Later");
+        android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(
+                -2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.RIGHT);
+        root.addView(offer, params);
+        recoveryHandler.postDelayed(kioskOfferTimeout, 8000);
+        offer.setOnClickListener(v -> {
+            dismissKioskOffer();
+            new AlertDialog.Builder(this).setTitle("Kiosk Mode is now available.")
+                .setPositiveButton("Configure now", (d, w) -> {
+                    authorize(this::showKiosk);
+                }).setNegativeButton("Later", (d, w) -> {
+                    dismissKioskOffer();
+                }).show();
+        });
+    }
+    private void recoverPlayback() {
+        if (pendingRecovery != null || !resumed) return;
+        long now = System.currentTimeMillis();
+        long since = now - kiosk.prefs.getLong("recoveryWindow", 0);
+        int attempts = since < 0 || since > 600000 ? 0 : kiosk.prefs.getInt("recoveryAttempts", 0);
+        if (!kiosk.recovery() || attempts >= 3) {
+            new AlertDialog.Builder(this).setTitle("Playback needs attention")
+                    .setMessage("Automatic recovery is disabled or paused after repeated failures. Cached content and pairing are retained.")
+                    .setPositiveButton("Retry playback", (d,w) -> startPlayer(activeServer, getPreferences(MODE_PRIVATE).getString("name", "Android TV")))
+                    .setNegativeButton("Settings", (d,w) -> authorize(this::showKiosk)).show();
+            return;
+        }
+        kiosk.prefs.edit().putLong("recoveryWindow", attempts == 0 ? now : kiosk.prefs.getLong("recoveryWindow", now))
+                .putInt("recoveryAttempts", attempts + 1).apply();
+        pendingRecovery = () -> {
+            pendingRecovery = null;
+            if (resumed && activeServer != null) startPlayer(activeServer, getPreferences(MODE_PRIVATE).getString("name", "Android TV"));
+        };
+        recoveryHandler.postDelayed(pendingRecovery, 5000L * (attempts + 1));
+    }
+    private boolean isHome() {
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            android.app.role.RoleManager roles = getSystemService(android.app.role.RoleManager.class);
+            if (roles != null && roles.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME))
+                return roles.isRoleHeld(android.app.role.RoleManager.ROLE_HOME);
+        }
+        android.content.pm.ResolveInfo home = getPackageManager().resolveActivity(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY);
+        return home != null && home.activityInfo != null && getPackageName().equals(home.activityInfo.packageName);
+    }
+    private void openHomeSettings() {
+        // Only expose the Home candidate after an explicit user request.
+        getPackageManager().setComponentEnabledSetting(new android.content.ComponentName(this, getPackageName() + ".KioskHome"),
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED, android.content.pm.PackageManager.DONT_KILL_APP);
+        homeSelectionPending = true;
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            android.app.role.RoleManager roles = getSystemService(android.app.role.RoleManager.class);
+            if (roles != null && roles.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)
+                    && !roles.isRoleHeld(android.app.role.RoleManager.ROLE_HOME)) {
+                try { startActivityForResult(roles.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME), 410); return; }
+                catch (RuntimeException ignored) { /* Try the firmware's Home settings below. */ }
+            }
+        }
+        try { startActivity(new Intent(Settings.ACTION_HOME_SETTINGS)); }
+        catch (RuntimeException ex) {
+            homeSelectionPending = false;
+            updateMessage("Home selection unavailable", "This firmware does not expose Home selection. Use the normal TV launcher to open OpenFrame. Startup is best effort.");
+        }
+    }
+    private void seedStorePin() {
+        if (agent != null) kiosk.seedStorePin(agent.assignedStoreNumber());
+    }
+    private void kioskAction(LinearLayout content, AlertDialog dialog, String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setOnClickListener(v -> { dialog.dismiss(); action.run(); });
+        content.addView(button);
+    }
+    private void showKiosk() {
+        seedStorePin();
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        int inset = (int) (24 * getResources().getDisplayMetrics().density);
+        content.setPadding(inset, 0, inset, inset / 2);
+        TextView status = text("Kiosk mode: " + (kiosk.enabled() ? "Enabled" : "Disabled")
+                + "\nFullscreen playback: Enabled"
+                + "\nDevice compatibility: Partial — Android controls Home and startup; full device lockdown is unavailable.", 16);
+        status.setFocusable(false);
+        content.addView(status);
+        scroll.addView(content);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("OpenFrame — Kiosk Mode")
+                .setView(scroll).setNegativeButton("Return to playback", null).create();
+        kioskAction(content, dialog, kiosk.enabled() ? "Disable kiosk mode" : "Enable kiosk mode", () -> {
+            if (!kiosk.enabled()) { configurePinThenEnable(); return; }
+            kiosk.prefs.edit().putBoolean("enabled", false).apply();
+            showKiosk();
+        });
+        kioskAction(content, dialog, "Launch at startup: " + (kiosk.startup() ? "Requested (firmware dependent)" : "Disabled"), () -> {
+            kiosk.prefs.edit().putBoolean("startup", !kiosk.prefs.getBoolean("startup", false)).apply();
+            showKiosk();
+        });
+        kioskAction(content, dialog, "Default Home application: " + (isHome() ? "OpenFrame" : "Not configured") + " — Configure", this::openHomeSettings);
+        kioskAction(content, dialog, "Automatic playback recovery: " + (kiosk.recovery() ? "Enabled" : "Disabled"), () -> {
+            kiosk.prefs.edit().putBoolean("recovery", !kiosk.prefs.getBoolean("recovery", true)).apply();
+            showKiosk();
+        });
+        kioskAction(content, dialog, "Device sleep prevention — Open settings", this::showDeviceSleepSettings);
+        kioskAction(content, dialog, "Administrator PIN — " + (kiosk.prefs.contains("pin") ? "Change" : "Configure"), this::configurePin);
+        dialog.show();
+    }
+    private void configurePinThenEnable() {
+        seedStorePin();
+        if (!kiosk.prefs.contains("pin")) { configurePin(); return; }
+        new AlertDialog.Builder(this).setTitle("Enable kiosk mode")
+            .setMessage("Your initial PIN is the assigned store number, padded with leading zeros to at least four digits, unless you have changed it. Enable PIN protected settings, best effort boot startup and bounded playback recovery? Next, Android may let you choose OpenFrame as Home. Canceling Home selection leaves your existing Home unchanged. Check device sleep settings separately.")
+            .setPositiveButton("Enable and choose Home", (d,w) -> {
+                kiosk.prefs.edit().putBoolean("enabled", true).putBoolean("startup", true).putBoolean("recovery", true).apply(); openHomeSettings();
+            }).setNegativeButton("Cancel", null).show();
+    }
+    private void configurePin() {
+        LinearLayout fields = new LinearLayout(this); fields.setOrientation(LinearLayout.VERTICAL);
+        EditText first = pinField("New PIN (4–20 digits)"); EditText second = pinField("Confirm PIN");
+        fields.addView(first); fields.addView(second);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Administrator PIN")
+            .setMessage("Remember this PIN. There is no remote PIN reset. After saving, choose Enable kiosk mode.")
+            .setView(fields).setPositiveButton("Save", null).setNegativeButton("Cancel", (d,w) -> hidePinKeyboard(second)).create();
+        dialog.setOnShowListener(d -> dialog.getButton(-1).setOnClickListener(v -> {
+            String pin = first.getText().toString();
+            if (!pin.matches("[0-9]{4,20}") || !pin.equals(second.getText().toString())) { second.setError("PINs must match and contain 4–20 digits"); return; }
+            String salt = KioskPin.salt(); kiosk.prefs.edit().putString("salt", salt).putString("pin", KioskPin.hash(pin, salt)).apply(); hidePinKeyboard(second); dialog.dismiss(); showKiosk();
+        }));
+        first.setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        first.setOnEditorActionListener((view, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_NEXT) return false;
+            second.requestFocus();
+            return true;
+        });
+        bindPinSubmit(second, dialog);
+        dialog.show();
+    }
+    private void hidePinKeyboard(EditText input) {
+        InputMethodManager keyboard = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (keyboard != null && input.getWindowToken() != null)
+            keyboard.hideSoftInputFromWindow(input.getWindowToken(), 0);
+        input.clearFocus();
+    }
+    private void bindPinSubmit(EditText input, AlertDialog dialog) {
+        input.setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+        input.setOnEditorActionListener((view, action, event) -> {
+            boolean enter = event != null && (event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER);
+            if (action != EditorInfo.IME_ACTION_DONE && action != EditorInfo.IME_ACTION_GO && !enter) return false;
+            if (event == null || (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0))
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+        dialog.setOnCancelListener(d -> hidePinKeyboard(input));
+        dialog.setOnDismissListener(d -> hidePinKeyboard(input));
+    }
+    private EditText pinField(String hint) {
+        EditText input = new EditText(this); input.setHint(hint); input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        return input;
+    }
+    private void authorize(Runnable action) {
+        if (!kiosk.prefs.contains("pin")) { action.run(); return; }
+        if (System.currentTimeMillis() < kiosk.prefs.getLong("pinBlockedUntil", 0)) { updateMessage("Try later", "Wait 30 seconds before trying the administrator PIN again."); return; }
+        EditText input = pinField("Administrator PIN");
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Administrator PIN").setView(input)
+            .setPositiveButton("Unlock", null).setNegativeButton("Cancel", (d,w) -> hidePinKeyboard(input)).create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            boolean verified = KioskPin.verify(input.getText().toString(), kiosk.prefs.getString("salt", ""), kiosk.prefs.getString("pin", ""));
+            hidePinKeyboard(input);
+            dialog.dismiss();
+            if (verified) {
+                kiosk.prefs.edit().putInt("pinFailures", 0).apply();
+                action.run();
+            } else {
+                int failures = kiosk.prefs.getInt("pinFailures", 0) + 1;
+                kiosk.prefs.edit().putInt("pinFailures", failures % 5).putLong("pinBlockedUntil", failures >= 5 ? System.currentTimeMillis() + 30000 : 0).apply();
+                updateMessage("Incorrect PIN", "Try again from the player menu.");
+            }
+        }));
+        bindPinSubmit(input, dialog);
+        dialog.show();
+    }
+    private void exitKiosk() {
+        new AlertDialog.Builder(this).setTitle("Exit player")
+            .setMessage("Exit pauses boot startup and disables the OpenFrame Home candidate so Android can return to its launcher. Pairing and cache are retained.")
+            .setPositiveButton("Exit", (d,w) -> {
+                kiosk.prefs.edit().putBoolean("enabled", false).apply();
+                getPackageManager().setComponentEnabledSetting(new android.content.ComponentName(this, getPackageName() + ".KioskHome"),
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED, android.content.pm.PackageManager.DONT_KILL_APP);
+                try { startActivity(new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)); } catch (RuntimeException ignored) { }
+                finish();
+            }).setNegativeButton("Cancel", null).show();
+    }
+
     private String deviceSleepSummary() {
         // Some TV firmware has a separate inactivity shutdown timer that ignores
         // KEEP_SCREEN_ON. Read it without requesting permission to change it.
@@ -580,21 +835,25 @@ public final class PlayerActivity extends Activity {
     }
     private void chooseAutomaticUpdates() {
         boolean enabled = automaticUpdatesEnabled();
-        new AlertDialog.Builder(this).setTitle("Automatic updates")
-                .setMessage("When enabled, OpenFrame checks for player updates when it opens and every six hours while it is open.")
-                .setSingleChoiceItems(new String[]{"Off (default)", "On"}, enabled ? 1 : 0, (dialog, which) -> {
-                    boolean next = which == 1;
+        new AlertDialog.Builder(this).setTitle("Automatic updates: " + (enabled ? "On" : "Off"))
+                .setMessage("When enabled, OpenFrame checks at startup and every six hours while open. Failed checks retry in about a minute while open. Installation requires your confirmation.\n\nLast check result: "
+                        + getPreferences(MODE_PRIVATE).getString("updateStatus", "No completed check yet."))
+                .setPositiveButton(enabled ? "Turn off" : "Turn on", (dialog, which) -> {
+                    boolean next = !enabled;
                     getPreferences(MODE_PRIVATE).edit().putBoolean(AUTO_UPDATES, next).apply();
-                    if (next) startUpdates();
-                    else {
+                    if (next) {
+                        updateCheckedThisSession = false;
+                        startUpdates();
+                    } else {
                         if (updatePolling != null) updatePolling.cancel(false);
                         updatePolling = null;
                         availableUpdate = null;
                         if (updateNotice != null) updateNotice.setVisibility(View.GONE);
                     }
-                    dialog.dismiss();
-                }).setNegativeButton("Cancel", null).show();
+                    chooseAutomaticUpdates();
+                }).setNegativeButton("Back", null).show();
     }
+
     private void chooseUpdateSource() {
         boolean localUpdates = UpdateSource.SERVER.equals(getPreferences(MODE_PRIVATE).getString("updateSource", UpdateSource.GITHUB));
         new AlertDialog.Builder(this).setTitle("Update source")

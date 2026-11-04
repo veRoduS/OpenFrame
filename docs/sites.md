@@ -10,9 +10,12 @@ separately published.
 
 1. In **Settings → Data feeds → Sites**, create a site number and name. Numbers
    are strings of 1–20 digits: `001` and `1` identify different sites.
-2. Create or select an application and generate an application API key for that
-   site. Configure the external application with that key. Use the same source
-   name at every site, for example `production`; each site's values are separate.
+2. Create or select one application for your integration. Generate a key for
+   that site, or (server 0.30.3+) choose **Multiple stores (central)** and select
+   the sites it may update. The central endpoint accepts one structured batch
+   across stores; see [SMCC integration update](smcc-integration-update.md).
+   Use the same source name, for example `production`; each site's values remain
+   separate. Future sites require a replacement key with an updated selection.
 3. Enter the site number in Android setup, Pi first-boot setup, or **Screen
    setup** when generating the Pi configuration. Older players may omit it.
 4. Under **Screens**, enter the pairing code and confirm the approved site. The
@@ -69,6 +72,17 @@ Missing, inaccessible, or incompatible local sources display unavailable data;
 values never fall back to another location. A source first created later becomes
 available through normal sync without republishing the layout. Ordinary value
 updates do not change the effective playlist revision or restart slides.
+
+From server **0.30.1**, publishing a store-relative widget does not require every
+playlist recipient, or the publisher, to view the editor's example-store feed.
+This also applies to inherited fork publications and later master updates. The
+saved slide and master still require their normal access permissions, and
+creating or editing a widget still requires access to its chosen example feed.
+Every delivered local feed is checked against the screen's approved site and
+its audience; inaccessible sources show unavailable without falling back to the
+example store. **One fixed feed** keeps its recipient permission requirements,
+including when a slide also contains store-relative widgets. No new API-key or
+feed-sharing grants are created by publishing a relative source.
 
 Playlist previews have a **Preview site** selector and use the same resolver as
 player sync. Without a preview site, relative bindings are unavailable. Editor

@@ -135,7 +135,7 @@ jobs:
         run: |
           printf '## OpenFrame %s\n\nImage: `%s:%s`\n\nDigest: `%s@%s`\n\nDownload the Compose artifact, copy `.env.example` to `.env`, then run `docker compose up -d`. Requires 64-bit Linux on ARM.\n' "$VERSION" "$IMAGE" "$VERSION" "$IMAGE" "$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
       - name: Publish an owner-approved GitHub release as latest
-        if: env.VERSION == '0.16.0' || env.VERSION == '0.17.0' || env.VERSION == '0.25.0' || env.VERSION == '0.30.0'
+        if: env.VERSION == '0.16.0' || env.VERSION == '0.17.0' || env.VERSION == '0.25.0' || env.VERSION == '0.30.0' || env.VERSION == '0.32.0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: v${{ env.VERSION }}

@@ -244,3 +244,75 @@ button.data-feed-open {
   margin-block: 8px;
   overflow-wrap: anywhere;
 }
+
+.data-feed-integration {
+  border: 1px solid var(--color-border, #dde3df);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 16px;
+}
+.data-feed-integration > summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.data-feed-integration > summary small {
+  display: block;
+  margin: 6px 0 0 18px;
+  color: var(--of-text-muted, #63716a);
+}
+.data-feed-store {
+  min-width: 0;
+  margin-top: 20px;
+}
+.data-feed-store h3 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+.data-feed-store article + article {
+  margin-top: 8px;
+}
+.central-store-picker {
+  max-height: 260px;
+  overflow: auto;
+}
+.central-store-picker label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.central-store-picker input[type='checkbox'] {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.data-feed-limits {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--color-border, #dde3df);
+  border-radius: 12px;
+}
+.data-feed-limits summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.data-feed-limits fieldset {
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+.data-feed-limits label {
+  display: grid;
+  gap: 6px;
+  max-width: 100%;
+}
+.data-feed-limits input {
+  width: 140px;
+  max-width: 100%;
+}
+.data-feed-limits output {
+  display: block;
+  margin: 8px 0;
+}

@@ -129,6 +129,13 @@ After building, `node tests/library-selection.browser.mjs` checks visible checke
 
 After building, `node tests/data-feed-applications.browser.mjs` verifies admin application setup, one-time scoped key generation, an external first push without a login cookie, automatic feed discovery, new metric fields, stable IDs through key rotation, confirmed revocation and unused-application deletion, and desktop/phone layouts. It uses the same Playwright settings and a disposable database; screenshots stay under ignored `work/ui-review/application-keys/`. The Node data-feed tests cover application isolation, payload/field/feed/key/rate limits, transaction rollback, creator disable/demotion/deletion, persisted mappings and unchanged player publication revisions.
 
+After building, `node tests/multi-store-feeds.browser.mjs` checks central key creation with selected stores, grouped integration/store feeds, retained widget reconnection to relative metric/table sources, revocation, and desktop/phone layouts. It uses disposable data and the standard Playwright settings. Node feed tests verify atomic rollback, authorization, migration, rate limits and isolated screen delivery.
+
+After building, `node tests/data-feed-limits.browser.mjs` checks the admin field
+limit setting, reload persistence, bounds, immediate ingestion enforcement,
+preserved wider feeds, manual feed form controls and desktop/phone layouts.
+It uses disposable data and the standard Playwright settings.
+
 After building, `node tests/editor-ribbon.browser.mjs` checks unsaved new drafts,
 portrait orientation, text formatting, safe Delete shortcuts, metric sentences,
 responsive editor layouts and administrator audit review in an isolated database.
