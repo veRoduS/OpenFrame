@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import type { DataCardConfig, DataFeed, Layer } from './types';
 import './data-card-options.css';
 
@@ -199,38 +199,27 @@ function StylePreview({
 }
 
 export function DataCardStylePicker({ config, onChange }: CardProps) {
-  const name = useId();
-  const style = config.card?.style || 'plain';
+  if (config.card?.style === 'split')
+    return <p className="muted">Header card · new widgets use this style.</p>;
   return (
-    <fieldset className="data-card-style-picker">
-      <legend>Card style</legend>
-      <div className="data-card-style-choices">
-        {(
-          [
-            ['plain', 'Classic'],
-            ['split', 'Split header'],
-          ] as const
-        ).map(([value, label]) => (
-          <label
-            className="data-card-style-choice"
-            data-selected={style === value}
-            key={value}
-          >
-            <input
-              type="radio"
-              name={name}
-              value={value}
-              checked={style === value}
-              onChange={() =>
-                onChange({ ...dataCardSettings(config), style: value })
-              }
-            />
-            <StylePreview mode={config.mode} split={value === 'split'} />
-            <span>{label}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <div className="data-card-style-picker">
+      <p className="muted">
+        This saved widget uses the original simple style. Its appearance is
+        preserved.
+      </p>
+      <StylePreview mode={config.mode} split={false} />
+      <button
+        type="button"
+        onClick={() =>
+          onChange({ ...dataCardSettings(config), style: 'split' })
+        }
+      >
+        Update to header card
+      </button>
+      <p className="muted">
+        Review the canvas before saving. Undo restores the previous style.
+      </p>
+    </div>
   );
 }
 

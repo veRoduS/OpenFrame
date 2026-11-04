@@ -152,7 +152,7 @@ export const feedIds = (manifest) => [
   ...new Set(
     (manifest?.items || []).flatMap((i) =>
       (i.slide?.layers || [])
-        .filter((l) => l.type === 'data')
+        .filter((l) => l.type === 'data' || (l.type === 'text' && l.data))
         .map((l) => l.data?.feedId)
         .filter(Boolean),
     ),
@@ -213,7 +213,7 @@ export function mountDataFeeds(
     const feed = raw(id);
     return slide.layers.some(
       (layer) =>
-        layer.type === 'data' &&
+        (layer.type === 'data' || layer.type === 'text') &&
         (layer.data?.feedId === id ||
           (feed?.applicationId &&
             layer.data?.siteBinding?.applicationId === feed.applicationId &&
@@ -226,7 +226,9 @@ export function mountDataFeeds(
       playlist.published?.items?.some((item) => references(item.slide, id)),
     );
   function validateLayers(slide, user) {
-    for (const layer of slide.layers.filter((l) => l.type === 'data')) {
+    for (const layer of slide.layers.filter(
+      (l) => l.type === 'data' || (l.type === 'text' && l.data),
+    )) {
       const config = layer.data;
       if (!config?.feedId)
         throw fail(
@@ -313,7 +315,8 @@ export function mountDataFeeds(
     const bindings = [];
     for (const item of resolved.items || [])
       for (const layer of item.slide?.layers || []) {
-        const config = layer.type === 'data' && layer.data;
+        const config =
+          (layer.type === 'data' || layer.type === 'text') && layer.data;
         if (!config?.siteBinding) continue;
         const { applicationId, sourceKey } = config.siteBinding;
         const mapping =
@@ -685,6 +688,10 @@ export function mountDataFeeds(
         'INVALID_TOKEN',
         'Invalid, expired, revoked, or unauthorized feed token',
       );
+    req.auditActor = {
+      id: row.id,
+      name: `Feed key: ${feed.name} / ${row.name}`,
+    };
     if (feed.siteId) requireActiveSite(db, feed.siteId);
     if (!req.is('application/json'))
       throw fail(

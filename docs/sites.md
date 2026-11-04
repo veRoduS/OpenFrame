@@ -24,7 +24,7 @@ separately published.
    are hidden, and members cannot change the requested store during approval.
 5. Assign a published playlist. Keep existing user/group sharing in place: site
    matching is an additional delivery restriction, not a replacement for grants.
-   Share the relevant local feeds and screen with the appropriate group.
+   Share the relevant local feeds with the appropriate group; screen access is granted automatically.
 
 Use the Site selectors to filter Screens and Data feeds. Screen connected,
 offline, and pending counts follow that filter. All sites remains available to
@@ -44,7 +44,7 @@ site number as a whole number (for example `Store 042` for site `042`). Matching
 is exact, so `Store 42` is not suggested for `042`; with no match or several
 matches nothing is preselected. Review the suggestion before creating the site.
 Members see their eligible pending screens even before the store has any feeds
-or approved screens. Member approval records the acting user in site history and
+or approved screens. Approval by either an administrator or a store member records the acting user in site history and
 shares the screen with the store access group, including subgroup members. The
 screen does not depend on the approving user's personal account remaining active.
 Share local feeds and playlists with the appropriate recipients separately;
@@ -112,9 +112,10 @@ local sources or field mismatches. Shared playlists remain assigned; a playlist
 with fixed metrics from another site is unassigned. The server rejects a stale
 review if the assignment, publication, bindings, or sharing changed meanwhile.
 
-A transfer resets the screen's access to administrators and cancels outstanding
-commands. Previous location shares are removed. Re-share the screen with the
-appropriate destination group afterward. Data feeds, user accounts, and playlist
+A transfer removes previous location shares, automatically grants the destination
+store access group screen access, and cancels outstanding commands. Sites without
+an access group remain accessible to administrators. First site assignments also
+grant the site's access group screen access. Data feeds, user accounts, and playlist
 content are not moved by this operation.
 
 The screen shows **Transfer pending** until the player confirms it has persisted

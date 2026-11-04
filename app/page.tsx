@@ -1,3 +1,4 @@
+import { AuditHistory } from './audit-history';
 import { HomeFocusSettings } from './home-focus-settings';
 import { focusHomeLibrary } from './home-focus';
 import { SiteTransfer } from './site-transfer';
@@ -653,7 +654,9 @@ export default function App() {
     uploadNotice,
   } = useMediaUploads(auth?.authenticated ? auth.user?.id : null, refresh);
   async function createSlide() {
-    const slide = await api<Slide>('/api/slides', 'POST', {
+    const slide: Slide = {
+      id: '',
+      updatedAt: new Date().toISOString(),
       name: 'Untitled slide',
       ...(focusedHome ? { managingGroupId: focusedHome.groupId } : {}),
       width: 1920,
@@ -670,8 +673,7 @@ export default function App() {
           bold: true,
         },
       ],
-    });
-    await refresh();
+    };
     setEditing(slide);
   }
   async function savePlaylist(p: Playlist) {
@@ -1336,6 +1338,7 @@ export default function App() {
                         onRefresh={refresh}
                         onAccess={setAccessResource}
                       />
+                      <AuditHistory refresh={refresh} />
                       <StockSettings />
                       <FontSettings fonts={fonts} refresh={refreshFonts} />
                     </div>
@@ -2105,8 +2108,8 @@ export default function App() {
               onClose={() => setEditing(null)}
               onSave={async (slide) => {
                 const saved = await api<Slide>(
-                  `/api/slides/${slide.id}`,
-                  'PUT',
+                  slide.id ? `/api/slides/${slide.id}` : '/api/slides',
+                  slide.id ? 'PUT' : 'POST',
                   slide,
                 );
                 await refresh();
@@ -3122,6 +3125,10 @@ function Editor({
     }
     if (type === 'data') {
       layer.data!.mode = dataMode === 'table' ? 'bar' : dataMode || 'metric';
+      layer.data!.card = {
+        ...dataCardSettings(layer.data!),
+        rows: dataMode === 'bar' ? 'bars' : 'table',
+      };
       layer.data!.title =
         dataModes.find((m) => m.mode === (dataMode || 'metric'))?.label ||
         'Data';
@@ -3245,6 +3252,10 @@ function Editor({
     publishedPlaylists.some((p) => p.id === d.playlistId),
   );
   async function save() {
+    if (!dirty && !slide.id) {
+      onClose();
+      return true;
+    }
     setBusy(true);
     setError('');
     try {
@@ -3258,6 +3269,21 @@ function Editor({
     } finally {
       setBusy(false);
     }
+  }
+  function deleteSelection() {
+    const ids = arrangeMode ? arrangeIds : selected ? [selected] : [];
+    const removable = new Set(
+      slide.layers
+        .filter((l) => ids.includes(l.id) && l.lockMode !== 'full')
+        .map((l) => l.id),
+    );
+    if (!removable.size) return;
+    change({
+      ...slide,
+      layers: slide.layers.filter((l) => !removable.has(l.id)),
+    });
+    setSelected(null);
+    setArrangeIds([]);
   }
   function reorder(direction: number) {
     if (!current) return;
@@ -3279,6 +3305,20 @@ function Editor({
         fullScreen
         showCloseButton={false}
         className="editor-overlay slide-editor"
+        onKeyDown={(event) => {
+          const target = event.target as HTMLElement;
+          if (
+            event.key !== 'Delete' ||
+            busy ||
+            target.closest(
+              'input, textarea, select, [contenteditable="true"], [role="combobox"]',
+            )
+          )
+            return;
+          if (target.closest('[role="dialog"]') !== event.currentTarget) return;
+          event.preventDefault();
+          deleteSelection();
+        }}
         data-mobile-panel={mobilePanel}
         style={
           mobileViewport
@@ -3311,7 +3351,11 @@ function Editor({
               maxLength={100}
             />
             <span aria-live="polite">
-              {dirty ? 'Unsaved changes' : 'All changes saved'}
+              {dirty
+                ? 'Unsaved changes'
+                : slide.id
+                  ? 'All changes saved'
+                  : 'New draft · not saved'}
             </span>
           </div>
           <div className="editor-header-actions">
@@ -3352,7 +3396,7 @@ function Editor({
             <button
               className="primary"
               aria-label={saveLabel}
-              disabled={busy || !slide.name.trim()}
+              disabled={busy || !slide.name.trim() || (!slide.id && !dirty)}
               onClick={save}
             >
               <Save size={17} />
@@ -3363,6 +3407,144 @@ function Editor({
             </button>
           </div>
         </header>
+        <div className="editor-ribbon" role="toolbar" aria-label="Slide tools">
+          <fieldset>
+            <legend>Insert</legend>
+            <button onClick={() => add('text')}>Text box</button>
+            <button onClick={() => setMedia('add')}>Image / video</button>
+            <button onClick={() => add('data')}>Metric card</button>
+            <button onClick={() => add('shape')}>Shape</button>
+          </fieldset>
+          <fieldset>
+            <legend>Slide</legend>
+            <select
+              aria-label="Slide orientation"
+              value={slide.width > slide.height ? 'landscape' : 'portrait'}
+              onChange={(e) =>
+                change({
+                  ...slide,
+                  width: e.target.value === 'portrait' ? 1080 : 1920,
+                  height: e.target.value === 'portrait' ? 1920 : 1080,
+                })
+              }
+            >
+              <option value="landscape">Landscape · 16:9</option>
+              <option value="portrait">Portrait · 9:16</option>
+            </select>
+          </fieldset>
+          {current?.type === 'text' && (
+            <fieldset disabled={current.lockMode === 'full'}>
+              <legend>Text</legend>
+              <select
+                aria-label="Toolbar font"
+                value={
+                  current.fontId
+                    ? `custom:${current.fontId}`
+                    : `system:${current.fontFamily || 'Arial'}`
+                }
+                onChange={(e) =>
+                  patchLayer(
+                    e.target.value.startsWith('custom:')
+                      ? { fontId: e.target.value.slice(7) }
+                      : {
+                          fontFamily: e.target.value.slice(7),
+                          fontId: undefined,
+                        },
+                  )
+                }
+              >
+                {systemFonts.map((font) => (
+                  <option key={font} value={`system:${font}`}>
+                    {font}
+                  </option>
+                ))}
+                {fonts.map((font) => (
+                  <option key={font.id} value={`custom:${font.id}`}>
+                    {font.family}
+                  </option>
+                ))}
+              </select>
+              <button
+                aria-label="Fit text to box"
+                aria-pressed={!!current.autoSize}
+                onClick={() => patchLayer({ autoSize: !current.autoSize })}
+              >
+                Auto fit
+              </button>
+              <input
+                aria-label="Toolbar font size"
+                title="Font size"
+                type="number"
+                min={12}
+                max={400}
+                value={current.fontSize}
+                onChange={(e) =>
+                  e.target.value &&
+                  patchLayer({
+                    fontSize: Math.max(12, Math.min(400, +e.target.value)),
+                    autoSize: false,
+                  })
+                }
+              />
+              <button
+                aria-label="Toolbar bold"
+                aria-pressed={current.bold}
+                onClick={() => patchLayer({ bold: !current.bold })}
+              >
+                <b>B</b>
+              </button>
+              <button
+                aria-label="Italic"
+                aria-pressed={!!current.italic}
+                onClick={() => patchLayer({ italic: !current.italic })}
+              >
+                <i>I</i>
+              </button>
+              <button
+                aria-label="Underline"
+                aria-pressed={!!current.underline}
+                onClick={() => patchLayer({ underline: !current.underline })}
+              >
+                <u>U</u>
+              </button>
+              <select
+                aria-label="Line spacing"
+                value={current.lineSpacing || 1.15}
+                onChange={(e) => patchLayer({ lineSpacing: +e.target.value })}
+              >
+                {[1, 1.15, 1.5, 2, 3].map((spacing) => (
+                  <option key={spacing} value={spacing}>
+                    {spacing}× spacing
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Toolbar text color"
+                type="color"
+                value={current.color}
+                onChange={(e) => patchLayer({ color: e.target.value })}
+              />
+              {(['left', 'center', 'right'] as const).map((align) => (
+                <button
+                  key={align}
+                  aria-pressed={current.align === align}
+                  onClick={() => patchLayer({ align })}
+                >
+                  {align}
+                </button>
+              ))}
+            </fieldset>
+          )}
+          <fieldset>
+            <legend>Arrange</legend>
+            <button
+              disabled={!current && !arrangeIds.length}
+              onClick={deleteSelection}
+            >
+              Delete
+            </button>
+          </fieldset>
+        </div>
         {affectsPublished && (
           <div className="publication-impact" role="note">
             <strong>Saving updates published content.</strong>{' '}
@@ -3406,7 +3588,8 @@ function Editor({
               <Layers size={16} />
               Layers <span>{slide.layers.length}</span>
             </h2>
-            <div className="insert-tools">
+            <details className="insert-tools">
+              <summary>More widgets &amp; tools</summary>
               <section
                 className="insert-tool-group"
                 aria-labelledby="insert-content-heading"
@@ -3500,7 +3683,7 @@ function Editor({
                   ))}
                 </div>
               </section>
-            </div>
+            </details>
             <div className="arrange-selection">
               <button
                 type="button"
@@ -3628,25 +3811,6 @@ function Editor({
                   </button>
                 </div>
               ))}
-            </div>
-            <div className="canvas-settings">
-              <h3>Canvas</h3>
-              <label>
-                Orientation
-                <select
-                  value={slide.width > slide.height ? 'landscape' : 'portrait'}
-                  onChange={(e) =>
-                    change({
-                      ...slide,
-                      width: e.target.value === 'landscape' ? 1920 : 1080,
-                      height: e.target.value === 'landscape' ? 1080 : 1920,
-                    })
-                  }
-                >
-                  <option value="landscape">Landscape / 16:9</option>
-                  <option value="portrait">Portrait / 9:16</option>
-                </select>
-              </label>
             </div>
           </aside>
           <section
@@ -4347,6 +4511,94 @@ function Editor({
                     </label>
                   )}
                 </PropertySection>
+                {current.type === 'text' && (
+                  <PropertySection title="Live metric in text">
+                    <label>
+                      Metric source
+                      <select
+                        aria-label="Text metric"
+                        value={
+                          current.data
+                            ? `${current.data.feedId}|${current.data.field}`
+                            : ''
+                        }
+                        onChange={(event) => {
+                          if (!event.target.value) {
+                            patchLayer({ data: undefined });
+                            return;
+                          }
+                          const [feedId, field] = event.target.value.split('|');
+                          const feed = feeds.find((f) => f.id === feedId)!;
+                          const config = {
+                            ...newLayer('data').data!,
+                            feedId,
+                            field,
+                          };
+                          if (
+                            feed.siteId &&
+                            feed.applicationId &&
+                            feed.sourceKey
+                          )
+                            config.siteBinding = {
+                              applicationId: feed.applicationId,
+                              sourceKey: feed.sourceKey,
+                            };
+                          patchLayer({
+                            data: config,
+                            text: `${current.text} <${field}>`,
+                          });
+                        }}
+                      >
+                        <option value="">No live metric</option>
+                        {feeds.flatMap((f) =>
+                          f.fields
+                            .filter((v) => v.type === 'number')
+                            .map((v) => (
+                              <option
+                                key={`${f.id}|${v.key}`}
+                                value={`${f.id}|${v.key}`}
+                              >
+                                {f.name} · {v.key}
+                              </option>
+                            )),
+                        )}
+                      </select>
+                    </label>
+                    <p className="muted">
+                      Place{' '}
+                      {current.data
+                        ? `<${current.data.field}>`
+                        : '<MetricName>'}{' '}
+                      anywhere in your sentence. Store sources follow the
+                      screen’s assigned store. Missing values display —. Live
+                      text and extended formatting require player 0.15.6 or
+                      newer.
+                    </p>
+                    {current.data && (
+                      <label>
+                        Decimal places
+                        <input
+                          aria-label="Text metric decimals"
+                          type="number"
+                          min={0}
+                          max={4}
+                          value={current.data.decimals}
+                          onChange={(e) =>
+                            patchLayer({
+                              data: {
+                                ...current.data!,
+                                decimals: Math.max(
+                                  0,
+                                  Math.min(4, +e.target.value),
+                                ),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    )}
+                  </PropertySection>
+                )}
                 {current.type === 'data' && (
                   <PropertySection title="Appearance">
                     {current.data?.card?.style !== 'split' && (
@@ -4714,7 +4966,7 @@ function Editor({
             </button>
             <button
               className="primary"
-              disabled={busy || !slide.name.trim()}
+              disabled={busy || !slide.name.trim() || (!slide.id && !dirty)}
               onClick={() => {
                 void save().then((ok) => {
                   if (ok) navigation.leave();

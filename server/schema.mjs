@@ -49,6 +49,9 @@ export const layerSchema = z
     fontId: id.optional(),
     color: color.default('#202923'),
     bold: z.boolean().default(false),
+    italic: z.boolean().optional(),
+    underline: z.boolean().optional(),
+    lineSpacing: z.number().min(0.8).max(3).optional(),
     align: z.enum(['left', 'center', 'right']).default('left'),
     verticalAlign: z.enum(['top', 'middle', 'bottom']).default('top'),
     autoSize: z.boolean().default(false),
@@ -139,6 +142,14 @@ export const layerSchema = z
   .refine((l) => l.type !== 'counter' || !!l.counter, 'Configure the counter')
   .refine((l) => l.type !== 'weather' || !!l.weather, 'Configure the weather')
   .refine((l) => l.type !== 'shape' || !!l.shape, 'Configure the shape')
+  .refine(
+    (l) => !l.data || ['data', 'text'].includes(l.type),
+    'Only text and data layers support metric bindings',
+  )
+  .refine(
+    (l) => l.type !== 'text' || !l.data || l.data.mode === 'metric',
+    'Text variables require a numeric metric',
+  )
   .refine((l) => l.type !== 'data' || !!l.data, 'Configure the data widget')
   .refine((l) => l.type !== 'stocks' || !!l.stocks, 'Configure stock symbols');
 export const tagsSchema = z

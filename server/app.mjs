@@ -1,5 +1,7 @@
+import { createAudit } from './audit.mjs';
 import {
   mountSites,
+  grantScreenSiteAccess,
   requireActiveSite,
   siteByNumber,
   siteMember,
@@ -352,6 +354,8 @@ export function createApp({
     next();
   };
   app.get('/api/health', (req, res) => res.json({ ok: true, version }));
+  const audit = createAudit(db);
+  app.use((req, res, next) => audit.middleware(req, res, next));
   accounts.mount(app, rateLimit);
   mountSites(app, { db, administrator, accounts });
   const vault = mountScreenSetup(app, {
@@ -485,7 +489,7 @@ export function createApp({
       return item.layers.flatMap((l) =>
         ['image', 'video'].includes(l.type) && !l.removedMedia
           ? [['asset', l.assetId]]
-          : l.type === 'data' && l.data?.feedId && !l.data.siteBinding
+          : l.data?.feedId && !l.data.siteBinding
             ? [['data-feed', l.data.feedId]]
             : [],
       );
@@ -1440,7 +1444,7 @@ export function createApp({
         const slide =
           item.slide || allRecords('slide').find((s) => s.id === item.slideId);
         for (const layer of slide?.layers || [])
-          if (layer.type === 'data' && !visible('data-feed', layer.data.feedId))
+          if (layer.data && !visible('data-feed', layer.data.feedId))
             throw fail(
               409,
               'Viewing access to every data feed is required for every playlist recipient',
@@ -1600,7 +1604,7 @@ export function createApp({
         i.slide.layers.some((l) => l.type === 'video'),
       )
         ? 5
-        : items.some((i) => i.slide.layers.some((l) => l.type === 'data'))
+        : items.some((i) => i.slide.layers.some((l) => !!l.data))
           ? 4
           : items.some((item) =>
                 item.slide.layers.some(
@@ -1664,7 +1668,7 @@ export function createApp({
           i.slide.layers.some((l) => l.type === 'video'),
         )
           ? 5
-          : items.some((i) => i.slide.layers.some((l) => l.type === 'data'))
+          : items.some((i) => i.slide.layers.some((l) => !!l.data))
             ? 4
             : published.schemaVersion,
         revision: randomUUID(),
@@ -2379,11 +2383,7 @@ export function createApp({
         device.id,
       );
       if (!device.approved) {
-        if (!administrator) {
-          db.prepare(
-            "INSERT OR IGNORE INTO resource_grants(kind,id,userId,groupId) VALUES ('device',?,'',?)",
-          ).run(device.id, site.accessGroupId);
-        }
+        grantScreenSiteAccess(db, device.id, site);
         auditSite(
           db,
           req.user,
@@ -2401,12 +2401,12 @@ export function createApp({
   app.post('/api/devices/:id/site', administrator, (req, res) => {
     const device = requireRecord('device', req.params.id);
     const { siteId } = z.object({ siteId: z.uuid() }).strict().parse(req.body);
-    requireActiveSite(db, siteId);
+    const site = requireActiveSite(db, siteId);
     if (!device.approved) throw fail(400, 'Assign the site during pairing');
     if (device.siteId && device.siteId !== siteId)
       throw fail(
         409,
-        'Site transfers are not available yet; reset and re-enroll the player',
+        'Use the reviewed screen transfer to move this screen to another site',
       );
     if (!device.siteId && !supportsSiteVersion(device.status?.version))
       throw fail(
@@ -2421,6 +2421,7 @@ export function createApp({
           ? device.siteRevision || 0
           : (device.siteRevision || 0) + 1,
       });
+      grantScreenSiteAccess(db, device.id, site);
       if (!device.siteId)
         auditSite(
           db,
@@ -2592,6 +2593,35 @@ export function createApp({
         stocks: stocks.forManifest(published),
       },
     });
+  });
+  audit.install(app, administrator, (kind, item) => {
+    if (kind === 'slide') {
+      slideSchema.parse(item);
+      dataFeeds.validateLayers(item, accounts.context.getStore()?.user);
+      checkImages(item, accounts.context.getStore()?.user);
+      checkFonts(item);
+    } else {
+      playlistSchema.parse(item);
+      for (const entry of item.items) requireRecord('slide', entry.slideId);
+      for (const entry of item.published?.items || []) {
+        dataFeeds.validateLayers(
+          entry.slide,
+          accounts.context.getStore()?.user,
+        );
+        checkImages(entry.slide, accounts.context.getStore()?.user);
+        checkFonts(entry.slide);
+      }
+    }
+    organization.validateFolder(
+      kind,
+      item.folderId,
+      accounts.context.getStore()?.user,
+    );
+    if (
+      item.managingGroupId &&
+      !db.prepare('SELECT 1 FROM groups WHERE id=?').get(item.managingGroupId)
+    )
+      throw fail(409, 'The managing group no longer exists');
   });
   app.use('/api', (req, res) =>
     res.status(404).json({ error: 'Endpoint not found' }),

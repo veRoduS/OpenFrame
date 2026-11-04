@@ -147,3 +147,45 @@ Publish the playlist layout once. Further data updates appear through normal pla
 New slides mark their generated “Something worth\nsharing.” text as a starter. Publishing removes that layer if its text was never edited, including when an image covers it. Saving and draft previews keep the starter until publication. Changing its text clears the marker; changing it back later does not make it eligible for cleanup. Text added deliberately, and existing unmarked slides, are preserved. Cleanup updates editable source slides and their existing publications. For a shared slide you can only view, cleanup affects your published snapshot without changing the owner's slide. Failed publications leave source slides untouched.
 
 Deleting a slide is blocked while it remains in a playlist draft or publication. The confirmation lists visible dependent playlists; remove the slide, save the drafts, and publish their replacements first. Restart/revoke confirmations explain screen interruption and reconnect behavior. Revoking a feed API key requires confirmation and immediately stops that application's updates.
+
+## Slide editing ribbon
+
+New slides stay in your browser as unsaved drafts. Opening **New slide** and
+closing it without edits does not create a library item. Save becomes available
+once you change the draft; closing an edited draft offers the usual unsaved-change
+choice. A blank slide can be saved intentionally after editing its name or canvas.
+
+Use the ribbon to insert text, media, shapes and metric cards. Less common widgets
+are under **More widgets & tools** in Layers. **Slide orientation** switches between
+1920 × 1080 landscape and 1080 × 1920 portrait. Existing layer positions retain
+their proportions; review text wrapping and image cropping after switching.
+
+Select a text box for font family, size, bold, italic, underline, alignment,
+line spacing and color. **Auto fit** fits text to its box; entering a font size
+switches back to a fixed size. Custom uploaded fonts are also available in the
+ribbon. Press **Delete** to remove the selected layer, or the selected unlocked
+layers in Arrange mode. Full locks are respected. Delete inside text fields edits
+text as usual, and Undo restores removed layers.
+
+In text properties, choose **Live metric in text → Metric source**, then put the
+field token anywhere in the sentence, for example:
+
+```text
+We are <AccidentFreeDays> days accident free.
+```
+
+Each text box binds one numeric field; its token may appear more than once.
+Values update without publishing the slide again. Decimal places are configurable;
+zero remains zero, and unavailable or missing values display an em dash. Store
+application sources follow each screen's assigned store, using the same feed
+permissions and transfer isolation as metric cards. Share the feed separately.
+Update Pi/Android players to **0.15.6 or newer** before using metric sentences or
+italic/underline/line spacing; older players retain their older text rendering.
+
+New metric widgets use header cards. Existing simple widgets keep their saved
+appearance. **Update to header card** is an explicit conversion; review the
+canvas and save, or use Undo to retain the original. Number presets include whole
+numbers, dollars with two decimals, and percentages with one decimal. Percentages
+format values already on a 0–100 scale; they do not multiply fractions by 100.
+
+See [Audit and history](audit-history.md) for administrator change review and restoration.

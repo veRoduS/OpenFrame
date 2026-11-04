@@ -120,9 +120,10 @@ export function SiteTransfer({
               </ul>
             )}
             <p>
-              Screen access will reset to administrators.{' '}
-              {impact.removedShareCount} existing shares will be removed. Share
-              it with the destination group after the move.
+              The destination store access group will automatically receive
+              screen access. {impact.removedShareCount} existing shares will be
+              removed. Sites without an access group remain accessible to
+              administrators.
             </p>
             <p>
               {impact.online

@@ -38,6 +38,13 @@ export function siteMember(db, user, site) {
     .get(site.accessGroupId, user.id);
 }
 
+export function grantScreenSiteAccess(db, deviceId, site) {
+  if (!site?.accessGroupId) return;
+  db.prepare(
+    "INSERT OR IGNORE INTO resource_grants(kind,id,userId,groupId) VALUES ('device',?,'',?)",
+  ).run(deviceId, site.accessGroupId);
+}
+
 export function siteTransaction(db, change) {
   db.exec('SAVEPOINT site_change');
   try {

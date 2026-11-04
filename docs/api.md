@@ -305,3 +305,14 @@ holding resource access. Parent/sibling groups and direct shares cannot bypass
 this boundary. The gate is applied to library listings, direct feed requests,
 previews, screen mutations/commands, and device feed audiences. Without an access
 group, existing resource-sharing rules remain in effect.
+
+## Administrator history
+
+See [Audit and history](audit-history.md) for filtered `GET /api/audit`, detail
+`GET /api/audit/{sequence}` and atomic `POST /api/audit/{sequence}/revert`.
+All endpoints require a global administrator. Restore supports slide/playlist
+edits and sharing operations; unsupported operations and conflicts return 409.
+Text layers may carry a metric-mode `data` binding and render `<fieldName>`
+inside their `text` with player 0.15.6+. This uses existing feed permissions,
+site resolution and publication snapshots. Optional text `italic`, `underline`
+and `lineSpacing` (0.8–3) preserve older slides' defaults.

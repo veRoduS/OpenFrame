@@ -2,6 +2,14 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.30.2] - 2026-11-03
+
+- Streamline slide editing, live metric text and administrator audit history
+
+## [0.30.1] - 2026-11-03
+
+- Automatically grant store screen access on pairing, assignment and transfer
+
 ## [0.30.0] - 2026-10-30
 
 - Publish the accumulated multi-site, home workspace, API-key, playlist and weather improvements as the latest server milestone.

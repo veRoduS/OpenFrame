@@ -128,3 +128,10 @@ After building, `node tests/workspace-ui.browser.mjs` checks load failure/retry 
 After building, `node tests/library-selection.browser.mjs` checks visible checked states after blur and search rerenders, pointer and keyboard toggling, multiple selections, and clearing selection in Slides and Playlists at desktop and phone widths. It uses the same Playwright settings and an isolated disposable database.
 
 After building, `node tests/data-feed-applications.browser.mjs` verifies admin application setup, one-time scoped key generation, an external first push without a login cookie, automatic feed discovery, new metric fields, stable IDs through key rotation, confirmed revocation and unused-application deletion, and desktop/phone layouts. It uses the same Playwright settings and a disposable database; screenshots stay under ignored `work/ui-review/application-keys/`. The Node data-feed tests cover application isolation, payload/field/feed/key/rate limits, transaction rollback, creator disable/demotion/deletion, persisted mappings and unchanged player publication revisions.
+
+After building, `node tests/editor-ribbon.browser.mjs` checks unsaved new drafts,
+portrait orientation, text formatting, safe Delete shortcuts, metric sentences,
+responsive editor layouts and administrator audit review in an isolated database.
+Use the Playwright settings above. Screenshots stay under ignored `work/editor-ribbon/`.
+`tests/audit.test.mjs` checks admin restrictions, filtering, secret exclusion,
+publication/sharing restoration and atomic conflicts. See [audit history](docs/audit-history.md).

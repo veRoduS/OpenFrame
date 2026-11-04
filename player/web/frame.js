@@ -267,9 +267,12 @@ export async function prepareFrame(host, item, assets, rotation, signal) {
           if (layer.type !== 'data') layoutText(box, content, layer, scale);
         };
         layouts.push(layout);
-        if (layer.type === 'text') content.textContent = layer.text;
+        if (layer.type === 'text' && !layer.data)
+          content.textContent = layer.text;
         else {
-          const renderer = widgets.get(layer.type);
+          const renderer = widgets.get(
+            layer.type === 'text' && layer.data ? 'metric-text' : layer.type,
+          );
           if (!renderer) throw new Error(`Unsupported widget: ${layer.type}`);
           const result = renderer(content, layer, { onChange: layout, signal });
           // Legacy cleanup-only widgets remain supported; new widgets stage quietly.

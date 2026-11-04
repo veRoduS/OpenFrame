@@ -59,7 +59,7 @@ export function renderDataWidget(
       text,
     );
   const format = (value) =>
-    `${Number(value).toLocaleString('en-US', { minimumFractionDigits: config.decimals || 0, maximumFractionDigits: config.decimals || 0 })}${config.unit ? ` ${config.unit}` : ''}`;
+    `${config.card?.prefix || ''}${Number(value).toLocaleString('en-US', { minimumFractionDigits: config.decimals || 0, maximumFractionDigits: config.decimals || 0 })}${config.unit ? ` ${config.unit}` : ''}`;
   const title =
     config.title ||
     {
