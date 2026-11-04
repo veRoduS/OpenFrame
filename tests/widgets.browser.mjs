@@ -101,6 +101,7 @@ try {
     await page.locator('.canvas-holder [data-shape="circle"] circle').count(),
     1,
   );
+  await page.getByText('More widgets & tools', { exact: true }).click();
   await page
     .getByRole('button', { name: 'Add weather widget', exact: true })
     .click();

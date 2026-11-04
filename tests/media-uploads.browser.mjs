@@ -297,13 +297,17 @@ try {
     .click();
   const editor = page.locator('.slide-editor');
   const layerList = editor.locator('.layer-list');
-  await editor.getByRole('button', { name: 'Add media', exact: true }).click();
+  await editor
+    .getByRole('button', { name: 'Image / video', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Add loop.mov', exact: true }).click();
   assert.equal(
     await layerList.getByRole('button', { name: /loop\.mov/ }).count(),
     1,
   );
-  await editor.getByRole('button', { name: 'Add media', exact: true }).click();
+  await editor
+    .getByRole('button', { name: 'Image / video', exact: true })
+    .click();
   await page
     .getByRole('button', { name: 'Add replacement.webm', exact: true })
     .click();

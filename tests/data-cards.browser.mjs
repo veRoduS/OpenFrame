@@ -178,6 +178,7 @@ try {
     .fill('Split card editor');
   await page.locator('.layer-list button').first().click();
   await page.getByRole('button', { name: 'Delete layer', exact: true }).click();
+  await page.getByText('More widgets & tools', { exact: true }).click();
   await page
     .getByRole('button', { name: 'Add bar chart widget', exact: true })
     .click();
@@ -185,7 +186,9 @@ try {
   await page
     .getByLabel('Value field', { exact: true })
     .selectOption('departments');
-  await page.getByRole('radio', { name: 'Split header', exact: true }).check();
+  await page
+    .getByText('Header card · new widgets use this style.', { exact: true })
+    .waitFor();
   await page.getByText('Header and delta badge', { exact: true }).click();
   await page.getByLabel('Header color', { exact: true }).waitFor();
   await page
@@ -201,6 +204,7 @@ try {
   await page
     .getByLabel('Delta field', { exact: true })
     .selectOption('pickupDelta');
+  await page.getByLabel('Row layout', { exact: true }).selectOption('table');
   await page
     .getByLabel('Row delta field', { exact: true })
     .selectOption('departmentChanges');
@@ -212,12 +216,6 @@ try {
   await page.getByLabel('Footer right label', { exact: true }).fill('Fixture');
   await page.getByLabel('Show update time', { exact: true }).uncheck();
   await page.locator('.slide-canvas svg[data-card-style="split"]').waitFor();
-  await page.getByRole('radio', { name: 'Classic', exact: true }).check();
-  assert.equal(
-    await page.locator('.slide-canvas svg[data-card-style="split"]').count(),
-    0,
-  );
-  await page.getByRole('radio', { name: 'Split header', exact: true }).check();
   assert.equal(
     await page.getByLabel('Row delta field', { exact: true }).inputValue(),
     'departmentChanges',
@@ -237,14 +235,42 @@ try {
   await page
     .getByRole('button', { name: 'Back to slides', exact: true })
     .click();
+  await api(`/api/slides/${saved.id}`, 'PUT', {
+    ...saved,
+    layers: saved.layers.map((layer) => ({
+      ...layer,
+      data: { ...layer.data, card: { ...layer.data.card, style: 'plain' } },
+    })),
+  });
+  await page.reload();
+  await page
+    .getByRole('button', { name: 'Edit Split card editor', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Update to header card', exact: true })
+    .click();
+  await page.locator('.slide-canvas svg[data-card-style="split"]').waitFor();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  assert.equal(
+    await page.locator('.slide-canvas svg[data-card-style="split"]').count(),
+    0,
+  );
+  await page
+    .getByRole('button', { name: 'Update to header card', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Save slide', exact: true }).click();
+  await page.getByText('All changes saved', { exact: true }).waitFor();
+  await page
+    .getByRole('button', { name: 'Back to slides', exact: true })
+    .click();
   await page
     .getByRole('button', { name: 'Edit Split card editor', exact: true })
     .click();
   await page.locator('.layer-list button').first().click();
   assert.ok(
     await page
-      .getByRole('radio', { name: 'Split header', exact: true })
-      .isChecked(),
+      .getByText('Header card · new widgets use this style.', { exact: true })
+      .isVisible(),
   );
   assert.equal(
     await page.getByLabel('Delta field', { exact: true }).inputValue(),
@@ -275,7 +301,7 @@ try {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.getByRole('button', { name: 'Properties', exact: true }).click();
   await page
-    .getByRole('radio', { name: 'Split header', exact: true })
+    .getByText('Header card · new widgets use this style.', { exact: true })
     .scrollIntoViewIfNeeded();
   const mobile = await page.evaluate(() => ({
     document: document.documentElement.scrollWidth,
@@ -308,6 +334,7 @@ try {
   await lineEditor
     .getByRole('button', { name: 'Delete layer', exact: true })
     .click();
+  await lineEditor.getByText('More widgets & tools', { exact: true }).click();
   await lineEditor
     .getByRole('button', { name: 'Add line graph widget', exact: true })
     .click();
@@ -318,8 +345,8 @@ try {
     .getByLabel('Value field', { exact: true })
     .selectOption('gmv');
   await lineEditor
-    .getByRole('radio', { name: 'Split header', exact: true })
-    .check();
+    .getByText('Header card · new widgets use this style.', { exact: true })
+    .waitFor();
   const statisticsToggle = lineEditor.getByLabel('Show min / avg / max', {
     exact: true,
   });

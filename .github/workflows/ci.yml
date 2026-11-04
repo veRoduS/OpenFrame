@@ -97,6 +97,12 @@ jobs:
       - name: Editor locks and image replacement
         timeout-minutes: 4
         run: node tests/editor-locks.browser.mjs
+      - name: Editor ribbon, metric text and bulk slide sharing
+        timeout-minutes: 4
+        run: node tests/editor-ribbon.browser.mjs
+      - name: Consistent library and site filters
+        timeout-minutes: 4
+        run: node tests/library-filters.browser.mjs
       - name: Player video decode and lifecycle
         timeout-minutes: 4
         run: node tests/player-video.browser.mjs

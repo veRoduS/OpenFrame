@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.33.0] - 2026-11-04
+
+- Release editor improvements, site-aware library filters, bulk sharing and administrator audit history
+
 ## [0.32.4] - 2026-11-04
 
 - Record signage feature ideas and owner priorities

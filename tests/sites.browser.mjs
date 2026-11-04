@@ -89,7 +89,7 @@ try {
   await editor.getByRole('button', { name: /^Slides/ }).click();
   await editor.getByRole('button', { name: 'New slide', exact: true }).click();
   await editor
-    .getByRole('button', { name: 'Add metric widget', exact: true })
+    .getByRole('button', { name: 'Metric card', exact: true })
     .click();
   const feedPicker = editor.getByLabel('Data feed', { exact: true });
   const storeOptions = feedPicker.locator(

@@ -131,7 +131,9 @@ try {
     ).slides.find((item) => item.id === slide.id);
   }
   async function addImage() {
-    await page.getByRole('button', { name: 'Add media', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Image / video', exact: true })
+      .click();
     assert.equal(
       await page
         .getByRole('dialog', { name: 'Add media', exact: true })
