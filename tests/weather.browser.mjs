@@ -223,7 +223,7 @@ try {
         .getByRole('button', { name: 'Layers', exact: true })
         .click();
       await page
-        .getByRole('button', { name: 'Add text', exact: true })
+        .getByRole('button', { name: 'Text box', exact: true })
         .waitFor();
       assert.equal(
         await page.getByLabel('Latitude', { exact: true }).isVisible(),

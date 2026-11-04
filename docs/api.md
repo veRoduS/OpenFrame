@@ -342,3 +342,20 @@ immediately to new manual feeds and application field creation. Existing wider
 feeds preserve data/schema and can update existing values after lowering it.
 Body sizes, table rows, series points, feed counts, rate limits and player
 delivery remain unchanged. See [the API guide](data-feeds-api.md).
+
+## Administrator history
+
+See [Audit and history](audit-history.md) for filtered `GET /api/audit`, detail
+`GET /api/audit/{sequence}` and atomic `POST /api/audit/{sequence}/revert`.
+All endpoints require a global administrator. Restore supports slide/playlist
+edits and sharing operations; unsupported operations and conflicts return 409.
+Text layers may carry a metric-mode `data` binding and render `<fieldName>`
+inside their `text` with player 0.15.10+. This uses existing feed permissions,
+site resolution and publication snapshots. Optional text `italic`, `underline`
+and `lineSpacing` (0.8–3) preserve older slides' defaults.
+
+`POST /api/access/bulk` accepts `{slideIds: uuid[], groupId?: string,
+userId?: string, permission?: "view" | "edit"}`. Select exactly one recipient and
+1–100 slide IDs; duplicate IDs are ignored and View is the default. The operation
+uses the same authorization and linked-content rules as individual sharing and
+commits atomically. Individual-user grants require a global administrator.

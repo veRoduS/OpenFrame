@@ -1,3 +1,4 @@
+import { metricText } from './metric-text.js';
 import {
   renderDataWidget,
   getDataFeedSnapshots,
@@ -111,5 +112,20 @@ registerWidget('data', (element, layer) =>
     subscribeDataFeeds,
     (node, value) =>
       renderDataWidget(node, layer.data, JSON.parse(value), layer.color),
+  ),
+);
+
+registerWidget('metric-text', (element, layer, { onChange = () => {} } = {}) =>
+  liveText(
+    element,
+    () =>
+      metricText(
+        layer.text,
+        layer.data,
+        getDataFeedSnapshots()[layer.data?.feedId],
+      ),
+    () => null,
+    onChange,
+    subscribeDataFeeds,
   ),
 );

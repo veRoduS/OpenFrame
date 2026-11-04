@@ -474,6 +474,10 @@ export function mountDataFeedApplications(
         'INVALID_TOKEN',
         'Invalid, expired, revoked, or unauthorized application key',
       );
+    req.auditActor = {
+      id: key.id,
+      name: `Application key: ${application.name} / ${key.name}`,
+    };
     if (
       application.managingGroupId &&
       !db

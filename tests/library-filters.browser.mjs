@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
@@ -48,6 +49,7 @@ try {
     parentId: parent.id,
   });
   const unrelated = await api('/api/groups', 'POST', { name: 'Other region' });
+  const enrolled = new Map();
   for (const [name, group] of [
     ['Safety North', child],
     ['Safety South', sibling],
@@ -66,6 +68,7 @@ try {
       items: [{ slideId: slide.id, duration: 15 }],
     });
     const device = await api('/api/player/enroll', 'POST', { name });
+    enrolled.set(name, device);
     if (group)
       for (const [kind, id] of [
         ['slide', slide.id],
@@ -352,6 +355,96 @@ try {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
+  const northSite = await api('/api/sites', 'POST', {
+    siteNumber: '001',
+    name: 'North',
+    accessGroupId: child.id,
+  });
+  await api('/api/sites', 'POST', {
+    siteNumber: '002',
+    name: 'South',
+    accessGroupId: sibling.id,
+  });
+  const screen = enrolled.get('Safety North');
+  await page.request.post(`${base}/api/player/sync`, {
+    headers: { Authorization: `Bearer ${screen.token}` },
+    data: { version: '0.15.10', siteAck: 0 },
+  });
+  await api(`/api/devices/${screen.id}/site`, 'POST', { siteId: northSite.id });
+  const image = await sharp({
+    create: { width: 20, height: 20, channels: 3, background: 'blue' },
+  })
+    .png()
+    .toBuffer();
+  for (const [name, group] of [
+    ['North image', child],
+    ['South image', sibling],
+    ['Private image', null],
+  ]) {
+    const response = await page.request.post(`${base}/api/assets`, {
+      multipart: {
+        file: { name: `${name}.png`, mimeType: 'image/png', buffer: image },
+      },
+    });
+    assert.ok(response.ok());
+    const asset = await response.json();
+    if (group)
+      await api(`/api/access/asset/${asset.id}`, 'POST', { groupId: group.id });
+  }
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [route, noun, total] of [
+      ['/dashboard', 'Slides', 4],
+      ['/dashboard/playlists', 'Playlists', 4],
+      ['/dashboard/screens', 'Screens', 4],
+      ['/dashboard/media', 'Media', 3],
+    ]) {
+      await page.goto(base + route);
+      const filters = page.getByRole('region', {
+        name: `${noun} filters`,
+        exact: true,
+      });
+      const site = filters.getByLabel(`Filter ${noun.toLowerCase()} by site`, {
+        exact: true,
+      });
+      await site.selectOption(northSite.id);
+      await filters
+        .getByRole('status')
+        .getByText(`Showing 1 of ${total} ${noun.toLowerCase()}`, {
+          exact: true,
+        })
+        .waitFor();
+      await page.reload();
+      assert.equal(
+        await page
+          .getByLabel(`Filter ${noun.toLowerCase()} by site`, { exact: true })
+          .inputValue(),
+        northSite.id,
+      );
+      await filters
+        .getByRole('button', { name: 'Clear filters', exact: true })
+        .click();
+      assert.equal(await site.inputValue(), '');
+      await filters
+        .getByRole('status')
+        .getByText(`Showing ${total} of ${total} ${noun.toLowerCase()}`, {
+          exact: true,
+        })
+        .waitFor();
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      );
+      await page.screenshot({
+        path: path.join(
+          root,
+          `work/filters-${noun.toLowerCase()}-${width}.png`,
+        ),
+        fullPage: true,
+      });
+    }
+  }
   assert.deepEqual(errors, []);
   console.log(
     'Library filters passed: nested groups, name/status combinations, ungrouped resources, counts, empty results, independent page state and 320px layout.',

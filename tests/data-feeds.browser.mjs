@@ -148,6 +148,7 @@ try {
   await page.getByRole('button', { name: 'New slide', exact: true }).click();
   await page.locator('.layer-list button').first().click();
   await page.getByRole('button', { name: 'Delete layer', exact: true }).click();
+  await page.getByText('More widgets & tools', { exact: true }).click();
   for (const name of ['metric', 'progress bar', 'line graph', 'bar chart']) {
     await page
       .getByRole('button', { name: `Add ${name} widget`, exact: true })
@@ -199,7 +200,7 @@ try {
     issued.token,
   );
   await playback
-    .locator('.slide-frame[aria-hidden="false"] svg[aria-label="Metric. 88"]')
+    .locator('.slide-frame[aria-hidden="false"] svg[aria-label^="Metric. 88"]')
     .waitFor({ timeout: 20000 });
   assert.equal(
     await playback.evaluate(

@@ -503,3 +503,54 @@ void test('store screen metrics and subgroup access survive departure of the app
     200,
   );
 });
+
+void test('administrator pairing and transfer grant the destination store access', async (t) => {
+  const { admin, client, person, enroll, north, south, branch, southGroup } =
+    await fixture(t);
+  const northUser = await person('north-auto', branch.id);
+  const southUser = await person('south-auto', southGroup.id);
+  const device = await enroll('Moving screen', north.siteNumber);
+  assert.equal(
+    (
+      await admin(`/api/devices/${device.id}/approve`, 'POST', {
+        code: device.code,
+        siteId: north.id,
+      })
+    ).status,
+    200,
+  );
+  const visible = async (user, id) =>
+    (await user.call('/api/library')).data.devices.some(
+      (d) => d.id === id && d.approved,
+    );
+  assert.equal(await visible(northUser, device.id), true);
+  assert.equal(await visible(southUser, device.id), false);
+  assert.equal(
+    (
+      await client()(
+        '/api/player/sync',
+        'POST',
+        {
+          version: '0.15.2',
+          siteAck: 1,
+        },
+        device.token,
+      )
+    ).status,
+    200,
+  );
+  const impact = (
+    await admin(`/api/devices/${device.id}/site-preview?siteId=${south.id}`)
+  ).data;
+  assert.equal(
+    (
+      await admin(`/api/devices/${device.id}/transfer`, 'POST', {
+        siteId: south.id,
+        reviewToken: impact.reviewToken,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(await visible(northUser, device.id), false);
+  assert.equal(await visible(southUser, device.id), true);
+});

@@ -155,3 +155,72 @@ feed** (server 0.32.0+). The default is 100, with a range of 1–500.
 Changes take effect immediately and persist after restart. Lowering the limit
 preserves existing fields and value updates; new feeds/additional fields must
 fit the current setting. Existing numbered sources are not automatically merged.
+
+## Slide editing ribbon
+
+New slides stay in your browser as unsaved drafts. Opening **New slide** and
+closing it without edits does not create a library item. Save becomes available
+once you change the draft; closing an edited draft offers the usual unsaved-change
+choice. A blank slide can be saved intentionally after editing its name or canvas.
+
+Use the ribbon to insert text, media, shapes and metric cards. Less common widgets
+are under **More widgets & tools** in Layers. **Slide orientation** switches between
+1920 × 1080 landscape and 1080 × 1920 portrait. Existing layer positions retain
+their proportions; review text wrapping and image cropping after switching.
+
+Select a text box for font family, size, bold, italic, underline, alignment,
+line spacing and color. **Auto fit** fits text to its box; entering a font size
+switches back to a fixed size. Custom uploaded fonts are also available in the
+ribbon. Press **Delete** to remove the selected layer, or the selected unlocked
+layers in Arrange mode. Full locks are respected. Delete inside text fields edits
+text as usual, and Undo restores removed layers.
+
+In text properties, choose **Live metric in text → Metric source**, then put the
+field token anywhere in the sentence, for example:
+
+```text
+We are <AccidentFreeDays> days accident free.
+```
+
+Each text box binds one numeric field; its token may appear more than once.
+Values update without publishing the slide again. Decimal places are configurable;
+zero remains zero, and unavailable or missing values display an em dash. Store
+application sources follow each screen's assigned store, using the same feed
+permissions and transfer isolation as metric cards. Share the feed separately.
+Update Pi/Android players to **0.15.10 or newer** before using metric sentences or
+italic/underline/line spacing; older players retain their older text rendering.
+
+New metric widgets use header cards. Existing simple widgets keep their saved
+appearance. **Update to header card** is an explicit conversion; review the
+canvas and save, or use Undo to retain the original. Number presets include whole
+numbers, dollars with two decimals, and percentages with one decimal. Percentages
+format values already on a 0–100 scale; they do not multiply fractions by 100.
+
+See [Audit and history](audit-history.md) for administrator change review and restoration.
+
+To share several slides, select their checkboxes in Slides and choose **Assign
+access** in the selection toolbar. Choose a group (or, for administrators, a user),
+choose **View** or **Edit**, then **Apply**. The chosen permission applies to that
+recipient on every selected slide, including replacing their previous direct
+permission. Other recipients and ownership stay unchanged. You must have sharing
+permission on every selected slide. Up to 100 slides can be updated at once;
+validation or linked-content sharing failures leave the entire batch unchanged.
+
+## Consistent library filters
+
+Slides, Playlists, Screens and Media use the same filter bar: **Search**, an
+always-visible **Site** selector, secondary **Group** and **Status** filters
+(**Type** for Media), and **Tags** where supported. On phones, **Filters** expands
+the secondary controls; Site remains visible. Result counts, Clear filters, and
+sort/view tools use the same layout. Clear filters also resets the folder scope.
+
+Site selections are saved separately for each page and signed-in account during
+the browser session. They clear on logout or if the selected site is no longer
+available. **All sites** shows everything you already have access to.
+
+For Slides, Playlists and Media, a site includes content shared with its access
+group (including related parent/child groups), playlists assigned to its screens,
+and the slides/media used by those playlists. **Unassigned** shows content with
+no known site association. A shared item may appear under several sites. Screens
+retain their assigned/requested-site filtering. Filtering does not grant access,
+move content, change ownership or alter what a screen plays.

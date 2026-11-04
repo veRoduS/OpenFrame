@@ -1,3 +1,4 @@
+import { metricText } from '../player/web/metric-text.js';
 import { renderDataWidget } from '../player/web/data-feeds.js';
 import { renderStocks } from '../player/web/stocks.js';
 import { renderShape } from '../player/web/shape.js';
@@ -211,17 +212,56 @@ function TextContent({
   layer,
   scale,
   text,
+  active,
 }: {
+  active: boolean;
   layer: Layer;
   scale: number;
   text: string;
 }) {
+  const [snapshot, setSnapshot] = useState<{
+    id: string;
+    value: unknown;
+  } | null>(null);
+  useEffect(() => {
+    const id = layer.data?.feedId;
+    if (!id || !active) return;
+    let stopped = false;
+    const controller = new AbortController();
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/data-feeds/${id}/data`, {
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(8000),
+          ]),
+          cache: 'no-store',
+        });
+        const next = response.ok ? await response.json() : null;
+        if (!stopped) setSnapshot({ id: id!, value: next });
+      } catch {
+        /* Keep the last snapshot while offline. */
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 15000);
+    return () => {
+      stopped = true;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [layer.data?.feedId, active]);
+  const rendered = metricText(
+    text,
+    layer.data,
+    snapshot?.id === layer.data?.feedId ? snapshot?.value : null,
+  );
   const ref = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     if (ref.current?.parentElement)
       layoutText(ref.current.parentElement, ref.current, layer, scale);
-  }, [layer, scale, text]);
-  return <span ref={ref}>{text}</span>;
+  }, [layer, scale, rendered]);
+  return <span ref={ref}>{rendered}</span>;
 }
 
 export function SlideCanvas({
@@ -461,6 +501,7 @@ export function SlideCanvas({
             <WeatherContent layer={layer} scale={scale} active={interactive} />
           ) : (
             <TextContent
+              active={liveData}
               layer={layer}
               scale={scale}
               text={

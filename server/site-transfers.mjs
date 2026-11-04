@@ -1,6 +1,11 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { requireActiveSite, siteTransaction, auditSite } from './sites.mjs';
+import {
+  grantScreenSiteAccess,
+  requireActiveSite,
+  siteTransaction,
+  auditSite,
+} from './sites.mjs';
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const digest = (value) =>
@@ -58,7 +63,7 @@ export function mountSiteTransfers(
     let detachPlaylist = false;
     for (const [index, item] of (published?.items || []).entries()) {
       for (const [layerIndex, layer] of item.slide.layers.entries()) {
-        if (layer.type !== 'data') continue;
+        if (!layer.data) continue;
         const config = layer.data;
         const local = resolved.items[index].slide.layers[layerIndex].data;
         const available =
@@ -92,6 +97,7 @@ export function mountSiteTransfers(
       device.siteId,
       device.siteRevision || 0,
       destination.id,
+      destination.accessGroupId,
       device.playlistId,
       published?.revision,
       resolved?.revision,
@@ -136,7 +142,8 @@ export function mountSiteTransfers(
       .strict()
       .parse(req.body);
     const device = requireRecord('device', req.params.id);
-    const impact = preview(device, requireActiveSite(db, siteId));
+    const destination = requireActiveSite(db, siteId);
+    const impact = preview(device, destination);
     if (impact.reviewToken !== reviewToken)
       throw fail(
         409,
@@ -169,6 +176,7 @@ export function mountSiteTransfers(
           clearedAt: null,
         },
       });
+      grantScreenSiteAccess(db, device.id, destination);
       auditSite(
         db,
         req.user,

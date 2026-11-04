@@ -5,6 +5,7 @@ import { DataFeedLimitSettings } from './data-feed-limit-settings';
 import { DataFeedApplications } from './data-feed-applications';
 import { DataFeedResetButton } from './data-feed-reset';
 import {
+  dataCardSettings,
   DataCardOptions,
   DataCardStylePicker,
   WidgetPropertySection,
@@ -1182,6 +1183,35 @@ export function DataWidgetOptions({
   );
   return (
     <div className="data-widget-options">
+      <label>
+        Number preset
+        <select
+          aria-label="Number preset"
+          value=""
+          onChange={(event) => {
+            const preset = event.target.value;
+            if (!preset) return;
+            patch({
+              decimals:
+                preset === 'currency' ? 2 : preset === 'percentage' ? 1 : 0,
+              unit: preset === 'percentage' ? '%' : '',
+              card: {
+                ...dataCardSettings(config),
+                style: config.card?.style || 'plain',
+                prefix: preset === 'currency' ? '$' : '',
+              },
+            });
+          }}
+        >
+          <option value="">Choose format…</option>
+          <option value="number">Whole number</option>
+          <option value="currency">Currency · $1,234.56</option>
+          <option value="percentage">Percentage · 42.5%</option>
+        </select>
+        <span className="muted">
+          Percentage uses values already on a 0–100 scale.
+        </span>
+      </label>
       <WidgetPropertySection title="Card style and title">
         <DataCardStylePicker
           config={config}

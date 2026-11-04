@@ -215,3 +215,66 @@
     grid-template-rows: minmax(0, 1fr) 44px;
   }
 }
+
+.editor-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 20px 12px;
+  background: #f6f8fb;
+  border-bottom: 1px solid #dce2ea;
+  flex-shrink: 0;
+}
+.editor-ribbon fieldset {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 4px 12px 0 0;
+  border: 0;
+  border-right: 1px solid #dce2ea;
+}
+.editor-ribbon legend {
+  font-size: 11px;
+  color: #526071;
+  padding: 0 0 4px;
+}
+.editor-ribbon input[type='number'] {
+  width: 76px;
+}
+.editor-ribbon input[type='color'] {
+  width: 36px;
+  height: 34px;
+  padding: 2px;
+}
+.editor-ribbon select {
+  max-width: 180px;
+}
+.editor-ribbon button[aria-pressed='true'] {
+  background: #dce8fa;
+  border-color: #6789bf;
+}
+@media (max-width: 767px) {
+  .editor-ribbon {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 5px 10px;
+    gap: 8px;
+  }
+  .editor-ribbon fieldset {
+    flex-shrink: 0;
+  }
+}
+.audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin: 16px 0;
+}
+.audit-filters label {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  flex: 1;
+}

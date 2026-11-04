@@ -75,6 +75,7 @@ export function LibraryOrganizationToolbar({
   onSelect,
   refresh,
   onAccess,
+  onBulkAccess,
   children,
   showTagFilter = true,
 }: {
@@ -91,6 +92,7 @@ export function LibraryOrganizationToolbar({
   onSelect: (ids: string[]) => void;
   refresh: () => Promise<void>;
   onAccess: (folder: LibraryFolder) => void;
+  onBulkAccess?: (ids: string[]) => void;
 }) {
   const [error, setError] = useState('');
   const [foldersOpen, setFoldersOpen] = useState(false);
@@ -408,6 +410,16 @@ export function LibraryOrganizationToolbar({
             )}
             {!!selection.length && (
               <>
+                {onBulkAccess && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onBulkAccess(selection)}
+                  >
+                    <Shield size={16} />
+                    Assign access
+                  </button>
+                )}
                 <span className="selection-count">
                   {selection.length} selected
                 </span>

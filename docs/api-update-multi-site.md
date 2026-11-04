@@ -307,7 +307,7 @@ Metric producers do not implement these player APIs.
   Members cannot redirect the screen to another site. Administrators can also
   approve, including older enrollments without a number and sites without an
   access group. Library sites/devices expose `canApprove` for the current user
-  and include that user's eligible pending screens. Member approval shares the
+  and include that user's eligible pending screens. Administrator and member approval share the
   screen with the store group and its subgroups without personal ownership; content and
   metric permissions remain separate. Already approved screens cannot be moved
   through pairing.
@@ -316,7 +316,7 @@ Metric producers do not implement these player APIs.
 - Transfers require a 0.15.2+ heartbeat. Request an impact review through
   `GET /api/devices/{id}/site-preview?siteId=UUID`, then submit
   `POST /api/devices/{id}/transfer` with `{siteId,reviewToken}`. Stale reviews
-  return 409. Prior screen shares/commands are reset; incompatible fixed-feed
+  return 409. Prior screen shares/commands are reset and the destination access group is granted screen access; incompatible fixed-feed
   playlists are detached.
 - Upgraded sync clients persist `siteRevision` with the approved site, clear
   prior site content before media downloads, and send `siteAck` for that durable

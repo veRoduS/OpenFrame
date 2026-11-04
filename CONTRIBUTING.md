@@ -135,3 +135,10 @@ After building, `node tests/data-feed-limits.browser.mjs` checks the admin field
 limit setting, reload persistence, bounds, immediate ingestion enforcement,
 preserved wider feeds, manual feed form controls and desktop/phone layouts.
 It uses disposable data and the standard Playwright settings.
+
+After building, `node tests/editor-ribbon.browser.mjs` checks unsaved new drafts,
+portrait orientation, text formatting, safe Delete shortcuts, metric sentences,
+responsive editor layouts and administrator audit review in an isolated database.
+Use the Playwright settings above. Screenshots stay under ignored `work/editor-ribbon/`.
+`tests/audit.test.mjs` checks admin restrictions, filtering, secret exclusion,
+publication/sharing restoration and atomic conflicts. See [audit history](docs/audit-history.md).

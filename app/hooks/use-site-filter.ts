@@ -6,14 +6,21 @@ const keyFor = (userId: string, kind: string) =>
 export function clearSiteFilters(userId?: string) {
   if (!userId) return;
   try {
-    for (const kind of ['screens', 'metrics', 'preview'])
+    for (const kind of [
+      'screens',
+      'slides',
+      'playlists',
+      'media',
+      'metrics',
+      'preview',
+    ])
       sessionStorage.removeItem(keyFor(userId, kind));
   } catch {
     /* Storage can be unavailable. */
   }
 }
 export function useSiteFilter(
-  kind: 'screens' | 'metrics' | 'preview',
+  kind: 'screens' | 'slides' | 'playlists' | 'media' | 'metrics' | 'preview',
   userId: string | undefined,
   sites: Site[] | undefined,
 ) {

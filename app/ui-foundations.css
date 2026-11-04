@@ -899,3 +899,40 @@ button[data-variant='destructive']:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The four library pages share Search / Site / secondary filters / result tools. */
+.library-filters.has-site-filter {
+  grid-template-columns: minmax(180px, 1fr) minmax(170px, 0.8fr) minmax(
+      300px,
+      1.5fr
+    );
+  align-items: end;
+}
+.library-filters.has-site-filter .library-filter-options {
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+  .library-filters.has-site-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .library-filters.has-site-filter .library-filter-options {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 767px) {
+  .library-filters.has-site-filter {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .library-filters.has-site-filter .library-site-filter {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .library-filters.has-site-filter .library-filter-toggle {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .library-filters.has-site-filter .library-filter-options {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+  }
+}

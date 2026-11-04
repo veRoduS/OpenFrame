@@ -55,6 +55,9 @@ export type Layer = {
   fontId?: string;
   color: string;
   bold: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  lineSpacing?: number;
   align: 'left' | 'center' | 'right';
   verticalAlign?: 'top' | 'middle' | 'bottom';
   autoSize?: boolean;

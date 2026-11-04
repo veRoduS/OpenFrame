@@ -23,7 +23,9 @@ export function layoutText(box, content, layer, scale) {
     display: 'block',
     flexShrink: '0',
     width: '100%',
-    lineHeight: '1.15',
+    lineHeight: String(layer.lineSpacing || 1.15),
+    fontStyle: layer.italic ? 'italic' : 'normal',
+    textDecoration: layer.underline ? 'underline' : 'none',
     whiteSpace: 'pre-wrap',
     overflowWrap: 'anywhere',
     minWidth: '0',
@@ -37,12 +39,15 @@ export function layoutText(box, content, layer, scale) {
     content.style.fontSize = `${layer.fontSize * scale}px`;
     return;
   }
-  const size = fitFontSize((candidate) => {
-    content.style.fontSize = `${candidate}px`;
-    return (
-      content.scrollWidth <= box.clientWidth &&
-      content.scrollHeight <= box.clientHeight
-    );
-  }, box.clientHeight / 1.15);
+  const size = fitFontSize(
+    (candidate) => {
+      content.style.fontSize = `${candidate}px`;
+      return (
+        content.scrollWidth <= box.clientWidth &&
+        content.scrollHeight <= box.clientHeight
+      );
+    },
+    box.clientHeight / (layer.lineSpacing || 1.15),
+  );
   content.style.fontSize = `${size}px`;
 }

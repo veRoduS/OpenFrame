@@ -3501,6 +3501,16 @@ void test('central data resolves through unchanged shared player layouts without
       code: screen.code,
       siteId: sites[i].id,
     });
+    // Pairing grants the store group screen access; content must be shared too.
+    assert.equal(
+      (
+        await admin(`/api/access/playlist/${playlist.id}`, 'POST', {
+          groupId: groups[i].id,
+          permission: 'view',
+        })
+      ).status,
+      200,
+    );
     await admin(`/api/devices/${screen.id}`, 'PUT', {
       name: `Central screen ${i}`,
       playlistId: playlist.id,

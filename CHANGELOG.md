@@ -2,6 +2,26 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.33.0] - 2026-11-04
+
+- Release editor improvements, site-aware library filters, bulk sharing and administrator audit history
+
+## [0.32.4] - 2026-11-04
+
+- Record signage feature ideas and owner priorities
+
+## [0.32.3] - 2026-11-04
+
+- Unify library filters and add persistent site filtering to slides, playlists, screens and media
+
+## [0.32.2] - 2026-11-04
+
+- Assign View or Edit access to selected slides atomically while preserving existing sharing
+
+## [0.32.1] - 2026-11-04
+
+- Integrate slide editor ribbon, metric text, automatic store screen access and administrator audit history with current server updates
+
 ## [0.32.0] - 2026-10-30
 
 - Release configurable feed field limits with a default of 100 and admin controls from 1 to 500

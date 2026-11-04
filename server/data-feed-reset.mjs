@@ -29,7 +29,8 @@ export function createDataFeedReset(db) {
     function disconnect(slide) {
       let changed = false;
       const layers = (slide.layers || []).map((layer) => {
-        const config = layer.type === 'data' && layer.data;
+        const config =
+          (layer.type === 'data' || layer.type === 'text') && layer.data;
         if (
           !config ||
           !(all

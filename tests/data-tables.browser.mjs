@@ -95,13 +95,14 @@ try {
     .fill('SMCC table display');
   await page.locator('.layer-list button').first().click();
   await page.getByRole('button', { name: 'Delete layer', exact: true }).click();
+  await page.getByText('More widgets & tools', { exact: true }).click();
   await page
     .getByRole('button', { name: 'Add table widget', exact: true })
     .click();
   assert.ok(
     await page
-      .getByRole('radio', { name: 'Split header', exact: true })
-      .isChecked(),
+      .getByText('Header card · new widgets use this style.', { exact: true })
+      .isVisible(),
   );
   await page
     .getByLabel('Data feed', { exact: true })

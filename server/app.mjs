@@ -1,5 +1,7 @@
+import { createAudit } from './audit.mjs';
 import {
   mountSites,
+  grantScreenSiteAccess,
   requireActiveSite,
   siteByNumber,
   siteMember,
@@ -356,6 +358,8 @@ export function createApp({
     next();
   };
   app.get('/api/health', (req, res) => res.json({ ok: true, version }));
+  const audit = createAudit(db);
+  app.use((req, res, next) => audit.middleware(req, res, next));
   accounts.mount(app, rateLimit);
   mountSites(app, { db, administrator, accounts });
   const vault = mountScreenSetup(app, {
@@ -489,7 +493,7 @@ export function createApp({
       return item.layers.flatMap((l) =>
         ['image', 'video'].includes(l.type) && !l.removedMedia
           ? [['asset', l.assetId]]
-          : l.type === 'data' && l.data?.feedId && !l.data.siteBinding
+          : l.data?.feedId && !l.data.siteBinding
             ? [['data-feed', l.data.feedId]]
             : [],
       );
@@ -673,6 +677,67 @@ export function createApp({
           .get(kind, id)?.groupId || null,
     });
   });
+  function validateAccessTarget(user, kind, id, target) {
+    if (!!target.userId === !!target.groupId)
+      throw fail(400, 'Choose one user or group');
+    requireRecord(kind, id);
+    if (!canShare(user, kind, id)) throw fail(403, 'Owner or admin required');
+    if (
+      target.userId &&
+      (user.role !== 'admin' ||
+        !db
+          .prepare('SELECT id FROM users WHERE id=? AND (disabled=0 OR ?=1)')
+          .get(target.userId, Number(target.remove)))
+    )
+      throw fail(403, 'Admin assigns users');
+    if (
+      target.groupId &&
+      (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
+        (!target.remove &&
+          user.role !== 'admin' &&
+          !accounts.member(user, target.groupId) &&
+          !(
+            kind === 'slide' &&
+            db
+              .prepare('SELECT groupId FROM memberships WHERE userId=?')
+              .all(user.id)
+              .some((membership) =>
+                accounts.related(target.groupId, membership.groupId),
+              )
+          )))
+    )
+      throw fail(
+        403,
+        'Share with your groups or their descendants; slides may also be shared with parent groups',
+      );
+  }
+  app.post('/api/access/bulk', admin, (req, res) => {
+    const input = z
+      .object({
+        slideIds: z
+          .array(z.uuid())
+          .min(1)
+          .max(100)
+          .transform((ids) => [...new Set(ids)]),
+        userId: z.string().default(''),
+        groupId: z.string().default(''),
+        permission: z.enum(['view', 'edit']).default('view'),
+      })
+      .strict()
+      .parse(req.body);
+    const target = {
+      userId: input.userId,
+      groupId: input.groupId,
+      permission: input.permission,
+      remove: false,
+    };
+    siteTransaction(db, () => {
+      for (const id of input.slideIds)
+        validateAccessTarget(req.user, 'slide', id, target);
+      for (const id of input.slideIds) grantTree(req.user, 'slide', id, target);
+    });
+    res.json({ updated: input.slideIds.length });
+  });
   app.post('/api/access/:kind/:id', admin, (req, res) => {
     const { kind, id } = req.params;
     if (
@@ -696,39 +761,7 @@ export function createApp({
         permission: z.enum(['view', 'edit']).default('view'),
       })
       .parse(req.body);
-    if (!!target.userId === !!target.groupId)
-      throw fail(400, 'Choose one user or group');
-    requireRecord(kind, id);
-    if (!canShare(req.user, kind, id))
-      throw fail(403, 'Owner or admin required');
-    if (
-      target.userId &&
-      (req.user.role !== 'admin' ||
-        !db
-          .prepare('SELECT id FROM users WHERE id=? AND (disabled=0 OR ?=1)')
-          .get(target.userId, Number(target.remove)))
-    )
-      throw fail(403, 'Admin assigns users');
-    if (
-      target.groupId &&
-      (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
-        (!target.remove &&
-          req.user.role !== 'admin' &&
-          !accounts.member(req.user, target.groupId) &&
-          !(
-            kind === 'slide' &&
-            db
-              .prepare('SELECT groupId FROM memberships WHERE userId=?')
-              .all(req.user.id)
-              .some((membership) =>
-                accounts.related(target.groupId, membership.groupId),
-              )
-          )))
-    )
-      throw fail(
-        403,
-        'Share with your groups or their descendants; slides may also be shared with parent groups',
-      );
+    validateAccessTarget(req.user, kind, id, target);
     db.exec('BEGIN IMMEDIATE');
     try {
       if (target.remove) {
@@ -1452,7 +1485,7 @@ export function createApp({
           // A relative source is authorized against each screen's resolved local
           // feed at delivery, not against the editor's example store here.
           if (
-            layer.type === 'data' &&
+            layer.data &&
             layer.data.feedId &&
             !layer.data.siteBinding &&
             !visible('data-feed', layer.data.feedId)
@@ -1620,7 +1653,7 @@ export function createApp({
         i.slide.layers.some((l) => l.type === 'video'),
       )
         ? 5
-        : items.some((i) => i.slide.layers.some((l) => l.type === 'data'))
+        : items.some((i) => i.slide.layers.some((l) => !!l.data))
           ? 4
           : items.some((item) =>
                 item.slide.layers.some(
@@ -1684,7 +1717,7 @@ export function createApp({
           i.slide.layers.some((l) => l.type === 'video'),
         )
           ? 5
-          : items.some((i) => i.slide.layers.some((l) => l.type === 'data'))
+          : items.some((i) => i.slide.layers.some((l) => !!l.data))
             ? 4
             : published.schemaVersion,
         revision: randomUUID(),
@@ -2399,11 +2432,7 @@ export function createApp({
         device.id,
       );
       if (!device.approved) {
-        if (!administrator) {
-          db.prepare(
-            "INSERT OR IGNORE INTO resource_grants(kind,id,userId,groupId) VALUES ('device',?,'',?)",
-          ).run(device.id, site.accessGroupId);
-        }
+        grantScreenSiteAccess(db, device.id, site);
         auditSite(
           db,
           req.user,
@@ -2421,12 +2450,12 @@ export function createApp({
   app.post('/api/devices/:id/site', administrator, (req, res) => {
     const device = requireRecord('device', req.params.id);
     const { siteId } = z.object({ siteId: z.uuid() }).strict().parse(req.body);
-    requireActiveSite(db, siteId);
+    const site = requireActiveSite(db, siteId);
     if (!device.approved) throw fail(400, 'Assign the site during pairing');
     if (device.siteId && device.siteId !== siteId)
       throw fail(
         409,
-        'Site transfers are not available yet; reset and re-enroll the player',
+        'Use the reviewed screen transfer to move this screen to another site',
       );
     if (!device.siteId && !supportsSiteVersion(device.status?.version))
       throw fail(
@@ -2441,6 +2470,7 @@ export function createApp({
           ? device.siteRevision || 0
           : (device.siteRevision || 0) + 1,
       });
+      grantScreenSiteAccess(db, device.id, site);
       if (!device.siteId)
         auditSite(
           db,
@@ -2612,6 +2642,35 @@ export function createApp({
         stocks: stocks.forManifest(published),
       },
     });
+  });
+  audit.install(app, administrator, (kind, item) => {
+    if (kind === 'slide') {
+      slideSchema.parse(item);
+      dataFeeds.validateLayers(item, accounts.context.getStore()?.user);
+      checkImages(item, accounts.context.getStore()?.user);
+      checkFonts(item);
+    } else {
+      playlistSchema.parse(item);
+      for (const entry of item.items) requireRecord('slide', entry.slideId);
+      for (const entry of item.published?.items || []) {
+        dataFeeds.validateLayers(
+          entry.slide,
+          accounts.context.getStore()?.user,
+        );
+        checkImages(entry.slide, accounts.context.getStore()?.user);
+        checkFonts(entry.slide);
+      }
+    }
+    organization.validateFolder(
+      kind,
+      item.folderId,
+      accounts.context.getStore()?.user,
+    );
+    if (
+      item.managingGroupId &&
+      !db.prepare('SELECT 1 FROM groups WHERE id=?').get(item.managingGroupId)
+    )
+      throw fail(409, 'The managing group no longer exists');
   });
   app.use('/api', (req, res) =>
     res.status(404).json({ error: 'Endpoint not found' }),
