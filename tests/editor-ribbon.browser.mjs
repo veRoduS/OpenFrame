@@ -145,6 +145,63 @@ try {
     .first()
     .click();
   await page.getByRole('dialog').waitFor();
+  await page
+    .getByRole('button', { name: 'Close', exact: true })
+    .first()
+    .click();
+  const second = await (
+    await context.request.post(`${origin}/api/slides`, {
+      data: {
+        name: 'Second bulk slide',
+        width: 1920,
+        height: 1080,
+        background: '#ffffff',
+        layers: [],
+      },
+    })
+  ).json();
+  const group = await (
+    await context.request.post(`${origin}/api/groups`, {
+      data: { name: 'Bulk browser team' },
+    })
+  ).json();
+  await page.goto(`${origin}/dashboard`);
+  await page
+    .getByRole('checkbox', { name: 'Select Portrait welcome', exact: true })
+    .check();
+  await page
+    .getByRole('checkbox', { name: 'Select Second bulk slide', exact: true })
+    .check();
+  await page
+    .getByRole('button', { name: 'Assign access', exact: true })
+    .click();
+  const bulkDialog = page.getByRole('dialog', {
+    name: 'Assign access to 2 slides',
+    exact: true,
+  });
+  await bulkDialog.waitFor();
+  await bulkDialog
+    .getByLabel('Bulk access recipient', { exact: true })
+    .selectOption(group.id);
+  await bulkDialog
+    .getByLabel('Bulk access permission', { exact: true })
+    .selectOption('view');
+  await page
+    .getByRole('button', { name: 'Apply to 2 slides', exact: true })
+    .click();
+  await page
+    .getByRole('status')
+    .filter({ hasText: 'Access assigned to 2 slides.' })
+    .waitFor();
+  for (const id of [slides[0].id, second.id]) {
+    const access = await (
+      await context.request.get(`${origin}/api/access/slide/${id}`)
+    ).json();
+    assert.equal(
+      access.grants.find((grant) => grant.groupId === group.id).permission,
+      'view',
+    );
+  }
   assert.deepEqual(errors, []);
   console.log(
     'Editor ribbon: drafts, portrait, formatting, Delete, responsive layouts and audit review passed.',

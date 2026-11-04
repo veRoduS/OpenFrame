@@ -353,3 +353,9 @@ Text layers may carry a metric-mode `data` binding and render `<fieldName>`
 inside their `text` with player 0.15.10+. This uses existing feed permissions,
 site resolution and publication snapshots. Optional text `italic`, `underline`
 and `lineSpacing` (0.8–3) preserve older slides' defaults.
+
+`POST /api/access/bulk` accepts `{slideIds: uuid[], groupId?: string,
+userId?: string, permission?: "view" | "edit"}`. Select exactly one recipient and
+1–100 slide IDs; duplicate IDs are ignored and View is the default. The operation
+uses the same authorization and linked-content rules as individual sharing and
+commits atomically. Individual-user grants require a global administrator.

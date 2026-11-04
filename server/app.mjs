@@ -677,6 +677,67 @@ export function createApp({
           .get(kind, id)?.groupId || null,
     });
   });
+  function validateAccessTarget(user, kind, id, target) {
+    if (!!target.userId === !!target.groupId)
+      throw fail(400, 'Choose one user or group');
+    requireRecord(kind, id);
+    if (!canShare(user, kind, id)) throw fail(403, 'Owner or admin required');
+    if (
+      target.userId &&
+      (user.role !== 'admin' ||
+        !db
+          .prepare('SELECT id FROM users WHERE id=? AND (disabled=0 OR ?=1)')
+          .get(target.userId, Number(target.remove)))
+    )
+      throw fail(403, 'Admin assigns users');
+    if (
+      target.groupId &&
+      (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
+        (!target.remove &&
+          user.role !== 'admin' &&
+          !accounts.member(user, target.groupId) &&
+          !(
+            kind === 'slide' &&
+            db
+              .prepare('SELECT groupId FROM memberships WHERE userId=?')
+              .all(user.id)
+              .some((membership) =>
+                accounts.related(target.groupId, membership.groupId),
+              )
+          )))
+    )
+      throw fail(
+        403,
+        'Share with your groups or their descendants; slides may also be shared with parent groups',
+      );
+  }
+  app.post('/api/access/bulk', admin, (req, res) => {
+    const input = z
+      .object({
+        slideIds: z
+          .array(z.uuid())
+          .min(1)
+          .max(100)
+          .transform((ids) => [...new Set(ids)]),
+        userId: z.string().default(''),
+        groupId: z.string().default(''),
+        permission: z.enum(['view', 'edit']).default('view'),
+      })
+      .strict()
+      .parse(req.body);
+    const target = {
+      userId: input.userId,
+      groupId: input.groupId,
+      permission: input.permission,
+      remove: false,
+    };
+    siteTransaction(db, () => {
+      for (const id of input.slideIds)
+        validateAccessTarget(req.user, 'slide', id, target);
+      for (const id of input.slideIds) grantTree(req.user, 'slide', id, target);
+    });
+    res.json({ updated: input.slideIds.length });
+  });
   app.post('/api/access/:kind/:id', admin, (req, res) => {
     const { kind, id } = req.params;
     if (
@@ -700,39 +761,7 @@ export function createApp({
         permission: z.enum(['view', 'edit']).default('view'),
       })
       .parse(req.body);
-    if (!!target.userId === !!target.groupId)
-      throw fail(400, 'Choose one user or group');
-    requireRecord(kind, id);
-    if (!canShare(req.user, kind, id))
-      throw fail(403, 'Owner or admin required');
-    if (
-      target.userId &&
-      (req.user.role !== 'admin' ||
-        !db
-          .prepare('SELECT id FROM users WHERE id=? AND (disabled=0 OR ?=1)')
-          .get(target.userId, Number(target.remove)))
-    )
-      throw fail(403, 'Admin assigns users');
-    if (
-      target.groupId &&
-      (!db.prepare('SELECT id FROM groups WHERE id=?').get(target.groupId) ||
-        (!target.remove &&
-          req.user.role !== 'admin' &&
-          !accounts.member(req.user, target.groupId) &&
-          !(
-            kind === 'slide' &&
-            db
-              .prepare('SELECT groupId FROM memberships WHERE userId=?')
-              .all(req.user.id)
-              .some((membership) =>
-                accounts.related(target.groupId, membership.groupId),
-              )
-          )))
-    )
-      throw fail(
-        403,
-        'Share with your groups or their descendants; slides may also be shared with parent groups',
-      );
+    validateAccessTarget(req.user, kind, id, target);
     db.exec('BEGIN IMMEDIATE');
     try {
       if (target.remove) {

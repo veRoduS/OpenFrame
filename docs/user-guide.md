@@ -197,3 +197,30 @@ numbers, dollars with two decimals, and percentages with one decimal. Percentage
 format values already on a 0–100 scale; they do not multiply fractions by 100.
 
 See [Audit and history](audit-history.md) for administrator change review and restoration.
+
+To share several slides, select their checkboxes in Slides and choose **Assign
+access** in the selection toolbar. Choose a group (or, for administrators, a user),
+choose **View** or **Edit**, then **Apply**. The chosen permission applies to that
+recipient on every selected slide, including replacing their previous direct
+permission. Other recipients and ownership stay unchanged. You must have sharing
+permission on every selected slide. Up to 100 slides can be updated at once;
+validation or linked-content sharing failures leave the entire batch unchanged.
+
+## Consistent library filters
+
+Slides, Playlists, Screens and Media use the same filter bar: **Search**, an
+always-visible **Site** selector, secondary **Group** and **Status** filters
+(**Type** for Media), and **Tags** where supported. On phones, **Filters** expands
+the secondary controls; Site remains visible. Result counts, Clear filters, and
+sort/view tools use the same layout. Clear filters also resets the folder scope.
+
+Site selections are saved separately for each page and signed-in account during
+the browser session. They clear on logout or if the selected site is no longer
+available. **All sites** shows everything you already have access to.
+
+For Slides, Playlists and Media, a site includes content shared with its access
+group (including related parent/child groups), playlists assigned to its screens,
+and the slides/media used by those playlists. **Unassigned** shows content with
+no known site association. A shared item may appear under several sites. Screens
+retain their assigned/requested-site filtering. Filtering does not grant access,
+move content, change ownership or alter what a screen plays.

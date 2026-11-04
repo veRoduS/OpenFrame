@@ -1,3 +1,5 @@
+import { siteContentIds } from './site-content.mjs';
+import { BulkSlideAccessDialog } from './bulk-slide-access';
 import { AuditHistory } from './audit-history';
 import { HomeFocusSettings } from './home-focus-settings';
 import { focusHomeLibrary } from './home-focus';
@@ -412,6 +414,7 @@ export default function App() {
       : {}),
   }));
   const [playlistSort, setPlaylistSort] = useState('name');
+  const [bulkAccessIds, setBulkAccessIds] = useState<string[] | null>(null);
   const [selectedItems, setSelectedItems] = useState<
     Record<'slides' | 'playlists', string[]>
   >({ slides: [], playlists: [] });
@@ -454,6 +457,33 @@ export default function App() {
     'screens',
     auth?.authenticated ? auth.user?.id : undefined,
     libraryState === 'ready' ? library.sites : undefined,
+  );
+  const [slidesSite, setSlidesSite] = useSiteFilter(
+    'slides',
+    auth?.authenticated ? auth.user?.id : undefined,
+    libraryState === 'ready' ? library.sites : undefined,
+  );
+  const [playlistsSite, setPlaylistsSite] = useSiteFilter(
+    'playlists',
+    auth?.authenticated ? auth.user?.id : undefined,
+    libraryState === 'ready' ? library.sites : undefined,
+  );
+  const [mediaSite, setMediaSite] = useSiteFilter(
+    'media',
+    auth?.authenticated ? auth.user?.id : undefined,
+    libraryState === 'ready' ? library.sites : undefined,
+  );
+  const slideSiteIds = useMemo(
+    () => siteContentIds(library, slidesSite).slides,
+    [library, slidesSite],
+  );
+  const playlistSiteIds = useMemo(
+    () => siteContentIds(library, playlistsSite).playlists,
+    [library, playlistsSite],
+  );
+  const mediaSiteIds = useMemo(
+    () => siteContentIds(library, mediaSite).assets,
+    [library, mediaSite],
   );
   const [transferDevice, setTransferDevice] = useState<Device | null>(null);
   const [pairOpen, setPairOpen] = useState(false);
@@ -733,6 +763,7 @@ export default function App() {
       .flatMap((p) => p.publishedSlideIds || []),
   );
   const visibleSlides = library.slides
+    .filter((item) => slideSiteIds.has(item.id))
     .filter(
       (item) =>
         matchesLibraryFilter(
@@ -759,21 +790,23 @@ export default function App() {
         (Date.parse(b.updatedAt || '') || 0);
       return (slideSort === 'oldest' ? byTime : -byTime) || byName;
     });
-  const visiblePlaylists = library.playlists.filter(
-    (item) =>
-      matchesLibraryFilter(
-        item,
-        filters.playlists,
-        groups,
-        item.publicationState || (item.publishedAt ? 'published' : 'draft'),
-        true,
-      ) &&
-      matchesOrganization(
-        item,
-        organizationFilters.playlists,
-        library.playlistFolders || [],
-      ),
-  );
+  const visiblePlaylists = library.playlists
+    .filter((item) => playlistSiteIds.has(item.id))
+    .filter(
+      (item) =>
+        matchesLibraryFilter(
+          item,
+          filters.playlists,
+          groups,
+          item.publicationState || (item.publishedAt ? 'published' : 'draft'),
+          true,
+        ) &&
+        matchesOrganization(
+          item,
+          organizationFilters.playlists,
+          library.playlistFolders || [],
+        ),
+    );
   const sortedPlaylists = [...visiblePlaylists].sort((a, b) =>
     playlistSort === 'name'
       ? a.name.localeCompare(b.name, undefined, { numeric: true })
@@ -814,17 +847,34 @@ export default function App() {
         setFilters((current) => ({ ...current, [key]: filter }))
       }
       additionalActive={
-        key !== 'devices' ? Number(!!organizationFilters[key].tag) : 0
+        key !== 'devices'
+          ? Number(!!organizationFilters[key].tag) +
+            Number(organizationFilters[key].folder !== 'all')
+          : 0
       }
       onReset={() => {
         if (key !== 'devices')
           setOrganizationFilters((current) => ({
             ...current,
-            [key]: { ...current[key], tag: '' },
+            [key]: { ...current[key], tag: '', folder: 'all' },
           }));
       }}
       groups={groups}
-      groupAlwaysVisible
+      sites={library.sites || []}
+      siteValue={
+        key === 'slides'
+          ? slidesSite
+          : key === 'playlists'
+            ? playlistsSite
+            : screenSite
+      }
+      onSiteChange={
+        key === 'slides'
+          ? setSlidesSite
+          : key === 'playlists'
+            ? setPlaylistsSite
+            : setScreenSite
+      }
       statuses={statuses}
       shown={shown}
       total={library[key]?.length || 0}
@@ -878,6 +928,7 @@ export default function App() {
       onFilter={(filter) =>
         setOrganizationFilters((current) => ({ ...current, [kind]: filter }))
       }
+      onBulkAccess={kind === 'slides' ? setBulkAccessIds : undefined}
       selected={selectedItems[kind]}
       onSelect={(ids) =>
         setSelectedItems((current) => ({ ...current, [kind]: ids }))
@@ -1847,24 +1898,6 @@ export default function App() {
                   )}
                   {view === 'devices' && (
                     <>
-                      <label>
-                        Site
-                        <select
-                          aria-label="Filter screens by site"
-                          value={screenSite}
-                          onChange={(event) =>
-                            setScreenSite(event.target.value)
-                          }
-                        >
-                          <option value="">All sites</option>
-                          <option value="unassigned">Unassigned</option>
-                          {(library.sites || []).map((site) => (
-                            <option key={site.id} value={site.id}>
-                              {site.siteNumber} · {site.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
                       {filterBar(
                         'devices',
                         visibleDevices.length,
@@ -2059,6 +2092,11 @@ export default function App() {
                     <MediaLibrary
                       isAdmin={adminControls}
                       assets={library.assets}
+                      groups={groups}
+                      sites={library.sites || []}
+                      siteValue={mediaSite}
+                      onSiteChange={setMediaSite}
+                      siteAssetIds={mediaSiteIds}
                       folders={library.folders}
                       onRefresh={refresh}
                       onUpload={upload}
@@ -2366,6 +2404,15 @@ export default function App() {
                 setSetupOpen(false);
                 setPairOpen(true);
               }}
+            />
+          )}
+          {bulkAccessIds && auth.user && (
+            <BulkSlideAccessDialog
+              slideIds={bulkAccessIds}
+              slides={library.slides}
+              user={auth.user}
+              onClose={() => setBulkAccessIds(null)}
+              refresh={refresh}
             />
           )}
           {auth.user && (

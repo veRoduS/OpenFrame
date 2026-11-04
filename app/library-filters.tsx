@@ -1,3 +1,4 @@
+import type { Site } from './types';
 import { useId, useState, type ReactNode } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { indentedName, isWithin, orderedTree } from './hierarchy';
@@ -46,7 +47,15 @@ export function LibraryFilters({
   onReset,
   additionalActive = 0,
   groupAlwaysVisible = false,
+  sites,
+  siteValue = '',
+  onSiteChange,
+  statusLabel = 'Status',
 }: {
+  sites?: Site[];
+  siteValue?: string;
+  onSiteChange?: (value: string) => void;
+  statusLabel?: string;
   filter: LibraryFilter;
   onChange: (filter: LibraryFilter) => void;
   groups: Group[];
@@ -65,7 +74,10 @@ export function LibraryFilters({
   const [expanded, setExpanded] = useState(false);
   const controlsId = useId();
   const active =
-    Number(!!filter.group) + Number(!!filter.status) + additionalActive;
+    Number(!!filter.group) +
+    Number(!!filter.status) +
+    Number(!!siteValue) +
+    additionalActive;
   const groupControl = (
     <label>
       Group
@@ -86,7 +98,7 @@ export function LibraryFilters({
   );
   return (
     <section
-      className={`library-filters${groupAlwaysVisible ? ' has-group-filter' : ''}`}
+      className={`library-filters${groupAlwaysVisible ? ' has-group-filter' : ''}${onSiteChange ? ' has-site-filter' : ''}`}
       aria-label={`${noun} filters`}
     >
       <label className="library-search">
@@ -101,6 +113,25 @@ export function LibraryFilters({
           }
         />
       </label>
+      {onSiteChange && (
+        <label className="library-site-filter">
+          Site
+          <select
+            aria-label={`Filter ${noun.toLowerCase()} by site`}
+            value={siteValue}
+            onChange={(event) => onSiteChange(event.target.value)}
+          >
+            <option value="">All sites</option>
+            <option value="unassigned">Unassigned</option>
+            {(sites || []).map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.siteNumber} · {site.name}
+                {site.archivedAt ? ' (archived)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {groupAlwaysVisible && groupControl}
       <button
         type="button"
@@ -119,15 +150,17 @@ export function LibraryFilters({
           <>
             {!groupAlwaysVisible && groupControl}
             <label>
-              Status
+              {statusLabel}
               <select
-                aria-label="Status"
+                aria-label={statusLabel}
                 value={filter.status}
                 onChange={(event) =>
                   onChange({ ...filter, status: event.target.value })
                 }
               >
-                <option value="">All statuses</option>
+                <option value="">
+                  {statusLabel === 'Type' ? 'All types' : 'All statuses'}
+                </option>
                 {statuses.map((status) => (
                   <option key={status.value} value={status.value}>
                     {status.label}
@@ -149,6 +182,7 @@ export function LibraryFilters({
           disabled={!filter.query && !active}
           onClick={() => {
             onChange({ ...clearLibraryFilter });
+            onSiteChange?.('');
             onReset?.();
           }}
         >

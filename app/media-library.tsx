@@ -2,7 +2,7 @@ import type { MediaUploadBatch } from './media-uploads';
 import { orderedTree, isWithin, indentedName } from './hierarchy';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { IconButton as Tool } from './components/ui/icon-button';
-import { LibraryFilters } from './library-filters';
+import { matchesLibraryFilter, LibraryFilters } from './library-filters';
 import './media-library.css';
 import {
   Folder,
@@ -48,6 +48,11 @@ import { ManageAccessButton } from './resource-access';
 type FormMode = 'folder' | 'rename-folder' | 'asset' | 'move' | 'tags' | null;
 export function MediaLibrary({
   assets,
+  groups = [],
+  sites,
+  siteValue = '',
+  onSiteChange,
+  siteAssetIds,
   isAdmin = false,
   folders,
   onRefresh,
@@ -58,6 +63,11 @@ export function MediaLibrary({
   shareWithSlideId,
 }: {
   assets: Asset[];
+  groups?: NonNullable<import('./types').Library['groups']>;
+  sites?: import('./types').Site[];
+  siteValue?: string;
+  onSiteChange?: (value: string) => void;
+  siteAssetIds?: Set<string>;
   isAdmin?: boolean;
   folders: MediaFolder[];
   onRefresh: () => Promise<void>;
@@ -79,6 +89,8 @@ export function MediaLibrary({
   );
   const [folder, setFolder] = useState(() => routeParam('folder', 'all'));
   const [search, setSearch] = useState(() => routeParam('q'));
+  const [group, setGroup] = useState(() => routeParam('group'));
+  const [mediaType, setMediaType] = useState(() => routeParam('type'));
   const [tag, setTag] = useState(() => routeParam('tag'));
   const [sort, setSort] = useState(() => routeParam('sort', 'newest'));
   const readLayout = useCallback(() => {
@@ -96,6 +108,8 @@ export function MediaLibrary({
       ['folder', folder, 'all'],
       ['q', search, ''],
       ['tag', tag, ''],
+      ['group', group, ''],
+      ['type', mediaType, ''],
       ['sort', sort, 'newest'],
       ['layout', display, 'medium'],
     ])
@@ -107,7 +121,7 @@ export function MediaLibrary({
     } catch {
       /* Storage is optional. */
     }
-  }, [folder, search, tag, sort, display, onPick]);
+  }, [folder, search, tag, group, mediaType, sort, display, onPick]);
   useEffect(() => {
     if (onPick) return;
     function restore() {
@@ -115,6 +129,8 @@ export function MediaLibrary({
       setFolder(routeParam('folder', 'all'));
       setSearch(routeParam('q'));
       setTag(routeParam('tag'));
+      setGroup(routeParam('group'));
+      setMediaType(routeParam('type'));
       setSort(routeParam('sort', 'newest'));
       setDisplay(readLayout());
       setSelected(new Set());
@@ -143,12 +159,30 @@ export function MediaLibrary({
     'economy',
   );
   const uploadInput = useRef<HTMLInputElement>(null);
-  const filtered = visibleMedia(assets, {
-    folder,
-    search,
-    tag,
-    sort,
-  }) as Asset[];
+  const filtered = visibleMedia(
+    assets.filter(
+      (asset) =>
+        (!siteAssetIds || siteAssetIds.has(asset.id)) &&
+        matchesLibraryFilter(
+          {
+            ...asset,
+            groupIds: asset.accessTags
+              ?.filter((tag) => tag.type === 'group')
+              .map((tag) => tag.id),
+          },
+          { query: '', group, status: mediaType },
+          groups,
+          asset.kind || 'image',
+          true,
+        ),
+    ),
+    {
+      folder,
+      search,
+      tag,
+      sort,
+    },
+  ) as Asset[];
   const selection = assets
     .filter((a) => selected.has(a.id) && !a.readOnly)
     .map((a) => a.id);
@@ -340,16 +374,30 @@ export function MediaLibrary({
         noun="Media"
         shown={filtered.length}
         total={assets.length}
-        groups={[]}
-        statuses={[]}
-        filter={{ query: search, group: '', status: tag }}
+        groups={groups}
+        sites={sites}
+        siteValue={siteValue}
+        onSiteChange={onSiteChange}
+        statuses={[
+          { value: 'image', label: 'Images' },
+          { value: 'video', label: 'Videos' },
+        ]}
+        statusLabel="Type"
+        additionalActive={Number(!!tag) + Number(folder !== 'all')}
+        onReset={() => {
+          setTag('');
+          setFolder('all');
+        }}
+
+        filter={{ query: search, group, status: mediaType }}
         searchPlaceholder="Search media or tags"
         onChange={(next) => {
           setSearch(next.query);
-          setTag(next.status);
+          setGroup(next.group);
+          setMediaType(next.status);
           setSelected(new Set());
         }}
-        filterControls={
+        additionalFilters={
           <label>
             Tags
             <select
@@ -835,15 +883,18 @@ export function MediaLibrary({
             <div className="small-empty">
               <Images size={32} />
               <p>
-                {search || tag
+                {search || tag || group || mediaType || siteValue
                   ? 'No matching media.'
                   : 'No media in this folder.'}
               </p>
-              {(search || tag) && (
+              {(search || tag || group || mediaType || siteValue) && (
                 <button
                   onClick={() => {
                     setSearch('');
                     setTag('');
+                    setGroup('');
+                    setMediaType('');
+                    onSiteChange?.('');
                   }}
                 >
                   Clear filters

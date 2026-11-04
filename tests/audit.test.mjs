@@ -278,3 +278,169 @@ void test('restoring a slide also restores its publication, and a conflict rolls
     beforeCount,
   );
 });
+
+void test('bulk slide access preserves recipients, applies View/Edit and rolls back linked-content failures', async (t) => {
+  const { admin, db } = await fixture(t);
+  const group = (
+    await admin('/api/groups', 'POST', { name: 'Bulk recipients' })
+  ).data;
+  const other = (
+    await admin('/api/groups', 'POST', { name: 'Existing recipients' })
+  ).data;
+  const slides = [];
+  for (const name of ['Bulk one', 'Bulk two'])
+    slides.push(
+      (
+        await admin('/api/slides', 'POST', {
+          name,
+          width: 1920,
+          height: 1080,
+          background: '#ffffff',
+          layers: [],
+        })
+      ).data,
+    );
+  await admin(`/api/access/slide/${slides[0].id}`, 'POST', {
+    groupId: other.id,
+  });
+  const ids = slides.map((slide) => slide.id);
+  assert.equal(
+    (
+      await admin('/api/access/bulk', 'POST', {
+        slideIds: ids,
+        groupId: group.id,
+        permission: 'view',
+      })
+    ).status,
+    200,
+  );
+  for (const id of ids)
+    assert.equal(
+      (await admin(`/api/access/slide/${id}`)).data.grants.find(
+        (grant) => grant.groupId === group.id,
+      ).permission,
+      'view',
+    );
+  assert.ok(
+    (await admin(`/api/access/slide/${ids[0]}`)).data.grants.some(
+      (grant) => grant.groupId === other.id,
+    ),
+  );
+  assert.equal(
+    (
+      await admin('/api/access/bulk', 'POST', {
+        slideIds: [...ids, ids[0]],
+        groupId: group.id,
+        permission: 'edit',
+      })
+    ).data.updated,
+    2,
+  );
+  for (const id of ids)
+    assert.equal(
+      (await admin(`/api/access/slide/${id}`)).data.grants.find(
+        (grant) => grant.groupId === group.id,
+      ).permission,
+      'edit',
+    );
+  db.exec(
+    `CREATE TRIGGER reject_bulk BEFORE INSERT ON resource_permissions WHEN NEW.id='${ids[1]}' AND NEW.groupId='${other.id}' BEGIN SELECT RAISE(ABORT,'bulk fixture failure'); END;`,
+  );
+  const count = db.prepare('SELECT count(*) AS n FROM app_audit').get().n;
+  assert.equal(
+    (
+      await admin('/api/access/bulk', 'POST', {
+        slideIds: ids,
+        groupId: other.id,
+        permission: 'edit',
+      })
+    ).status,
+    500,
+  );
+  assert.equal(
+    (await admin(`/api/access/slide/${ids[0]}`)).data.grants.find(
+      (grant) => grant.groupId === other.id,
+    ).permission,
+    'view',
+  );
+  assert.equal(
+    (await admin(`/api/access/slide/${ids[1]}`)).data.grants.some(
+      (grant) => grant.groupId === other.id,
+    ),
+    false,
+  );
+  assert.equal(
+    db.prepare('SELECT count(*) AS n FROM app_audit').get().n,
+    count,
+  );
+});
+
+void test('bulk access rejects mixed ownership, inaccessible IDs and non-admin user grants atomically', async (t) => {
+  const { admin, client } = await fixture(t);
+  const invite = (
+    await admin('/api/users', 'POST', {
+      username: 'bulk-editor',
+      name: 'Bulk editor',
+    })
+  ).data;
+  const member = client();
+  await member('/api/activate', 'POST', {
+    token: invite.invitation,
+    password: 'bulk-editor-password',
+  });
+  const group = (await admin('/api/groups', 'POST', { name: 'Member team' }))
+    .data;
+  await admin(`/api/groups/${group.id}/members/${invite.user.id}`, 'PUT', {
+    role: 'member',
+  });
+  const input = {
+    name: 'Owned',
+    width: 1920,
+    height: 1080,
+    background: '#ffffff',
+    layers: [],
+  };
+  const owned = (await member('/api/slides', 'POST', input)).data;
+  const foreign = (
+    await admin('/api/slides', 'POST', { ...input, name: 'Edit only' })
+  ).data;
+  await admin(`/api/access/slide/${foreign.id}`, 'POST', {
+    userId: invite.user.id,
+    permission: 'edit',
+  });
+  assert.equal(
+    (
+      await member('/api/access/bulk', 'POST', {
+        slideIds: [owned.id, foreign.id],
+        groupId: group.id,
+      })
+    ).status,
+    403,
+  );
+  assert.deepEqual(
+    (await member(`/api/access/slide/${owned.id}`)).data.grants,
+    [],
+  );
+  assert.equal(
+    (
+      await member('/api/access/bulk', 'POST', {
+        slideIds: [owned.id],
+        userId: invite.user.id,
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await admin('/api/access/bulk', 'POST', {
+        slideIds: [owned.id, randomUUID()],
+        groupId: group.id,
+      })
+    ).status,
+    404,
+  );
+  assert.deepEqual(
+    (await admin(`/api/access/slide/${owned.id}`)).data.grants,
+    [],
+  );
+});
