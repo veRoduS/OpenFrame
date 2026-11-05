@@ -1,0 +1,85 @@
+name: Create GitHub release
+
+# Manually tags the current main commit and publishes a GitHub Release for the
+# server version it already contains. It never moves or replaces an existing tag.
+# Tags created with the workflow token do not start other workflows, so for a
+# vX.Y.0 milestone, dispatch "Publish milestone images" with that tag afterwards.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Server version already on main (for example 0.29.10)'
+        required: true
+        type: string
+      latest:
+        description: 'Mark as the latest release'
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Check the version matches main
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Use a version such as 0.29.10'; exit 1; }
+          actual=$(node -p "require('./package.json').version")
+          [ "$actual" = "$VERSION" ] || { echo "main is at server $actual, not $VERSION"; exit 1; }
+      - name: Write release notes from the changelogs
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export PREVIOUS=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null | sed 's/^v//')
+          node --input-type=module <<'JS'
+          import {readFileSync, writeFileSync} from 'node:fs';
+          const {VERSION, PREVIOUS} = process.env;
+          const parse = (v) => v.split('.').map(Number);
+          const newer = (a, b) => {
+            const [x, y] = [parse(a), parse(b)];
+            for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+            return false;
+          };
+          // Collect every changelog section after the previous latest release, up to this version.
+          const sections = readFileSync('CHANGELOG.md', 'utf8').split(/^## /m).slice(1)
+            .map((s) => ({version: s.match(/^\[([^\]]+)\]/)?.[1], body: s.replace(/^[^\n]*\n/, '').trim()}))
+            .filter(({version}) => version && !newer(version, VERSION) && (!PREVIOUS || newer(version, PREVIOUS)));
+          const player = JSON.parse(readFileSync('player/version.json', 'utf8')).version;
+          const apk = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/android-releases/apks/${player}/openframe-player.apk`;
+          const notes = [
+            `Server ${VERSION} · Android/Pi player ${player} ([APK](${apk}))`,
+            '',
+            PREVIOUS ? `### Changes since ${PREVIOUS}` : '### Changes',
+            '',
+            ...sections.map(({body}) => body),
+            '',
+            'See CHANGELOG.md and player/CHANGELOG.md for details. Container images are published only for vX.Y.0 milestones; otherwise build from source.',
+          ].join('\n');
+          writeFileSync('release-notes.md', notes + '\n');
+          JS
+          cat release-notes.md
+      - name: Create the tag and release
+        env:
+          VERSION: ${{ inputs.version }}
+          LATEST: ${{ inputs.latest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$(git rev-parse HEAD)" \
+            --title "OpenFrame $VERSION" --notes-file release-notes.md --latest="$LATEST"
