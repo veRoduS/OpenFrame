@@ -1,6 +1,6 @@
 {
   "name": "openframe",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.19.0",
@@ -38,6 +38,8 @@
   },
   "devDependencies": {
     "@base-ui/react": "1.7.0",
+    "@fontsource-variable/figtree": "5.3.0",
+    "@fontsource-variable/fraunces": "5.3.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
