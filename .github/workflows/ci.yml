@@ -57,7 +57,9 @@ jobs:
 
   browser:
     name: Browser regressions (Chromium)
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 cannot install Chromium on the Ubuntu 26.04 image that
+    # ubuntu-latest now selects. Move this with the Playwright pin below.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Configure isolated browser tools
