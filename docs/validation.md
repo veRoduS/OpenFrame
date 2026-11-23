@@ -1,5 +1,9 @@
 # Validation record
 
+## Approved milestone preparation — server 0.34.0 / player 0.15.10
+
+The owner approved this milestone and its release on November 23, 2026. It publishes local revision 0.33.1, which merged through pull request #6 with all CI jobs passing, including native AMD64/ARM64 Docker checks and the Chromium regressions on Ubuntu 24.04. The milestone changes only versions, release notes and the image workflow's release allowlist; its checks are repeated below. The compatibility review at server 0.33.0 remains current because no contract changed. Image publication and the GitHub Release are results of the tag workflow. Physical Pi and TV acceptance, browsers other than Chromium, and deployment to a running server are not established.
+
 ## Local public landing page redesign — server 0.33.1
 
 Checked on November 12, 2026: 293 Node tests pass without skips, including real Python-agent integration and FFmpeg conversion; all 101 Python tests pass. Lint, TypeScript, the production build, version consistency, repository/documentation checks, the compatibility check, and Pi shell syntax pass. The landing Chromium suite verifies that the page requests nothing from the API or another origin; login/logout, persisted sessions, and legacy invitations; the copy button and FAQ; the sample playlist under reduced motion (paused, steppable, every screen on the same slide, player clock format) and without it (advancing, pausable); the loopback-address example; mobile navigation; loaded images; and unclipped sections with a whole, in-view wall display at 1920, 1440, 1280, 768, 390, and 320 pixels. The Android download, accounts, editor ribbon, and library filter Chromium suites also pass. Full-page screenshots at those widths and at 1100 pixels, the slide transition, keyboard focus order, and the open menu, FAQ, and copied states were visually inspected, and text colours were measured at 4.5:1 contrast or better.

@@ -2,6 +2,10 @@
 
 Versions follow the project's [milestone policy](docs/releases.md), not feature-based SemVer increments. Entries are local development history unless identified by a published Git tag/release. No historical release dates or GitHub publications are implied.
 
+## [0.34.0] - 2026-11-23
+
+- Release the redesigned public landing page with a live sample playlist, real workspace captures and locally bundled fonts
+
 ## [0.33.1] - 2026-11-12
 
 - Redesign the public landing page around a live sample playlist, real workspace captures and locally bundled fonts
